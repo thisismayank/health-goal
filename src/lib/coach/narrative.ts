@@ -16,10 +16,9 @@ import {
 } from "./schemas";
 
 const MODEL = "gemini-2.5-flash";
-// Bumped from v1 -> v2 when temporal (in-progress vs retrospective)
-// framing was added; invalidates prior cache entries.
-const DAILY_PROMPT_VERSION = "daily-v2";
-const WEEKLY_PROMPT_VERSION = "weekly-v2";
+// v3 adds recovery-signals awareness (sleep/HRV/RHR baselines).
+const DAILY_PROMPT_VERSION = "daily-v3";
+const WEEKLY_PROMPT_VERSION = "weekly-v3";
 
 let cachedClient: GoogleGenAI | null = null;
 function gemini(): GoogleGenAI {
@@ -100,12 +99,20 @@ Hard rules:
 - Never invent numbers or facts not in the rollup below.
 - Never diagnose medical conditions or recommend supplements/drugs.
 - Distinguish wearable/estimated signals from clinical measurements.
-- If recovery signals are poor (high fatigue, high RPE on easy work),
-  recommend an easy day and modest adjustments — never push through
-  concerning symptoms.
 - Coach tone: concise, direct, respectful of the athlete's experience.
 - Prefer concrete observations ("the 25-min walk didn't hit the 60-min
   target") over vague encouragement.
+
+CRITICAL — RECOVERY SIGNALS:
+- Resting HR (RHR) and Heart Rate Variability (HRV) baselines are
+  personal medians of the trailing 21 days — NOT population norms.
+  Only interpret them as deltas from that personal baseline.
+- If concernFlags contains "rhr_high" (>=8 bpm above baseline),
+  "hrv_low" (>=15% below baseline), or "sleep_short" (<5.5h), the
+  body is signaling stress. Recommend an easier session or a rest day,
+  and modest adjustments — never advise pushing through.
+- If no recovery signals are present (recovery.hasAnySignal is false),
+  do NOT invent them. Just work with what's in the rollup.
 
 CRITICAL — TEMPORAL FRAMING:
 - If the rollup says the day/week is still IN PROGRESS, you are looking

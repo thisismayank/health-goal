@@ -146,9 +146,17 @@ export const dailyMetric = pgTable(
       .notNull()
       .references(() => userProfile.id, { onDelete: "cascade" }),
     date: text("date").notNull(),
+    // Manual entries (user-typed)
     bodyWeightKg: real("body_weight_kg"),
     fatigue1to10: integer("fatigue_1_to_10"),
     notes: text("notes"),
+    // Auto-imported recovery signals (from HealthKit via Health Auto Export)
+    sleepMinutes: integer("sleep_minutes"),
+    hrvMs: real("hrv_ms"),
+    restingHrBpm: integer("resting_hr_bpm"),
+    steps: integer("steps"),
+    activeEnergyKcal: integer("active_energy_kcal"),
+    lastAutoSyncAt: timestamp("last_auto_sync_at", { withTimezone: true }),
   },
   (table) => [
     uniqueIndex("daily_metric_user_date_idx").on(table.userId, table.date),

@@ -22,6 +22,13 @@
       "when": 1786790101669,
       "tag": "0002_black_thundra",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786792134736,
+      "tag": "0003_low_shatterstar",
+      "breakpoints": true
     }
   ]
 }

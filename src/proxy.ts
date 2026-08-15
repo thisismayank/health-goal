@@ -43,6 +43,9 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Exempt the Strava webhook — Strava's servers hit it without our creds.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/strava/webhook).*)"],
+  // Exempt webhooks that third-party services POST to us without basic-auth
+  // creds (they authenticate with their own tokens instead).
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|api/strava/webhook|api/health-import).*)",
+  ],
 };

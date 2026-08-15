@@ -24,6 +24,12 @@ import {
   sessionCompletionQualifies,
   type Phase,
 } from "@/lib/plan";
+import {
+  hrvBaseline,
+  rhrBaseline,
+  sleepBaseline,
+  type Baseline,
+} from "./baselines";
 
 const RUNNING_CATEGORIES: SessionCategory[] = ["EASY_RUN", "QUALITY_RUN"];
 const AEROBIC_CATEGORIES: SessionCategory[] = [
@@ -85,6 +91,16 @@ export type DailyRollup = {
   qualifyingWorkoutExists: boolean;
   bodyWeightKg: number | null;
   fatigue1to10: number | null;
+  recovery: {
+    sleepMinutes: number | null;
+    sleepBaselineMinutes: number | null;
+    restingHr: Baseline;
+    hrv: Baseline;
+    steps: number | null;
+    activeEnergyKcal: number | null;
+    hasAnySignal: boolean;
+    concernFlags: string[];
+  };
   daySummary: {
     totalMinutes: number;
     aerobicMinutes: number;
@@ -190,6 +206,22 @@ export async function getDailyRollup(
       .limit(1)
   )[0];
 
+  const rhr = await rhrBaseline(userId, dateYmd);
+  const hrv = await hrvBaseline(userId, dateYmd);
+  const sleep = await sleepBaseline(userId, dateYmd);
+  const sleepMinutes = metric?.sleepMinutes ?? null;
+
+  const concernFlags: string[] = [];
+  if (rhr.deltaAbs != null && rhr.deltaAbs >= 8) concernFlags.push("rhr_high");
+  if (hrv.deltaPct != null && hrv.deltaPct <= -15) concernFlags.push("hrv_low");
+  if (sleepMinutes != null && sleepMinutes < 5.5 * 60) concernFlags.push("sleep_short");
+
+  const hasAnySignal =
+    sleepMinutes != null ||
+    rhr.current != null ||
+    hrv.current != null ||
+    (metric?.steps ?? null) != null;
+
   return {
     date: dateYmd,
     weekday,
@@ -219,6 +251,16 @@ export async function getDailyRollup(
     qualifyingWorkoutExists: rows.some((r) => r.qualifiesForPlan),
     bodyWeightKg: metric?.bodyWeightKg ?? null,
     fatigue1to10: metric?.fatigue1to10 ?? null,
+    recovery: {
+      sleepMinutes,
+      sleepBaselineMinutes: sleep.baseline,
+      restingHr: rhr,
+      hrv,
+      steps: metric?.steps ?? null,
+      activeEnergyKcal: metric?.activeEnergyKcal ?? null,
+      hasAnySignal,
+      concernFlags,
+    },
     daySummary: {
       totalMinutes,
       aerobicMinutes,
@@ -282,6 +324,13 @@ export type WeeklyRollup = {
     deltaKg: number | null;
   };
   averageFatigue: number | null;
+  recovery: {
+    sleepAvgHours: number | null;
+    hrvAvgMs: number | null;
+    restingHrAvgBpm: number | null;
+    stepsAvg: number | null;
+    daysWithSignal: number;
+  };
   flags: string[];
 };
 
@@ -405,6 +454,24 @@ export async function getWeeklyRollup(
     ? +(fatigues.reduce((s, f) => s + f, 0) / fatigues.length).toFixed(1)
     : null;
 
+  const sleepMins = metrics.map((m) => m.sleepMinutes).filter((v): v is number => v != null);
+  const hrvs = metrics.map((m) => m.hrvMs).filter((v): v is number => v != null);
+  const rhrs = metrics.map((m) => m.restingHrBpm).filter((v): v is number => v != null);
+  const stepsList = metrics.map((m) => m.steps).filter((v): v is number => v != null);
+  const avg = (arr: number[]) =>
+    arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+  const sleepAvgHours = sleepMins.length ? +(avg(sleepMins)! / 60).toFixed(2) : null;
+  const hrvAvgMs = hrvs.length ? +avg(hrvs)!.toFixed(1) : null;
+  const restingHrAvgBpm = rhrs.length ? Math.round(avg(rhrs)!) : null;
+  const stepsAvg = stepsList.length ? Math.round(avg(stepsList)!) : null;
+  const daysWithSignal = metrics.filter(
+    (m) =>
+      m.sleepMinutes != null ||
+      m.hrvMs != null ||
+      m.restingHrBpm != null ||
+      m.steps != null,
+  ).length;
+
   const flags: string[] = [];
   if (compliancePct < 60 && passed.length >= 3) flags.push("low_compliance");
   if (
@@ -486,6 +553,13 @@ export async function getWeeklyRollup(
           : null,
     },
     averageFatigue: avgFatigue,
+    recovery: {
+      sleepAvgHours,
+      hrvAvgMs,
+      restingHrAvgBpm,
+      stepsAvg,
+      daysWithSignal,
+    },
     flags,
   };
 }
