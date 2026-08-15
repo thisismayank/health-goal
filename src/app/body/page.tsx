@@ -96,10 +96,11 @@ export default async function BodyPage() {
       </div>
 
       {haveRecovery ? (
-        <section className="space-y-2">
-          <h2 className="text-xs uppercase tracking-widest text-muted">
-            Recovery signals
-          </h2>
+        <>
+          <section className="space-y-2">
+            <h2 className="text-xs uppercase tracking-widest text-muted">
+              Recovery signals
+            </h2>
           <div className="grid grid-cols-2 gap-3">
             <RecoveryCard
               label="Sleep"
@@ -175,6 +176,10 @@ export default async function BodyPage() {
             />
           </div>
         </section>
+
+        <ExtendedWellness todayRow={todayRow} />
+        <TrainingLoad todayRow={todayRow} />
+        </>
       ) : (
         <section className="rounded-lg border border-panel-border bg-panel/60 p-4">
           <div className="text-xs uppercase tracking-widest text-muted mb-1">
@@ -278,5 +283,148 @@ function RecoveryCard({
       <div className={`text-xl font-semibold mt-1 ${toneCls}`}>{value}</div>
       <div className="text-xs text-muted mt-1">{baseline}</div>
     </div>
+  );
+}
+
+type ExtendedRow = {
+  sleepScore?: number | null;
+  vo2Max?: number | null;
+  spo2Pct?: number | null;
+  bodyFatPct?: number | null;
+  respirationRpm?: number | null;
+  avgSleepingHrBpm?: number | null;
+  readiness?: number | null;
+  stressScore?: number | null;
+  ctl?: number | null;
+  atl?: number | null;
+};
+
+function ExtendedWellness({ todayRow }: { todayRow: ExtendedRow | undefined }) {
+  if (!todayRow) return null;
+  const items: Array<{
+    label: string;
+    value: string;
+    hint?: string;
+    tone?: "neutral" | "accent" | "warn";
+  }> = [];
+
+  if (todayRow.sleepScore != null) {
+    items.push({
+      label: "Sleep score",
+      value: `${todayRow.sleepScore}`,
+      hint: "Garmin 0–100",
+      tone: todayRow.sleepScore >= 80 ? "accent" : todayRow.sleepScore < 60 ? "warn" : "neutral",
+    });
+  }
+  if (todayRow.readiness != null) {
+    items.push({
+      label: "Readiness",
+      value: `${todayRow.readiness}`,
+      hint: "Garmin 0–100",
+      tone: todayRow.readiness >= 75 ? "accent" : todayRow.readiness < 50 ? "warn" : "neutral",
+    });
+  }
+  if (todayRow.vo2Max != null) {
+    items.push({
+      label: "VO₂ max",
+      value: `${todayRow.vo2Max}`,
+      hint: "mL/kg/min",
+    });
+  }
+  if (todayRow.spo2Pct != null) {
+    items.push({
+      label: "SpO₂",
+      value: `${todayRow.spo2Pct}%`,
+      hint: "avg overnight",
+    });
+  }
+  if (todayRow.bodyFatPct != null) {
+    items.push({
+      label: "Body fat",
+      value: `${todayRow.bodyFatPct}%`,
+    });
+  }
+  if (todayRow.stressScore != null) {
+    items.push({
+      label: "Stress",
+      value: `${todayRow.stressScore}`,
+      hint: "Garmin 0–100",
+      tone: todayRow.stressScore >= 50 ? "warn" : "neutral",
+    });
+  }
+  if (todayRow.respirationRpm != null) {
+    items.push({
+      label: "Respiration",
+      value: `${todayRow.respirationRpm} rpm`,
+    });
+  }
+  if (todayRow.avgSleepingHrBpm != null) {
+    items.push({
+      label: "Sleep HR",
+      value: `${todayRow.avgSleepingHrBpm} bpm`,
+    });
+  }
+
+  if (items.length === 0) return null;
+  return (
+    <section className="space-y-2">
+      <h2 className="text-xs uppercase tracking-widest text-muted">
+        Extended wellness
+      </h2>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {items.map((it) => (
+          <RecoveryCard
+            key={it.label}
+            label={it.label}
+            value={it.value}
+            baseline={it.hint ?? ""}
+            tone={it.tone}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TrainingLoad({ todayRow }: { todayRow: ExtendedRow | undefined }) {
+  if (!todayRow) return null;
+  const ctl = todayRow.ctl ?? null;
+  const atl = todayRow.atl ?? null;
+  if (ctl == null && atl == null) return null;
+  const tsb = ctl != null && atl != null ? +(ctl - atl).toFixed(1) : null;
+  const tsbTone =
+    tsb == null ? "neutral" : tsb >= 5 ? "accent" : tsb <= -10 ? "warn" : "neutral";
+  return (
+    <section className="space-y-2">
+      <h2 className="text-xs uppercase tracking-widest text-muted">
+        Training load (intervals.icu)
+      </h2>
+      <div className="grid grid-cols-3 gap-3">
+        <RecoveryCard
+          label="Fitness (CTL)"
+          value={ctl != null ? `${ctl}` : "–"}
+          baseline="42-day EWMA"
+        />
+        <RecoveryCard
+          label="Fatigue (ATL)"
+          value={atl != null ? `${atl}` : "–"}
+          baseline="7-day EWMA"
+        />
+        <RecoveryCard
+          label="Form (TSB)"
+          value={tsb != null ? `${tsb > 0 ? "+" : ""}${tsb}` : "–"}
+          baseline={
+            tsb == null
+              ? ""
+              : tsb >= 5
+                ? "fresh"
+                : tsb <= -10
+                  ? "fatigued"
+                  : "steady"
+          }
+          tone={tsbTone}
+        />
+      </div>
+    </section>
   );
 }

@@ -29,6 +29,13 @@
       "when": 1786792134736,
       "tag": "0003_low_shatterstar",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786835790560,
+      "tag": "0004_overrated_silverclaw",
+      "breakpoints": true
     }
   ]
 }

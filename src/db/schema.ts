@@ -150,12 +150,26 @@ export const dailyMetric = pgTable(
     bodyWeightKg: real("body_weight_kg"),
     fatigue1to10: integer("fatigue_1_to_10"),
     notes: text("notes"),
-    // Auto-imported recovery signals (from HealthKit via Health Auto Export)
+    // Auto-imported recovery signals (from HealthKit via Health Auto Export
+    // or from intervals.icu which mirrors Garmin).
     sleepMinutes: integer("sleep_minutes"),
     hrvMs: real("hrv_ms"),
     restingHrBpm: integer("resting_hr_bpm"),
     steps: integer("steps"),
     activeEnergyKcal: integer("active_energy_kcal"),
+    // Extended Garmin wellness (via intervals.icu)
+    sleepScore: integer("sleep_score"), // 0-100 (Garmin)
+    sleepQuality: integer("sleep_quality"), // 1-5 subjective (Garmin morning survey)
+    vo2Max: real("vo2_max"), // mL/kg/min
+    spo2Pct: real("spo2_pct"), // %
+    bodyFatPct: real("body_fat_pct"), // %
+    respirationRpm: real("respiration_rpm"), // breaths/min
+    avgSleepingHrBpm: integer("avg_sleeping_hr_bpm"),
+    readiness: integer("readiness"), // 0-100 (Garmin)
+    stressScore: integer("stress_score"), // 0-100 (Garmin)
+    // Training load (computed by intervals.icu from activities)
+    ctl: real("ctl"), // Chronic Training Load — 42-day EWMA fitness proxy
+    atl: real("atl"), // Acute Training Load — 7-day EWMA fatigue proxy
     lastAutoSyncAt: timestamp("last_auto_sync_at", { withTimezone: true }),
   },
   (table) => [
