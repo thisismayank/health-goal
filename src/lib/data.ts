@@ -11,7 +11,7 @@ import {
   type StrengthExercise,
   type Workout,
 } from "@/db/schema";
-import { ymd, weekDays, weekStart } from "./date";
+import { todayInTimeZone, weekDays, weekStart, ymd, ymdInTimeZone } from "./date";
 
 export async function getCurrentUser() {
   const users = await db.select().from(userProfile).limit(1);
@@ -177,11 +177,30 @@ export async function getTodayContext() {
   const user = await getCurrentUser();
   if (!user) return null;
   const plan = await getActivePlan(user.id);
-  if (!plan) return { user, plan: null, session: null, workout: null };
-  const today = ymd(new Date());
+  const today = todayInTimeZone(user.timezone);
+  if (!plan) {
+    return { user, plan: null, session: null, workout: null, today };
+  }
   const session = await getSessionForDate(plan.id, today);
   const workoutRow = session ? await getWorkoutForPlannedSession(session.id) : null;
-  return { user, plan, session, workout: workoutRow };
+  return { user, plan, session, workout: workoutRow, today };
+}
+
+// Returns all workouts whose local start date equals `dateYmd` in the user's
+// timezone. Small dataset — we fetch recent rows and filter in JS rather than
+// building a tz-aware SQL predicate.
+export async function getWorkoutsOnLocalDate(
+  userId: number,
+  dateYmd: string,
+  tz: string,
+) {
+  const rows = await db
+    .select()
+    .from(workout)
+    .where(eq(workout.userId, userId))
+    .orderBy(desc(workout.startTime))
+    .limit(50);
+  return rows.filter((w) => ymdInTimeZone(w.startTime, tz) === dateYmd);
 }
 
 export { weekStart };

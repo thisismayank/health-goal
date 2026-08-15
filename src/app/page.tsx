@@ -1,8 +1,9 @@
-import { differenceInCalendarWeeks, format } from "date-fns";
+import { differenceInCalendarWeeks } from "date-fns";
 import {
   getLastSetsForExercise,
   getStrengthSets,
   getTodayContext,
+  getWorkoutsOnLocalDate,
 } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,7 @@ import { parseYmd, weeksUntil } from "@/lib/date";
 import { phaseForWeek } from "@/lib/plan";
 import { LogSessionForm } from "@/components/log-session-form";
 import { ReopenButton, SkipButton } from "@/components/session-actions";
-import type { PlannedSession } from "@/db/schema";
+import type { PlannedSession, Workout } from "@/db/schema";
 
 type Prescription = { name: string; sets: number; reps: string }[];
 
@@ -36,21 +37,36 @@ export default async function TodayPage() {
     );
   }
 
-  const { user, plan, session, workout } = ctx;
-  const today = new Date();
+  const { user, plan, session, workout, today } = ctx;
+  const todayLocal = parseYmd(today);
   const weekNumber = plan
-    ? differenceInCalendarWeeks(today, parseYmd(plan.startDate), {
+    ? differenceInCalendarWeeks(todayLocal, parseYmd(plan.startDate), {
         weekStartsOn: 1,
       }) + 1
     : null;
   const phase = weekNumber != null ? phaseForWeek(weekNumber) : null;
   const summitRemaining = user.summitDate ? weeksUntil(user.summitDate) : null;
+  const dayLabel = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    timeZone: user.timezone,
+  }).format(new Date());
+
+  const allTodayWorkouts = await getWorkoutsOnLocalDate(
+    user.id,
+    today,
+    user.timezone,
+  );
+  const extras = allTodayWorkouts.filter(
+    (w) => w.plannedSessionId !== (session?.id ?? -1),
+  );
 
   return (
     <div className="space-y-6">
       <section>
         <div className="text-xs uppercase tracking-widest text-muted">
-          {format(today, "EEEE · MMM d")}
+          {dayLabel}
         </div>
         <h1 className="text-2xl font-semibold mt-1">Today</h1>
         <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted">
@@ -84,6 +100,57 @@ export default async function TodayPage() {
           userId={user.id}
         />
       )}
+
+      {extras.length > 0 && <ExtrasSection workouts={extras} />}
+    </div>
+  );
+}
+
+function ExtrasSection({ workouts }: { workouts: Workout[] }) {
+  return (
+    <section className="space-y-2">
+      <h3 className="text-xs uppercase tracking-widest text-muted">
+        Also today
+      </h3>
+      <div className="space-y-2">
+        {workouts.map((w) => (
+          <ExtraActivityCard key={w.id} workout={w} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ExtraActivityCard({ workout: w }: { workout: Workout }) {
+  const min =
+    w.durationSeconds != null ? Math.round(w.durationSeconds / 60) : null;
+  const timeStr = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(w.startTime);
+  return (
+    <div className="rounded-md border border-panel-border bg-panel/60 px-4 py-3 flex items-baseline justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-sm truncate">
+          {w.type.replaceAll("_", " ").toLowerCase()}
+          {w.canonicalSource !== "manual" && (
+            <span className="ml-2 text-[10px] uppercase tracking-wider text-muted">
+              {w.canonicalSource}
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-muted">
+          {timeStr}
+          {min != null && ` · ${min} min`}
+          {w.distanceMeters != null && w.distanceMeters > 0 && (
+            <> · {(w.distanceMeters / 1000).toFixed(2)} km</>
+          )}
+          {w.elevationGainMeters != null && w.elevationGainMeters > 0 && (
+            <> · +{Math.round(w.elevationGainMeters)} m</>
+          )}
+          {w.rpe != null && ` · RPE ${w.rpe}`}
+        </div>
+      </div>
     </div>
   );
 }
@@ -163,6 +230,12 @@ async function SessionBlock({
       )}
       {session.status === "completed" && workoutId != null && (
         <WorkoutSummary workoutId={workoutId} plannedSessionId={session.id} />
+      )}
+      {session.status === "completed" && workoutId == null && (
+        <div className="rounded-lg border border-panel-border bg-panel p-4 flex items-center justify-between">
+          <span className="text-accent">Marked complete.</span>
+          <ReopenButton plannedSessionId={session.id} />
+        </div>
       )}
       {session.status === "skipped" && (
         <div className="rounded-lg border border-panel-border bg-panel p-4 flex items-center justify-between">

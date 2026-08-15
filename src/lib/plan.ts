@@ -76,3 +76,39 @@ export const EASY_RUN_MINUTES_BY_WEEK: Record<number, number> = {
   // Phase 2 — 45 to 50, alternating
   9: 45, 10: 45, 11: 45, 12: 50, 13: 45, 14: 50, 15: 45, 16: 50,
 };
+
+// Groups of session categories that should be considered "the same kind of
+// stress" for planned-vs-actual matching. An imported workout should only
+// auto-complete a planned session when they share at least one group.
+import type { SessionCategory } from "@/db/schema";
+
+const CATEGORY_GROUPS: Record<string, SessionCategory[]> = {
+  running: ["EASY_RUN", "QUALITY_RUN"],
+  aerobic: ["EASY_RUN", "QUALITY_RUN", "ZONE2_CARDIO"],
+  strength: [
+    "UPPER_STRENGTH",
+    "LOWER_STRENGTH",
+    "FULL_BODY_STRENGTH",
+    "MOUNTAIN_LEGS",
+  ],
+  mountain: [
+    "STAIRMASTER",
+    "INCLINE_TREADMILL",
+    "OUTDOOR_HIKE",
+    "LOADED_HIKE",
+    "LONG_MOUNTAIN_SESSION",
+    "MOUNTAIN_LEGS",
+  ],
+  recovery: ["ACTIVE_RECOVERY", "MOBILITY"],
+};
+
+export function categoriesCompatible(
+  a: SessionCategory,
+  b: SessionCategory,
+): boolean {
+  if (a === b) return true;
+  for (const group of Object.values(CATEGORY_GROUPS)) {
+    if (group.includes(a) && group.includes(b)) return true;
+  }
+  return false;
+}

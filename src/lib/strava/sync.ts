@@ -8,6 +8,7 @@ import {
 } from "@/db/schema";
 import { ymd } from "@/lib/date";
 import { getActivePlan } from "@/lib/data";
+import { categoriesCompatible } from "@/lib/plan";
 import type { StravaActivity } from "./client";
 import { getActivity, listActivitiesSince } from "./client";
 import { mapStravaType } from "./mapping";
@@ -42,6 +43,7 @@ export async function upsertActivity(
   const plan = await getActivePlan(userId);
   let plannedSessionId: number | null = null;
   let plannedIsOpen = false;
+  let plannedCompatible = false;
   if (plan) {
     const rows = await db
       .select()
@@ -54,9 +56,10 @@ export async function upsertActivity(
       )
       .limit(1);
     const ps = rows[0];
-    if (ps) {
+    if (ps && categoriesCompatible(category, ps.sessionCategory)) {
       plannedSessionId = ps.id;
       plannedIsOpen = ps.status === "planned";
+      plannedCompatible = true;
     }
   }
 
@@ -112,8 +115,10 @@ export async function upsertActivity(
     action = "created";
   }
 
-  // Auto-mark the planned session complete only on the FIRST matching activity of the day.
-  if (plannedSessionId && plannedIsOpen && action === "created") {
+  // Auto-mark the planned session complete only on the FIRST create for a
+  // compatible activity of the day. Same-day activities of a different kind
+  // (e.g. a run on a lifting day) come in as unlinked extras.
+  if (plannedSessionId && plannedIsOpen && plannedCompatible && action === "created") {
     await db
       .update(plannedSession)
       .set({ status: "completed" })

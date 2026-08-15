@@ -104,9 +104,15 @@ export async function reopenSession(plannedSessionId: number) {
     .update(plannedSession)
     .set({ status: "planned" })
     .where(eq(plannedSession.id, plannedSessionId));
-  await db.delete(workout).where(eq(workout.plannedSessionId, plannedSessionId));
+  // Unlink any workouts (preserves imported/manual data as extras on that day)
+  // rather than deleting them.
+  await db
+    .update(workout)
+    .set({ plannedSessionId: null })
+    .where(eq(workout.plannedSessionId, plannedSessionId));
   revalidatePath("/");
   revalidatePath("/week");
+  revalidatePath("/history");
 }
 
 export async function logBodyMetric(input: {
