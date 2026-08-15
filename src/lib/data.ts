@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   dailyMetric,
@@ -93,6 +93,34 @@ export async function getStrengthSets(workoutId: number): Promise<StrengthExerci
     .from(strengthExercise)
     .where(eq(strengthExercise.workoutId, workoutId))
     .orderBy(strengthExercise.exerciseName, strengthExercise.setNumber);
+}
+
+export async function getRecentWorkouts(userId: number, limit = 30) {
+  return db
+    .select({
+      workout,
+      planned: plannedSession,
+    })
+    .from(workout)
+    .leftJoin(plannedSession, eq(workout.plannedSessionId, plannedSession.id))
+    .where(eq(workout.userId, userId))
+    .orderBy(desc(workout.startTime))
+    .limit(limit);
+}
+
+export async function getStrengthSetsForWorkouts(
+  workoutIds: number[],
+): Promise<StrengthExercise[]> {
+  if (workoutIds.length === 0) return [];
+  return db
+    .select()
+    .from(strengthExercise)
+    .where(inArray(strengthExercise.workoutId, workoutIds))
+    .orderBy(
+      strengthExercise.workoutId,
+      strengthExercise.exerciseName,
+      strengthExercise.setNumber,
+    );
 }
 
 export async function getLastSetsForExercise(

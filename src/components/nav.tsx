@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const tabs = [
   { href: "/", label: "Today" },
   { href: "/week", label: "Week" },
+  { href: "/history", label: "History" },
   { href: "/body", label: "Body" },
 ];
 
@@ -41,7 +42,7 @@ export function Nav() {
       </header>
 
       <nav className="fixed bottom-0 inset-x-0 sm:hidden bg-panel/95 backdrop-blur border-t border-panel-border z-50">
-        <div className="mx-auto max-w-2xl grid grid-cols-3">
+        <div className="mx-auto max-w-2xl grid grid-cols-4">
           {tabs.map((t) => (
             <Link
               key={t.href}
