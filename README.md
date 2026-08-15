@@ -106,7 +106,7 @@ drizzle/                 generated Postgres migrations
 ## What to build next (extension backlog)
 
 Roughly in Section 44 milestone order from the spec:
-1. Extend the seed to cover phases 2–6 (16 → 24 → 32 → 38 weeks)
+1. Extend the seed to phases 3–6 (24 → 32 → 38 weeks). Phase 1 (Rebuild, weeks 1–8) and Phase 2 (Base + Vertical, weeks 9–16) are seeded; Phase 2 includes progressive pack (5 → 20 lb) and elevation (500 → 2000 ft) targets on the Saturday long session.
 2. Workout history page + recent workouts card on Today
 3. Strava OAuth + activity import (§8.3, §33)
 4. Planned-vs-actual matching for imported activities (§12)

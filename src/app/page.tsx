@@ -7,6 +7,7 @@ import {
 
 export const dynamic = "force-dynamic";
 import { parseYmd, weeksUntil } from "@/lib/date";
+import { phaseForWeek } from "@/lib/plan";
 import { LogSessionForm } from "@/components/log-session-form";
 import { ReopenButton, SkipButton } from "@/components/session-actions";
 import type { PlannedSession } from "@/db/schema";
@@ -42,6 +43,7 @@ export default async function TodayPage() {
         weekStartsOn: 1,
       }) + 1
     : null;
+  const phase = weekNumber != null ? phaseForWeek(weekNumber) : null;
   const summitRemaining = user.summitDate ? weeksUntil(user.summitDate) : null;
 
   return (
@@ -53,7 +55,11 @@ export default async function TodayPage() {
         <h1 className="text-2xl font-semibold mt-1">Today</h1>
         <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted">
           {weekNumber != null && <span>Week {weekNumber} of plan</span>}
-          {plan && <span>Phase {plan.currentPhase}</span>}
+          {phase && (
+            <span>
+              Phase {phase.number} · {phase.name}
+            </span>
+          )}
           {summitRemaining != null && (
             <span>
               <span className="text-foreground">{summitRemaining}</span> weeks

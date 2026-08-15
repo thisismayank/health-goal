@@ -1,0 +1,78 @@
+export type Phase = {
+  number: number;
+  name: string;
+  startWeek: number;
+  endWeek: number;
+  objectives: string[];
+};
+
+export const PHASES: Phase[] = [
+  {
+    number: 1,
+    name: "Rebuild",
+    startWeek: 1,
+    endWeek: 8,
+    objectives: [
+      "Restore easy running",
+      "Establish consistent strength training",
+      "Build Zone 2 volume",
+      "Develop tolerance for stair/incline work",
+    ],
+  },
+  {
+    number: 2,
+    name: "Base + Vertical Capacity",
+    startWeek: 9,
+    endWeek: 16,
+    objectives: [
+      "Increase long-session duration",
+      "Increase vertical gain",
+      "Introduce light/moderate backpack load",
+      "Maintain two upper-body exposures/week",
+    ],
+  },
+];
+
+export const TOTAL_SEEDED_WEEKS =
+  PHASES[PHASES.length - 1]?.endWeek ?? 0;
+
+export function phaseForWeek(week: number): Phase {
+  return (
+    PHASES.find((p) => week >= p.startWeek && week <= p.endWeek) ??
+    PHASES[PHASES.length - 1]
+  );
+}
+
+export type LongSessionTarget = {
+  durationMinutes: number;
+  packLb: number;
+  elevationFt: number;
+};
+
+export const LONG_SESSION_BY_WEEK: Record<number, LongSessionTarget> = {
+  // Phase 1 — Rebuild
+  1: { durationMinutes: 60, packLb: 0, elevationFt: 0 },
+  2: { durationMinutes: 70, packLb: 0, elevationFt: 0 },
+  3: { durationMinutes: 80, packLb: 0, elevationFt: 0 },
+  4: { durationMinutes: 90, packLb: 0, elevationFt: 0 },
+  5: { durationMinutes: 100, packLb: 0, elevationFt: 500 },
+  6: { durationMinutes: 110, packLb: 0, elevationFt: 500 },
+  7: { durationMinutes: 120, packLb: 0, elevationFt: 1000 },
+  8: { durationMinutes: 120, packLb: 5, elevationFt: 1000 },
+  // Phase 2 — Base + Vertical Capacity
+  9: { durationMinutes: 120, packLb: 5, elevationFt: 1000 },
+  10: { durationMinutes: 135, packLb: 5, elevationFt: 1000 },
+  11: { durationMinutes: 150, packLb: 10, elevationFt: 1500 },
+  12: { durationMinutes: 150, packLb: 15, elevationFt: 1500 },
+  13: { durationMinutes: 165, packLb: 15, elevationFt: 2000 },
+  14: { durationMinutes: 165, packLb: 20, elevationFt: 2000 },
+  15: { durationMinutes: 180, packLb: 20, elevationFt: 2000 },
+  16: { durationMinutes: 180, packLb: 20, elevationFt: 2000 },
+};
+
+export const EASY_RUN_MINUTES_BY_WEEK: Record<number, number> = {
+  // Phase 1 — 30 to 45
+  1: 30, 2: 32, 3: 34, 4: 36, 5: 38, 6: 40, 7: 42, 8: 45,
+  // Phase 2 — 45 to 50, alternating
+  9: 45, 10: 45, 11: 45, 12: 50, 13: 45, 14: 50, 15: 45, 16: 50,
+};
