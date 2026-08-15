@@ -23,7 +23,7 @@ export function Nav() {
               Companion
             </span>
           </Link>
-          <nav className="hidden sm:flex gap-1 text-sm">
+          <nav className="hidden sm:flex items-center gap-1 text-sm">
             {tabs.map((t) => (
               <Link
                 key={t.href}
@@ -37,7 +37,27 @@ export function Nav() {
                 {t.label}
               </Link>
             ))}
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              className={`rounded px-2 py-1.5 transition text-lg ${
+                pathname === "/settings"
+                  ? "bg-panel-border text-foreground"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              ⚙
+            </Link>
           </nav>
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            className={`sm:hidden text-lg px-2 py-1.5 ${
+              pathname === "/settings" ? "text-foreground" : "text-muted"
+            }`}
+          >
+            ⚙
+          </Link>
         </div>
       </header>
 

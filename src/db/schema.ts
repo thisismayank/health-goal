@@ -155,9 +155,82 @@ export const dailyMetric = pgTable(
   ],
 );
 
+export const WORKOUT_SOURCE_PROVIDERS = [
+  "manual",
+  "strava",
+  "healthkit",
+  "garmin",
+  "fit",
+  "gpx",
+  "tcx",
+] as const;
+
+export type WorkoutSourceProvider = (typeof WORKOUT_SOURCE_PROVIDERS)[number];
+
+export const workoutSource = pgTable(
+  "workout_source",
+  {
+    id: serial("id").primaryKey(),
+    workoutId: integer("workout_id")
+      .notNull()
+      .references(() => workout.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: WORKOUT_SOURCE_PROVIDERS }).notNull(),
+    providerActivityId: text("provider_activity_id").notNull(),
+    syncedAt: timestamp("synced_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    metadataJson: text("metadata_json"),
+  },
+  (table) => [
+    uniqueIndex("workout_source_provider_activity_idx").on(
+      table.provider,
+      table.providerActivityId,
+    ),
+  ],
+);
+
+export const stravaAccount = pgTable(
+  "strava_account",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userProfile.id, { onDelete: "cascade" }),
+    athleteId: text("athlete_id").notNull(),
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    scope: text("scope"),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("strava_account_user_idx").on(table.userId),
+    uniqueIndex("strava_account_athlete_idx").on(table.athleteId),
+  ],
+);
+
+export const stravaWebhookSubscription = pgTable("strava_webhook_subscription", {
+  id: serial("id").primaryKey(),
+  subscriptionId: integer("subscription_id").notNull(),
+  callbackUrl: text("callback_url").notNull(),
+  verifyToken: text("verify_token").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export type UserProfile = typeof userProfile.$inferSelect;
 export type TrainingPlan = typeof trainingPlan.$inferSelect;
 export type PlannedSession = typeof plannedSession.$inferSelect;
 export type Workout = typeof workout.$inferSelect;
 export type StrengthExercise = typeof strengthExercise.$inferSelect;
 export type DailyMetric = typeof dailyMetric.$inferSelect;
+export type WorkoutSource = typeof workoutSource.$inferSelect;
+export type StravaAccount = typeof stravaAccount.$inferSelect;
+export type StravaWebhookSubscription = typeof stravaWebhookSubscription.$inferSelect;

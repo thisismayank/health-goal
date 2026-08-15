@@ -43,5 +43,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Exempt the Strava webhook — Strava's servers hit it without our creds.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/strava/webhook).*)"],
 };

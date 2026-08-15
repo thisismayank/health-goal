@@ -6,6 +6,7 @@ import { db } from "@/db/client";
 import {
   dailyMetric,
   plannedSession,
+  stravaAccount,
   strengthExercise,
   workout,
 } from "@/db/schema";
@@ -144,4 +145,39 @@ export async function logBodyMetric(input: {
 
   revalidatePath("/body");
   revalidatePath("/");
+}
+
+export async function syncStravaNow() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const { syncRecent } = await import("./strava/sync");
+  const results = await syncRecent(user.id, 30);
+  revalidatePath("/");
+  revalidatePath("/week");
+  revalidatePath("/history");
+  revalidatePath("/settings");
+  const created = results.filter((r) => r.action === "created").length;
+  const updated = results.filter((r) => r.action === "updated").length;
+  return { total: results.length, created, updated };
+}
+
+export async function disconnectStrava() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const rows = await db
+    .select()
+    .from(stravaAccount)
+    .where(eq(stravaAccount.userId, user.id))
+    .limit(1);
+  const account = rows[0];
+  if (account) {
+    try {
+      const { deauthorize } = await import("./strava/client");
+      await deauthorize(account.accessToken);
+    } catch (e) {
+      console.warn("strava deauth failed (deleting local record anyway):", e);
+    }
+    await db.delete(stravaAccount).where(eq(stravaAccount.id, account.id));
+  }
+  revalidatePath("/settings");
 }
