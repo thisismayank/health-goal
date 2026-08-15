@@ -98,6 +98,25 @@ export type DailyRollup = {
     hrv: Baseline;
     steps: number | null;
     activeEnergyKcal: number | null;
+    sleepScore: number | null;
+    readiness: number | null;
+    stressScore: number | null;
+    vo2Max: number | null;
+    spo2Pct: number | null;
+    respirationRpm: number | null;
+    avgSleepingHrBpm: number | null;
+    bodyFatPct: number | null;
+    trainingLoad: {
+      ctl: number | null;
+      atl: number | null;
+      tsb: number | null;
+      interpretation:
+        | "fresh"
+        | "steady"
+        | "fatigued"
+        | "very_fatigued"
+        | "unknown";
+    };
     hasAnySignal: boolean;
     concernFlags: string[];
   };
@@ -216,11 +235,29 @@ export async function getDailyRollup(
   if (hrv.deltaPct != null && hrv.deltaPct <= -15) concernFlags.push("hrv_low");
   if (sleepMinutes != null && sleepMinutes < 5.5 * 60) concernFlags.push("sleep_short");
 
+  const ctl = metric?.ctl ?? null;
+  const atl = metric?.atl ?? null;
+  const tsb = ctl != null && atl != null ? +(ctl - atl).toFixed(1) : null;
+  const tsbInterpretation: DailyRollup["recovery"]["trainingLoad"]["interpretation"] =
+    tsb == null
+      ? "unknown"
+      : tsb <= -20
+        ? "very_fatigued"
+        : tsb <= -10
+          ? "fatigued"
+          : tsb < 5
+            ? "steady"
+            : "fresh";
+
   const hasAnySignal =
     sleepMinutes != null ||
     rhr.current != null ||
     hrv.current != null ||
-    (metric?.steps ?? null) != null;
+    (metric?.steps ?? null) != null ||
+    (metric?.sleepScore ?? null) != null ||
+    (metric?.readiness ?? null) != null ||
+    ctl != null ||
+    atl != null;
 
   return {
     date: dateYmd,
@@ -258,6 +295,20 @@ export async function getDailyRollup(
       hrv,
       steps: metric?.steps ?? null,
       activeEnergyKcal: metric?.activeEnergyKcal ?? null,
+      sleepScore: metric?.sleepScore ?? null,
+      readiness: metric?.readiness ?? null,
+      stressScore: metric?.stressScore ?? null,
+      vo2Max: metric?.vo2Max ?? null,
+      spo2Pct: metric?.spo2Pct ?? null,
+      respirationRpm: metric?.respirationRpm ?? null,
+      avgSleepingHrBpm: metric?.avgSleepingHrBpm ?? null,
+      bodyFatPct: metric?.bodyFatPct ?? null,
+      trainingLoad: {
+        ctl,
+        atl,
+        tsb,
+        interpretation: tsbInterpretation,
+      },
       hasAnySignal,
       concernFlags,
     },

@@ -16,9 +16,10 @@ import {
 } from "./schemas";
 
 const MODEL = "gemini-2.5-flash";
-// v3 adds recovery-signals awareness (sleep/HRV/RHR baselines).
-const DAILY_PROMPT_VERSION = "daily-v3";
-const WEEKLY_PROMPT_VERSION = "weekly-v3";
+// v4 adds extended Garmin wellness (sleep score, readiness, stress) +
+// training-load TSB interpretation to the interpretation guide.
+const DAILY_PROMPT_VERSION = "daily-v4";
+const WEEKLY_PROMPT_VERSION = "weekly-v4";
 
 let cachedClient: GoogleGenAI | null = null;
 function gemini(): GoogleGenAI {
@@ -113,6 +114,26 @@ CRITICAL — RECOVERY SIGNALS:
   and modest adjustments — never advise pushing through.
 - If no recovery signals are present (recovery.hasAnySignal is false),
   do NOT invent them. Just work with what's in the rollup.
+
+RECOVERY DATA INTERPRETATION GUIDE (only use if the field is non-null):
+- sleep_score (Garmin 0-100): >=80 excellent recovery; 60-79 adequate;
+  <60 compromised. Prefer this over raw hours when both are present.
+- readiness (Garmin 0-100): >=75 ready for hard work; 50-74 moderate;
+  <50 prioritize recovery.
+- stress_score (Garmin 0-100, 0 is best): >50 elevated stress;
+  combined with poor sleep = clear signal to ease off.
+- trainingLoad.tsb (fitness - fatigue, "form"):
+  - "fresh" (>=5): athlete can absorb progression
+  - "steady" (-10 to 5): normal training
+  - "fatigued" (-20 to -10): recommend easier session
+  - "very_fatigued" (<= -20): recommend deload or unplanned rest day
+- vo2_max: mention trend if it appears in the data; do NOT recommend
+  specific interventions off a single value — it's a slow-moving
+  estimate.
+- spo2_pct: comment only if consistently <92% — that's worth flagging
+  as "consider mentioning to a clinician", never diagnose.
+- respirationRpm, avgSleepingHrBpm, bodyFatPct: usable as background
+  context; not primary decision drivers.
 
 CRITICAL — TEMPORAL FRAMING:
 - If the rollup says the day/week is still IN PROGRESS, you are looking
