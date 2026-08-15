@@ -10,7 +10,15 @@ import {
   type Workout,
 } from "@/db/schema";
 import { getWorkoutsOnLocalDate } from "@/lib/data";
-import { parseYmd, weekDays, weekStart, ymd, ymdInTimeZone } from "@/lib/date";
+import {
+  nowInTimeZone,
+  parseYmd,
+  todayInTimeZone,
+  weekDays,
+  weekStart,
+  ymd,
+  ymdInTimeZone,
+} from "@/lib/date";
 import {
   phaseForWeek,
   sessionCompletionQualifies,
@@ -42,6 +50,13 @@ export type DailyRollup = {
   weekday: string;
   weekNumber: number | null;
   phase: { number: number; name: string } | null;
+  context: {
+    isCurrentDay: boolean;
+    localWallTime: string;
+    hourOfDay: number;
+    // Loose bucket: morning (<12), afternoon (12-17), evening (17-21), late (21+)
+    partOfDay: "morning" | "afternoon" | "evening" | "late";
+  };
   planned: {
     category: SessionCategory;
     title: string;
@@ -84,6 +99,13 @@ function workoutDurationMin(w: Workout): number {
   return w.durationSeconds != null ? Math.round(w.durationSeconds / 60) : 0;
 }
 
+function partOfDay(hour: number): DailyRollup["context"]["partOfDay"] {
+  if (hour < 12) return "morning";
+  if (hour < 17) return "afternoon";
+  if (hour < 21) return "evening";
+  return "late";
+}
+
 export async function getDailyRollup(
   userId: number,
   dateYmd: string,
@@ -94,6 +116,9 @@ export async function getDailyRollup(
     weekday: "long",
     timeZone: tz,
   }).format(parseYmd(dateYmd));
+
+  const now = nowInTimeZone(tz);
+  const isCurrentDay = dateYmd === todayInTimeZone(tz);
 
   const weekNumber = plan
     ? differenceInCalendarWeeks(parseYmd(dateYmd), parseYmd(plan.startDate), {
@@ -170,6 +195,12 @@ export async function getDailyRollup(
     weekday,
     weekNumber,
     phase: phase ? { number: phase.number, name: phase.name } : null,
+    context: {
+      isCurrentDay,
+      localWallTime: now.wallClock,
+      hourOfDay: now.hour,
+      partOfDay: partOfDay(now.hour),
+    },
     planned: ps
       ? {
           category: ps.sessionCategory,
@@ -203,6 +234,20 @@ export type WeeklyRollup = {
   weekStart: string;
   weekNumber: number | null;
   phase: { number: number; name: string } | null;
+  context: {
+    isCurrentWeek: boolean;
+    dayIndexInWeek: number; // 1..7 (Mon=1, Sun=7). Reflects how far through we are.
+    daysElapsed: number; // number of days that have fully or partially happened (>=1)
+    daysRemaining: number; // days strictly after today in this week
+    plannedRemaining: number; // planned sessions on future dates in this week
+    remainingSessions: Array<{
+      date: string;
+      weekday: string;
+      title: string;
+      category: SessionCategory;
+      targetDurationMinutes: number | null;
+    }>;
+  };
   planned: {
     sessions: number;
     strengthSessions: number;
@@ -250,6 +295,10 @@ export async function getWeeklyRollup(
   const startYmd = ymd(days[0]);
   const endYmd = ymd(days[6]);
   const todayYmdStr = ymdInTimeZone(new Date(), tz);
+  const isCurrentWeek = todayYmdStr >= startYmd && todayYmdStr <= endYmd;
+  const dayIndexInWeek = isCurrentWeek
+    ? days.findIndex((d) => ymd(d) === todayYmdStr) + 1
+    : 8; // sentinel: full week considered elapsed for past weeks
 
   const weekNumber = plan
     ? differenceInCalendarWeeks(days[0], parseYmd(plan.startDate), {
@@ -371,10 +420,35 @@ export async function getWeeklyRollup(
   if (avgRpe != null && avgRpe >= 8.5) flags.push("high_average_rpe");
   if (extras >= 3) flags.push("many_extras");
 
+  const remainingSessions = plannedRows
+    .filter((p) => p.date > todayYmdStr)
+    .map((p) => {
+      const d = parseYmd(p.date);
+      const weekday = new Intl.DateTimeFormat("en-US", {
+        weekday: "long",
+        timeZone: tz,
+      }).format(d);
+      return {
+        date: p.date,
+        weekday,
+        title: p.title,
+        category: p.sessionCategory,
+        targetDurationMinutes: p.targetDurationMinutes,
+      };
+    });
+
   return {
     weekStart: ymd(weekStart(anchor)),
     weekNumber,
     phase: phase ? { number: phase.number, name: phase.name } : null,
+    context: {
+      isCurrentWeek,
+      dayIndexInWeek: Math.min(dayIndexInWeek, 7),
+      daysElapsed: isCurrentWeek ? dayIndexInWeek : 7,
+      daysRemaining: isCurrentWeek ? Math.max(0, 7 - dayIndexInWeek) : 0,
+      plannedRemaining: remainingSessions.length,
+      remainingSessions,
+    },
     planned: {
       sessions: plannedSessions,
       strengthSessions: plannedStrengthSessions,

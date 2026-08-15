@@ -16,8 +16,10 @@ import {
 } from "./schemas";
 
 const MODEL = "gemini-2.5-flash";
-const DAILY_PROMPT_VERSION = "daily-v1";
-const WEEKLY_PROMPT_VERSION = "weekly-v1";
+// Bumped from v1 -> v2 when temporal (in-progress vs retrospective)
+// framing was added; invalidates prior cache entries.
+const DAILY_PROMPT_VERSION = "daily-v2";
+const WEEKLY_PROMPT_VERSION = "weekly-v2";
 
 let cachedClient: GoogleGenAI | null = null;
 function gemini(): GoogleGenAI {
@@ -103,34 +105,85 @@ Hard rules:
   concerning symptoms.
 - Coach tone: concise, direct, respectful of the athlete's experience.
 - Prefer concrete observations ("the 25-min walk didn't hit the 60-min
-  target") over vague encouragement.`;
+  target") over vague encouragement.
+
+CRITICAL — TEMPORAL FRAMING:
+- If the rollup says the day/week is still IN PROGRESS, you are looking
+  at a snapshot mid-day or mid-week. DO NOT describe planned work as
+  "missed", "skipped", or "not completed". The athlete may still be
+  going to do it. Frame everything as status + what's ahead.
+- Only in RETROSPECTIVE mode (day/week is over) may you describe
+  planned work as missed and grade the period.`;
 
 function buildDailyPrompt(rollup: DailyRollup): string {
+  const inProgress = rollup.context.isCurrentDay;
+
+  const inProgressGuidance = `
+MODE: IN PROGRESS
+The current local time is ${rollup.context.localWallTime} (${rollup.context.partOfDay}).
+The day is NOT over yet — the athlete may still do the planned work.
+
+Fill the schema like this:
+- summary: 1–3 sentences describing what's happened so far today and
+  what's still on today's plan. Frame the planned session as "still
+  ahead" or "coming up" — never "missed" while it's still ${rollup.context.partOfDay}.
+- wins: 0–3 short positives from what's been done so far today.
+- concerns: 0–3 concrete things to watch for the REMAINDER of today.
+  Empty if none. NOT "you skipped X" — instead "X still needs to happen".
+- next_hint: one sentence about what to focus on for the rest of TODAY
+  (not tomorrow). Timing advice is welcome (e.g., "get out before heat").
+  If nothing planned remains and the athlete is done, encourage recovery.`;
+
+  const retrospectiveGuidance = `
+MODE: RETROSPECTIVE
+The day is over. Grade what actually happened.
+
+Fill the schema like this:
+- summary: 1–3 sentences on how the day went vs plan.
+- wins: 0–3 short concrete positives.
+- concerns: 0–3 short concerns. Empty if none.
+- next_hint: one sentence for TOMORROW.`;
+
   return `${SAFETY_PREAMBLE}
 
 TODAY'S ROLLUP (JSON):
 ${JSON.stringify(rollup, null, 2)}
 
-Write a punchy card:
-- summary: 1–3 sentences on how the day went vs plan.
-- wins: 0–3 short concrete positives.
-- concerns: 0–3 short concerns. Empty if none.
-- next_hint: one sentence for tomorrow.`;
+${inProgress ? inProgressGuidance : retrospectiveGuidance}`;
 }
 
 function buildWeeklyPrompt(
   rollup: WeeklyRollup,
-  decision: ProgressionResult,
+  decision: ProgressionResult | null,
 ): string {
-  return `${SAFETY_PREAMBLE}
+  const inProgress = rollup.context.isCurrentWeek;
 
-WEEKLY ROLLUP (JSON):
-${JSON.stringify(rollup, null, 2)}
+  const inProgressGuidance = `
+MODE: IN PROGRESS
+Day ${rollup.context.dayIndexInWeek} of 7 (${rollup.context.daysRemaining} day(s) remaining).
+${rollup.context.plannedRemaining} planned session(s) still ahead this week.
+
+Fill the schema like this:
+- headline: one line snapshot (e.g. "Mid-week check: on pace, long
+  session still ahead").
+- summary: 2–4 sentences on where the week stands so far and what
+  matters for the rest of it. DO NOT grade or say things were missed
+  when the day for that session hasn't happened yet.
+- wins: 0–3 positives from what's been completed so far.
+- concerns: 0–3 things to watch for the REMAINDER of the week.
+- decision_explanation: exactly "Decision deferred until the week is
+  complete. Current pace: <one clause on trajectory>."
+- proposed_changes: return an EMPTY array [].
+- unchanged: return an empty array [].`;
+
+  const retrospectiveGuidance = `
+MODE: RETROSPECTIVE
+The week is complete. Apply the deterministic decision below.
 
 DETERMINISTIC PROGRESSION DECISION (do not override; explain):
 ${JSON.stringify(decision, null, 2)}
 
-Write the week review:
+Fill the schema like this:
 - headline: one line.
 - summary: 2–4 sentences on the week vs the plan.
 - wins / concerns: short, concrete lists.
@@ -140,6 +193,13 @@ Write the week review:
   numeric change (e.g. "hold_pack_weight"), express as from/to that
   makes the intent clear (e.g. from "10 lb" to "10 lb").
 - unchanged: turn 'hints.unchanged' slugs into short phrases.`;
+
+  return `${SAFETY_PREAMBLE}
+
+WEEKLY ROLLUP (JSON):
+${JSON.stringify(rollup, null, 2)}
+
+${inProgress ? inProgressGuidance : retrospectiveGuidance}`;
 }
 
 export async function generateDailyNarrative(
@@ -163,7 +223,7 @@ export async function generateDailyNarrative(
 export async function generateWeeklyReview(
   userId: number,
   rollup: WeeklyRollup,
-  decision: ProgressionResult,
+  decision: ProgressionResult | null,
 ): Promise<WeeklyReview | null> {
   const hash = inputHash({ rollup, decision }, WEEKLY_PROMPT_VERSION);
   const cached = await readCache(hash, WeeklyReviewSchema);

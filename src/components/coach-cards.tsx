@@ -90,7 +90,10 @@ export async function WeeklyReviewCard({
   plan: PlanRef;
 }) {
   const rollup = await getWeeklyRollup(userId, anchor, tz, plan);
-  const decision = decideProgression(rollup);
+  const inProgress = rollup.context.isCurrentWeek;
+  // Do not compute or surface a decision while the week is still in
+  // progress — per spec §14 the decision is an end-of-week call.
+  const decision = inProgress ? null : decideProgression(rollup);
   const review = await generateWeeklyReview(userId, rollup, decision);
 
   const decisionStyle: Record<string, string> = {
@@ -98,20 +101,28 @@ export async function WeeklyReviewCard({
     HOLD: "text-warn",
     DELOAD: "text-warn",
     MANUAL_REVIEW: "text-muted",
+    IN_PROGRESS: "text-muted",
   };
+  const decisionLabel = inProgress ? "IN PROGRESS" : decision?.decision ?? "";
 
   if (!review) {
-    // LLM failed but we still surface the deterministic decision.
+    // LLM failed. In in-progress mode we don't want to surface a
+    // pretend-decision — just show volume so far.
     return (
       <div className="rounded-lg border border-panel-border bg-panel p-5 space-y-2">
         <div className="text-xs uppercase tracking-widest text-muted">
-          Week review · deterministic
+          Week snapshot
         </div>
-        <div className={`text-lg font-medium ${decisionStyle[decision.decision]}`}>
-          {decision.decision}
-        </div>
+        {!inProgress && decision && (
+          <div
+            className={`text-lg font-medium ${decisionStyle[decision.decision]}`}
+          >
+            {decision.decision}
+          </div>
+        )}
         <div className="text-xs text-muted">
-          Compliance {rollup.compliance.percent}% ·{" "}
+          Day {rollup.context.dayIndexInWeek}/7 · Compliance{" "}
+          {rollup.compliance.percent}% ·{" "}
           {rollup.actual.totalMinutes}/{rollup.planned.totalMinutes} min ·{" "}
           {rollup.actual.sessions}/{rollup.compliance.total} sessions
         </div>
@@ -123,12 +134,15 @@ export async function WeeklyReviewCard({
     <div className="rounded-lg border border-panel-border bg-panel p-5 space-y-4">
       <div className="flex items-baseline justify-between">
         <div className="text-xs uppercase tracking-widest text-muted">
-          Week review
+          {inProgress ? "Week snapshot" : "Week review"}
         </div>
         <span
-          className={`text-xs uppercase tracking-wider ${decisionStyle[decision.decision]}`}
+          className={`text-xs uppercase tracking-wider ${
+            decisionStyle[inProgress ? "IN_PROGRESS" : decision?.decision ?? ""] ??
+            "text-muted"
+          }`}
         >
-          {decision.decision}
+          {decisionLabel}
         </span>
       </div>
       <h3 className="text-lg font-medium">{review.headline}</h3>
@@ -195,7 +209,30 @@ export async function WeeklyReviewCard({
 
       <div className="border-t border-panel-border pt-3 space-y-2">
         <p className="text-sm">{review.decision_explanation}</p>
-        {review.proposed_changes.length > 0 && (
+
+        {inProgress && rollup.context.remainingSessions.length > 0 && (
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted">
+              Still ahead this week
+            </div>
+            <ul className="mt-1 space-y-0.5 text-sm">
+              {rollup.context.remainingSessions.map((s) => (
+                <li key={s.date} className="flex justify-between gap-3">
+                  <span>
+                    {s.weekday.slice(0, 3)} · {s.title}
+                  </span>
+                  {s.targetDurationMinutes != null && (
+                    <span className="text-muted">
+                      {s.targetDurationMinutes} min
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {!inProgress && review.proposed_changes.length > 0 && (
           <div>
             <div className="text-xs uppercase tracking-wider text-muted">
               Next week — proposed
@@ -214,7 +251,7 @@ export async function WeeklyReviewCard({
             </ul>
           </div>
         )}
-        {review.unchanged.length > 0 && (
+        {!inProgress && review.unchanged.length > 0 && (
           <p className="text-xs text-muted">
             Unchanged: {review.unchanged.join(" · ")}
           </p>

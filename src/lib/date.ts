@@ -31,6 +31,34 @@ export const ymdInTimeZone = (d: Date, tz: string): string =>
 export const todayInTimeZone = (tz: string): string =>
   ymdFormatter(tz).format(new Date());
 
+export function nowInTimeZone(tz: string): {
+  hour: number;
+  minute: number;
+  wallClock: string;
+  weekdayIndex: number; // 0=Mon..6=Sun (matches weekStartsOn:1)
+} {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    weekday: "short",
+    timeZone: tz,
+  }).formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+  const weekdayShort = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
+  const map: Record<string, number> = {
+    Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6,
+  };
+  return {
+    hour,
+    minute,
+    wallClock: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    weekdayIndex: map[weekdayShort] ?? 0,
+  };
+}
+
 export const weekStart = (d: Date) => startOfWeek(d, { weekStartsOn: 1 });
 
 export const weekDays = (anchor: Date) => {
