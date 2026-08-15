@@ -8,7 +8,7 @@ import {
 } from "@/db/schema";
 import { ymd } from "@/lib/date";
 import { getActivePlan } from "@/lib/data";
-import { categoriesCompatible } from "@/lib/plan";
+import { sessionCompletionQualifies } from "@/lib/plan";
 import type { StravaActivity } from "./client";
 import { getActivity, listActivitiesSince } from "./client";
 import { mapStravaType } from "./mapping";
@@ -43,7 +43,7 @@ export async function upsertActivity(
   const plan = await getActivePlan(userId);
   let plannedSessionId: number | null = null;
   let plannedIsOpen = false;
-  let plannedCompatible = false;
+  let plannedQualifies = false;
   if (plan) {
     const rows = await db
       .select()
@@ -56,10 +56,10 @@ export async function upsertActivity(
       )
       .limit(1);
     const ps = rows[0];
-    if (ps && categoriesCompatible(category, ps.sessionCategory)) {
+    if (ps && sessionCompletionQualifies(a.elapsed_time, category, ps)) {
       plannedSessionId = ps.id;
       plannedIsOpen = ps.status === "planned";
-      plannedCompatible = true;
+      plannedQualifies = true;
     }
   }
 
@@ -91,9 +91,15 @@ export async function upsertActivity(
 
   let workoutId: number;
   let action: SyncResult["action"];
+  let previousPlannedSessionId: number | null = null;
 
   if (existing[0]) {
     workoutId = existing[0].workoutId;
+    const [prior] = await db
+      .select({ plannedSessionId: workout.plannedSessionId })
+      .from(workout)
+      .where(eq(workout.id, workoutId));
+    previousPlannedSessionId = prior?.plannedSessionId ?? null;
     await db.update(workout).set(workoutValues).where(eq(workout.id, workoutId));
     await db
       .update(workoutSource)
@@ -116,13 +122,38 @@ export async function upsertActivity(
   }
 
   // Auto-mark the planned session complete only on the FIRST create for a
-  // compatible activity of the day. Same-day activities of a different kind
-  // (e.g. a run on a lifting day) come in as unlinked extras.
-  if (plannedSessionId && plannedIsOpen && plannedCompatible && action === "created") {
+  // qualifying activity (category-compatible + hits duration floor). Same-day
+  // activities that fall short come in as unlinked extras.
+  if (plannedSessionId && plannedIsOpen && plannedQualifies && action === "created") {
     await db
       .update(plannedSession)
       .set({ status: "completed" })
       .where(eq(plannedSession.id, plannedSessionId));
+  }
+
+  // Retroactive un-completion: if we just unlinked from a previously-linked
+  // session, and no other workouts remain on it, revert that session to
+  // "planned" so it can be attempted for real.
+  if (
+    previousPlannedSessionId &&
+    previousPlannedSessionId !== plannedSessionId
+  ) {
+    const remaining = await db
+      .select({ id: workout.id })
+      .from(workout)
+      .where(eq(workout.plannedSessionId, previousPlannedSessionId))
+      .limit(1);
+    if (remaining.length === 0) {
+      await db
+        .update(plannedSession)
+        .set({ status: "planned" })
+        .where(
+          and(
+            eq(plannedSession.id, previousPlannedSessionId),
+            eq(plannedSession.status, "completed"),
+          ),
+        );
+    }
   }
 
   return { activityId: a.id, workoutId, plannedSessionId, action };

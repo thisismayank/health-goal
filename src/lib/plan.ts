@@ -112,3 +112,42 @@ export function categoriesCompatible(
   }
   return false;
 }
+
+const STRENGTH_CATEGORIES: SessionCategory[] = [
+  "UPPER_STRENGTH",
+  "LOWER_STRENGTH",
+  "FULL_BODY_STRENGTH",
+  "MOUNTAIN_LEGS",
+];
+
+// Fraction of planned duration a cardio-focused activity must hit to be
+// counted as the planned session's completion. Below the threshold, the
+// workout is treated as a bonus/extra activity instead.
+const CARDIO_DURATION_FLOOR = 0.7;
+const STRENGTH_MIN_MINUTES = 15;
+
+export function sessionCompletionQualifies(
+  actualDurationSeconds: number | null,
+  actualCategory: SessionCategory,
+  planned: {
+    targetDurationMinutes: number | null;
+    sessionCategory: SessionCategory;
+  },
+): boolean {
+  if (!categoriesCompatible(actualCategory, planned.sessionCategory)) {
+    return false;
+  }
+  const actualMin =
+    actualDurationSeconds != null ? actualDurationSeconds / 60 : 0;
+
+  // Strength: require a meaningful session length; duration is a poor proxy
+  // for strength quality, so we don't gate on % of target.
+  if (STRENGTH_CATEGORIES.includes(planned.sessionCategory)) {
+    return actualMin >= STRENGTH_MIN_MINUTES;
+  }
+
+  // Cardio-focused (runs, hikes, stairs, long mountain, recovery walks):
+  // must hit ≥70% of the target duration.
+  if (planned.targetDurationMinutes == null) return actualMin >= STRENGTH_MIN_MINUTES;
+  return actualMin >= planned.targetDurationMinutes * CARDIO_DURATION_FLOOR;
+}
