@@ -1,36 +1,124 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Rainier Training Companion
 
-## Getting Started
+A personal training tracker for a Mount Rainier summit prep. Weekend MVP scope: plan → log → weekly compliance. Everything else (HealthKit, Strava, LLM coach, readiness score) is deferred.
 
-First, run the development server:
+The full product spec lives at `~/Downloads/rainier_training_companion_build_spec.md`. This app implements a deliberate subset.
+
+## Stack
+
+- Next.js 16 (App Router, Turbopack) + TypeScript
+- Tailwind CSS v4
+- Drizzle ORM + postgres.js on Timescale Cloud (Tiger Cloud) Postgres
+- Deploy target: Vercel
+
+## What's in the MVP
+
+- **Today** view — the planned session, target duration/RPE, and a completion form (with strength-set logging for lifting days)
+- **Week** grid — planned vs completed, week-to-date compliance %
+- **Body** page — weight quick-log, 7-day rolling average, week-over-week delta, last 14 days
+- Seed script that provisions the primary user and 8 weeks of Phase 1 (Rebuild) sessions
+
+## What's deferred
+
+- iOS native app (this is a mobile-first web PWA)
+- HealthKit, Strava OAuth, webhooks, source deduplication
+- LLM coach + coach chat
+- Readiness score, progress/hold/deload engine
+- FIT/GPX/TCX import, route maps
+- Recovery integrations beyond manual fatigue
+- Timescale-specific features (hypertables for HR/weight time series, continuous aggregates) — worth adding once we ingest wearable data
+
+## Local dev
+
+Prereq: put your Postgres connection string in `.env.local` as `DATABASE_URL` (see `.env.example`). The Tiger Cloud service name for this project is `mountaineering-2027`.
 
 ```bash
+# 1. Install
+npm install
+
+# 2. Apply migrations to the DB
+npm run db:migrate
+
+# 3. Seed the primary user + 8-week plan (idempotent for the user; wipes and re-inserts planned sessions)
+npm run db:seed
+
+# 4. Run
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### DB scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `npm run db:generate` — generate a new migration after editing `src/db/schema.ts`
+- `npm run db:migrate` — apply pending migrations (production-safe: journal-tracked, not diff-based)
+- `npm run db:studio` — open Drizzle Studio for the DB
+- `npm run db:seed` — re-seed
 
-## Learn More
+> Note: don't use `drizzle-kit push` against Timescale — it tries to reconcile extension-owned views (e.g. `pg_buffercache`) and fails. Always use `db:migrate`.
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy to Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The Timescale DB is already provisioned. Just:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Push the code to a Git remote** (GitHub/GitLab).
 
-## Deploy on Vercel
+2. **Deploy on Vercel:**
+   ```bash
+   npx vercel
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+3. **Set env vars in Vercel project settings:**
+   - `DATABASE_URL` — the same `postgres://...` string from `.env.local`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+4. **Run the migration against the DB from your local machine** (Vercel doesn't run migrations at build time by default):
+   ```bash
+   npm run db:migrate
+   ```
+   If you want migrations to run automatically on Vercel, add `db:migrate` to a `postbuild` script — but be cautious about migrations running on every deploy.
+
+## File layout
+
+```
+src/
+  app/
+    layout.tsx           root layout + Nav
+    page.tsx             Today
+    week/page.tsx        Week grid
+    body/page.tsx        Body/weight log
+    globals.css
+  components/
+    nav.tsx              top + mobile bottom nav
+    log-session-form.tsx completion + strength-set editor
+    body-metric-form.tsx weight/fatigue quick-log
+    session-actions.tsx  skip / reopen buttons
+  db/
+    schema.ts            Drizzle schema (pg-core)
+    client.ts            postgres.js client (cached across HMR reloads)
+    seed.ts              primary user + 8-week Phase 1
+  lib/
+    data.ts              read helpers (server components consume these)
+    actions.ts           server actions (mutations)
+    date.ts              date helpers (YMD, week bounds)
+drizzle/                 generated Postgres migrations
+```
+
+## What to build next (extension backlog)
+
+Roughly in Section 44 milestone order from the spec:
+1. Extend the seed to cover phases 2–6 (16 → 24 → 32 → 38 weeks)
+2. Workout history page + recent workouts card on Today
+3. Strava OAuth + activity import (§8.3, §33)
+4. Planned-vs-actual matching for imported activities (§12)
+5. Readiness score (§15) — once you have 3–4 weeks of data
+6. Progress/hold/deload recommendation engine (§14)
+7. HealthKit read via a small iOS wrapper or WKWebView bridge (§8.2)
+8. LLM coach layer over structured summaries (§16)
+9. Convert `workout`, `daily_metric`, and future HR-sample tables into Timescale hypertables once ingest scales
+
+## Notes
+
+- Next 16 changed several APIs (async `cookies()`/`headers()`, Promise-typed page props). See `AGENTS.md` and `node_modules/next/dist/docs/` for the current patterns.
+- `AGENTS.md` is regenerated by `next dev` — commit it as-is.
+- The `db:seed` script uses Node's `--env-file` flag to load `.env.local` before any modules import the DB client. Next.js loads `.env.local` automatically.
+- After MVP is stable, rotate the Tiger Cloud password in the Timescale Cloud UI and update `DATABASE_URL` locally + in Vercel.
