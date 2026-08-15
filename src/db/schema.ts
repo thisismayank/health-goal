@@ -225,6 +225,28 @@ export const stravaWebhookSubscription = pgTable("strava_webhook_subscription", 
     .defaultNow(),
 });
 
+export const coachNarrative = pgTable(
+  "coach_narrative",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userProfile.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["daily", "weekly"] }).notNull(),
+    // sha256(inputRollupJson + '|' + promptVersion) — deterministic cache key.
+    inputHash: text("input_hash").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    model: text("model").notNull(),
+    contentJson: text("content_json").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("coach_narrative_hash_idx").on(table.inputHash),
+  ],
+);
+
 export type UserProfile = typeof userProfile.$inferSelect;
 export type TrainingPlan = typeof trainingPlan.$inferSelect;
 export type PlannedSession = typeof plannedSession.$inferSelect;
@@ -234,3 +256,4 @@ export type DailyMetric = typeof dailyMetric.$inferSelect;
 export type WorkoutSource = typeof workoutSource.$inferSelect;
 export type StravaAccount = typeof stravaAccount.$inferSelect;
 export type StravaWebhookSubscription = typeof stravaWebhookSubscription.$inferSelect;
+export type CoachNarrative = typeof coachNarrative.$inferSelect;

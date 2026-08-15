@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { differenceInCalendarWeeks } from "date-fns";
 import {
   getLastSetsForExercise,
@@ -11,6 +12,7 @@ import { parseYmd, weeksUntil } from "@/lib/date";
 import { phaseForWeek } from "@/lib/plan";
 import { LogSessionForm } from "@/components/log-session-form";
 import { ReopenButton, SkipButton } from "@/components/session-actions";
+import { CoachCardSkeleton, DailyCoachCard } from "@/components/coach-cards";
 import type { PlannedSession, Workout } from "@/db/schema";
 
 type Prescription = { name: string; sets: number; reps: string }[];
@@ -102,6 +104,15 @@ export default async function TodayPage() {
       )}
 
       {extras.length > 0 && <ExtrasSection workouts={extras} />}
+
+      <Suspense fallback={<CoachCardSkeleton label="Coach · thinking" />}>
+        <DailyCoachCard
+          userId={user.id}
+          today={today}
+          tz={user.timezone}
+          plan={plan ? { id: plan.id, startDate: plan.startDate } : null}
+        />
+      </Suspense>
     </div>
   );
 }

@@ -15,6 +15,13 @@
       "when": 1786787958789,
       "tag": "0001_big_meggan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786790101669,
+      "tag": "0002_black_thundra",
+      "breakpoints": true
     }
   ]
 }

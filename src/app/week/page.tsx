@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
+import { CoachCardSkeleton, WeeklyReviewCard } from "@/components/coach-cards";
 
 export const dynamic = "force-dynamic";
 import {
@@ -119,6 +121,15 @@ export default async function WeekPage() {
           );
         })}
       </div>
+
+      <Suspense fallback={<CoachCardSkeleton label="Week review · thinking" />}>
+        <WeeklyReviewCard
+          userId={user.id}
+          anchor={anchor}
+          tz={user.timezone}
+          plan={{ id: plan.id, startDate: plan.startDate }}
+        />
+      </Suspense>
 
       <div className="pt-2">
         <Link

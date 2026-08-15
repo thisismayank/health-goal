@@ -14,6 +14,7 @@
     "strava:setup-webhook": "tsx --env-file=.env.local scripts/strava-webhook-setup.ts"
   },
   "dependencies": {
+    "@google/genai": "^2.17.1",
     "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.2",
     "next": "16.3.1",
