@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { stravaAccount } from "@/db/schema";
+import { dailyMetric, stravaAccount } from "@/db/schema";
 import { getCurrentUser } from "@/lib/data";
+import { isConfigured as intervalsConfigured } from "@/lib/intervals/client";
 import {
   StravaDisconnectButton,
   StravaSyncButton,
 } from "@/components/strava-actions";
+import { IntervalsSyncButton } from "@/components/intervals-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +22,24 @@ export default async function SettingsPage({
   const user = await getCurrentUser();
   if (!user) return <p className="text-muted">No user found.</p>;
 
-  const rows = await db
-    .select()
-    .from(stravaAccount)
-    .where(eq(stravaAccount.userId, user.id))
-    .limit(1);
-  const strava = rows[0] ?? null;
+  const stravaRow = (
+    await db
+      .select()
+      .from(stravaAccount)
+      .where(eq(stravaAccount.userId, user.id))
+      .limit(1)
+  )[0];
+
+  const lastAutoRow = (
+    await db
+      .select({ lastAutoSyncAt: dailyMetric.lastAutoSyncAt })
+      .from(dailyMetric)
+      .where(eq(dailyMetric.userId, user.id))
+      .orderBy(desc(dailyMetric.lastAutoSyncAt))
+      .limit(1)
+  )[0];
+  const lastAutoSync = lastAutoRow?.lastAutoSyncAt ?? null;
+  const intervalsOn = intervalsConfigured();
 
   return (
     <div className="space-y-6">
@@ -50,35 +64,35 @@ export default async function SettingsPage({
       <section className="rounded-lg border border-panel-border bg-panel p-5 space-y-4">
         <header className="flex items-baseline justify-between">
           <h2 className="text-lg font-medium">Strava</h2>
-          {strava && (
+          {stravaRow && (
             <span className="text-xs text-accent uppercase tracking-wider">
               Connected
             </span>
           )}
         </header>
 
-        {strava ? (
+        {stravaRow ? (
           <>
             <dl className="text-sm text-muted space-y-1">
               <div>
                 Athlete ID:{" "}
-                <span className="text-foreground">{strava.athleteId}</span>
+                <span className="text-foreground">{stravaRow.athleteId}</span>
               </div>
               <div>
-                Scope: <span className="text-foreground">{strava.scope}</span>
+                Scope: <span className="text-foreground">{stravaRow.scope}</span>
               </div>
               <div>
                 Last sync:{" "}
                 <span className="text-foreground">
-                  {strava.lastSyncAt
-                    ? new Date(strava.lastSyncAt).toLocaleString()
+                  {stravaRow.lastSyncAt
+                    ? new Date(stravaRow.lastSyncAt).toLocaleString()
                     : "never"}
                 </span>
               </div>
               <div>
                 Token expires:{" "}
                 <span className="text-foreground">
-                  {new Date(strava.expiresAt).toLocaleString()}
+                  {new Date(stravaRow.expiresAt).toLocaleString()}
                 </span>
               </div>
             </dl>
@@ -106,6 +120,65 @@ export default async function SettingsPage({
             </Link>
           </>
         )}
+      </section>
+
+      <section className="rounded-lg border border-panel-border bg-panel p-5 space-y-4">
+        <header className="flex items-baseline justify-between">
+          <h2 className="text-lg font-medium">intervals.icu</h2>
+          {intervalsOn && (
+            <span className="text-xs text-accent uppercase tracking-wider">
+              Configured
+            </span>
+          )}
+        </header>
+
+        {intervalsOn ? (
+          <>
+            <dl className="text-sm text-muted space-y-1">
+              <div>
+                Athlete ID:{" "}
+                <span className="text-foreground">
+                  {process.env.INTERVALS_ATHLETE_ID}
+                </span>
+              </div>
+              <div>
+                Last auto-sync:{" "}
+                <span className="text-foreground">
+                  {lastAutoSync
+                    ? new Date(lastAutoSync).toLocaleString()
+                    : "never"}
+                </span>
+              </div>
+            </dl>
+            <p className="text-xs text-muted">
+              Pulls the last 30 days of wellness (HRV, resting HR, sleep,
+              steps, weight) from intervals.icu, which mirrors Garmin. Sync is
+              on-demand for now.
+            </p>
+            <IntervalsSyncButton />
+          </>
+        ) : (
+          <p className="text-sm text-muted">
+            Not configured. Set <code>INTERVALS_ATHLETE_ID</code> and{" "}
+            <code>INTERVALS_API_KEY</code> in Vercel env to enable.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-panel-border bg-panel p-5 space-y-4">
+        <header className="flex items-baseline justify-between">
+          <h2 className="text-lg font-medium">Health Auto Export (webhook)</h2>
+          <span className="text-xs text-muted uppercase tracking-wider">
+            Ready
+          </span>
+        </header>
+        <p className="text-sm text-muted">
+          Endpoint accepts POSTs from Health Auto Export (iOS) with a Bearer
+          token. Not required if intervals.icu covers your recovery data.
+        </p>
+        <code className="block text-xs text-muted break-all">
+          POST /api/health-import/webhook
+        </code>
       </section>
 
       <section className="rounded-lg border border-panel-border bg-panel p-5 space-y-2">

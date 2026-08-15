@@ -167,6 +167,17 @@ export async function syncStravaNow() {
   return { total: results.length, created, updated };
 }
 
+export async function syncIntervalsNow() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const { syncRecent } = await import("./intervals/sync");
+  const result = await syncRecent(user.id, 30);
+  revalidatePath("/");
+  revalidatePath("/body");
+  revalidatePath("/settings");
+  return result;
+}
+
 export async function disconnectStrava() {
   const user = await getCurrentUser();
   if (!user) throw new Error("No user found");
