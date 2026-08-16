@@ -1,4 +1,5 @@
 import { getWeeklyQuest } from "@/lib/basecamp/weekly-quest";
+import { getCohortRank, percentileLabel } from "@/lib/basecamp/cohort";
 
 export async function WeeklyQuestCard({
   userId,
@@ -8,6 +9,7 @@ export async function WeeklyQuestCard({
   tz: string;
 }) {
   const q = await getWeeklyQuest(userId, tz);
+  const cohort = await getCohortRank(userId, q.hikerClass, tz);
   const bars = [
     {
       label: "Workouts",
@@ -74,6 +76,41 @@ export async function WeeklyQuestCard({
         <p className="text-xs text-accent italic">
           ✓ All three targets hit this week. Coasting into rest.
         </p>
+      )}
+
+      {cohort && (
+        <div className="pt-2 border-t border-panel-border">
+          {cohort.kind === "ranked" ? (
+            <div className="flex items-baseline justify-between text-xs">
+              <div>
+                <span
+                  className={
+                    cohort.yourPercentile >= 75
+                      ? "text-accent font-medium"
+                      : cohort.yourPercentile >= 50
+                        ? "text-blue-300"
+                        : "text-muted"
+                  }
+                >
+                  {percentileLabel(cohort.yourPercentile)}
+                </span>
+                <span className="text-muted">
+                  {" "}of {cohort.cohortSize} Class {cohort.cohortClass}{" "}
+                  hikers this week
+                </span>
+              </div>
+              <div className="text-muted tabular-nums">
+                #{cohort.yourRank} / {cohort.cohortSize}
+              </div>
+            </div>
+          ) : (
+            <div className="text-[11px] text-muted italic">
+              Cohort forming — {cohort.cohortSize} Class {cohort.cohortClass}
+              {cohort.cohortSize === 1 ? " hiker" : " hikers"} so far.
+              Weekly rankings appear at 5+.
+            </div>
+          )}
+        </div>
       )}
     </section>
   );
