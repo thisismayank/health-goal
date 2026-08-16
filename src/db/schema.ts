@@ -38,6 +38,10 @@ export const userProfile = pgTable(
     // this column exists now so gates can be enforced immediately and
     // upgrade paths can be surfaced. Seed users backfilled to 'admin'.
     plan: text("plan").notNull().default("free"),
+    // Last computed Hiker Class we've persisted. Compared to the current
+    // computed class on home render to detect class-ups → celebration
+    // modal. First-seen initializes silently (no celebration on signup).
+    lastKnownClass: text("last_known_class"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -18,6 +18,10 @@ import {
 import type { StatKey } from "@/lib/basecamp/stats";
 import { tryFetchTripForecast } from "@/lib/weather/trip-forecast";
 import type { DailyForecast } from "@/lib/weather/open-meteo";
+import { computeCharacterSheet } from "@/lib/basecamp/stats";
+import { computeRank } from "@/lib/basecamp/rank";
+import { detectClassChangeAndUpdate } from "@/lib/basecamp/class-tracker";
+import { ClassUpOverlay } from "@/components/home/class-up-overlay";
 
 export const dynamic = "force-dynamic";
 
@@ -63,8 +67,20 @@ export default async function HomePage() {
         })
       : null;
 
+  // Class-up detection — compare current computed class vs last_known
+  // and celebrate if the user just crossed a threshold. Also updates
+  // last_known so it fires at most once per real change.
+  const currentSheet = await computeCharacterSheet(state.user.id);
+  const currentRank = computeRank(currentSheet);
+  const classChange = await detectClassChangeAndUpdate(
+    state.user.id,
+    currentRank.current,
+  );
+  const upgradeMoment = classChange?.direction === "up" ? classChange : null;
+
   return (
     <div className="space-y-5">
+      {upgradeMoment && <ClassUpOverlay change={upgradeMoment} />}
       <Greeting state={state} />
       <Hero state={state} delta={delta} tripForecast={tripForecast} />
       <StatsStrip userId={state.user.id} highlightStats={highlightStats} />

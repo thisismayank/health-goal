@@ -3,6 +3,9 @@ import { requireOnboardedUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
 import { TRAIL_LIBRARY, type TrailPreset } from "@/lib/basecamp/trail-library";
 import { POPULAR_DESTINATIONS, coordsForQuery } from "@/lib/basecamp/destinations";
+import { computeCharacterSheet } from "@/lib/basecamp/stats";
+import { computeRank } from "@/lib/basecamp/rank";
+import { isLocked, minClassForPreset } from "@/lib/basecamp/class-fit";
 import { presetToVirtualTrail } from "@/lib/basecamp/preset-trail";
 import {
   assessTrail,
@@ -65,6 +68,10 @@ export default async function DiscoverPage({
   // One fitness snapshot for all matches. assessTrail's optional
   // `snapshot` opt lets us skip N-1 duplicate queries.
   const snapshot = matches.length > 0 ? await loadFitnessSnapshot(user.id) : null;
+
+  // User's current Hiker Class — used for LOCKED chips on results.
+  const sheet = await computeCharacterSheet(user.id);
+  const userClass = computeRank(sheet).current;
 
   const assessed = snapshot
     ? await Promise.all(
@@ -193,43 +200,55 @@ export default async function DiscoverPage({
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {bucket.map(({ preset, assessment }) => (
-                    <Link
-                      key={preset.slug}
-                      href={`/trails/preset/${preset.slug}`}
-                      className={`block rounded-md border px-4 py-3 transition ${
-                        verdict === "comfortable"
-                          ? "border-accent/40 bg-accent-strong/5 hover:border-accent/60"
-                          : verdict === "achievable"
-                            ? "border-blue-500/30 bg-blue-950/10 hover:border-blue-500/60"
-                            : verdict === "hard"
-                              ? "border-warn/30 bg-warn/5 hover:border-warn/60"
-                              : "border-danger/30 bg-danger/5 hover:border-danger/60"
-                      }`}
-                    >
-                      <div className="flex items-baseline justify-between gap-3">
-                        <div className="font-medium truncate">
-                          {preset.name}
-                        </div>
-                        <div className="text-[10px] font-mono uppercase tracking-wider text-muted whitespace-nowrap">
-                          {preset.terrainGrade}
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted mt-1">
-                        {preset.region}
-                        {" · "}
-                        {preset.distanceKm} km · +
-                        {preset.elevationGainFt.toLocaleString()} ft · ~
-                        {preset.typicalHours}h
-                      </div>
-                      {assessment.suggestedAdjustments.length > 0 &&
-                        verdict !== "comfortable" && (
-                          <div className="text-[11px] text-muted mt-1.5 italic line-clamp-2">
-                            {assessment.suggestedAdjustments[0]}
+                  {bucket.map(({ preset, assessment }) => {
+                    const requiredClass = minClassForPreset(preset);
+                    const locked = isLocked(userClass, requiredClass);
+                    return (
+                      <Link
+                        key={preset.slug}
+                        href={`/trails/preset/${preset.slug}`}
+                        className={`block rounded-md border px-4 py-3 transition ${
+                          verdict === "comfortable"
+                            ? "border-accent/40 bg-accent-strong/5 hover:border-accent/60"
+                            : verdict === "achievable"
+                              ? "border-blue-500/30 bg-blue-950/10 hover:border-blue-500/60"
+                              : verdict === "hard"
+                                ? "border-warn/30 bg-warn/5 hover:border-warn/60"
+                                : "border-danger/30 bg-danger/5 hover:border-danger/60"
+                        }`}
+                      >
+                        <div className="flex items-baseline justify-between gap-3">
+                          <div className="font-medium truncate">
+                            {preset.name}
                           </div>
-                        )}
-                    </Link>
-                  ))}
+                          <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+                            {locked ? (
+                              <span className="text-[10px] font-mono uppercase tracking-wider text-warn">
+                                🔒 Class {requiredClass}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-mono uppercase tracking-wider text-muted">
+                                Class {requiredClass}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted mt-1">
+                          {preset.region}
+                          {" · "}
+                          {preset.distanceKm} km · +
+                          {preset.elevationGainFt.toLocaleString()} ft · ~
+                          {preset.typicalHours}h · {preset.terrainGrade}
+                        </div>
+                        {assessment.suggestedAdjustments.length > 0 &&
+                          verdict !== "comfortable" && (
+                            <div className="text-[11px] text-muted mt-1.5 italic line-clamp-2">
+                              {assessment.suggestedAdjustments[0]}
+                            </div>
+                          )}
+                      </Link>
+                    );
+                  })}
                 </div>
               </section>
             );
