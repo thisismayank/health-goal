@@ -126,10 +126,12 @@ export async function upsertActivity(
     action = "created";
   }
 
-  // Auto-mark the planned session complete only on the FIRST create for a
-  // qualifying activity (category-compatible + hits duration floor). Same-day
-  // activities that fall short come in as unlinked extras.
-  if (plannedSessionId && plannedIsOpen && plannedQualifies && action === "created") {
+  // Auto-mark the planned session complete whenever a qualifying activity
+  // links to a still-open planned session. Idempotent — safe to fire on
+  // both create AND update. Previously gated on action==="created" which
+  // meant an existing activity that later became qualifying (e.g. after a
+  // classification rule change) wouldn't flip the session status.
+  if (plannedSessionId && plannedIsOpen && plannedQualifies) {
     await db
       .update(plannedSession)
       .set({ status: "completed" })
