@@ -7,6 +7,7 @@ import { RecapHero } from "@/components/home/recap-hero";
 import { NoSessionHero } from "@/components/home/no-session-hero";
 import { TripWeekHero } from "@/components/home/trip-week-hero";
 import { StatsStrip } from "@/components/home/stats-strip";
+import { WeeklyQuestCard } from "@/components/home/weekly-quest-card";
 import { SummitHero } from "@/components/summit-hero";
 import { UpcomingTrails } from "@/components/upcoming-trails";
 import { CoachCardSkeleton, DailyCoachCard } from "@/components/coach-cards";
@@ -67,6 +68,7 @@ export default async function HomePage() {
       <Greeting state={state} />
       <Hero state={state} delta={delta} tripForecast={tripForecast} />
       <StatsStrip userId={state.user.id} highlightStats={highlightStats} />
+      <WeeklyQuestCard userId={state.user.id} tz={state.user.timezone} />
       <SummitHero userId={state.user.id} deltaFt={summitDeltaFt} />
       <UpcomingTrails userId={state.user.id} tz={state.user.timezone} />
       <Suspense fallback={<CoachCardSkeleton label="Coach · thinking" />}>
