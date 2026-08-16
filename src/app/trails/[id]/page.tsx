@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
@@ -12,8 +13,16 @@ import {
   VERDICT_COLOR,
   VERDICT_LABEL,
   type DimensionAnalysis,
+  type TrailAssessment,
 } from "@/lib/basecamp/trail-assessment";
+import {
+  generatePrepPlan,
+  type PrepPlan,
+} from "@/lib/basecamp/trail-prep-plan";
+import { generateTrailNarrative } from "@/lib/coach/trail-narrative";
 import { TrailDeleteButton } from "@/components/trail-actions";
+import { CoachCardSkeleton } from "@/components/coach-cards";
+import type { Trail as TrailRow } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +47,7 @@ export default async function TrailDetailPage({
 
   const today = todayInTimeZone(user.timezone);
   const assessment = await assessTrail(user.id, t, today);
+  const prepPlan = generatePrepPlan(assessment, t);
 
   return (
     <div className="space-y-6">
@@ -120,6 +130,17 @@ export default async function TrailDetailPage({
         </section>
       )}
 
+      <Suspense fallback={<CoachCardSkeleton label="Coach · thinking" />}>
+        <TrailCoachCard
+          userId={user.id}
+          trailRow={t}
+          assessment={assessment}
+          plan={prepPlan}
+        />
+      </Suspense>
+
+      {prepPlan.kind === "generated" && <PrepPlanCard plan={prepPlan} />}
+
       {t.notes && (
         <section className="rounded-md border border-panel-border bg-panel/60 p-4">
           <div className="text-xs uppercase tracking-widest text-muted mb-1">
@@ -133,6 +154,143 @@ export default async function TrailDetailPage({
         <TrailDeleteButton trailId={t.id} />
       </section>
     </div>
+  );
+}
+
+async function TrailCoachCard({
+  userId,
+  trailRow,
+  assessment,
+  plan,
+}: {
+  userId: number;
+  trailRow: TrailRow;
+  assessment: TrailAssessment;
+  plan: PrepPlan;
+}) {
+  const narrative = await generateTrailNarrative(
+    userId,
+    trailRow,
+    assessment,
+    plan,
+  );
+  if (!narrative) return null;
+
+  return (
+    <div className="rounded-lg border border-blue-500/30 bg-blue-950/10 shadow-lg shadow-blue-500/10 p-5 space-y-4">
+      <div className="text-xs font-mono uppercase tracking-widest text-blue-400">
+        [COACH TAKE]
+      </div>
+      <div className="space-y-2">
+        <h3 className="text-lg font-medium">{narrative.headline}</h3>
+        <p className="text-sm leading-relaxed">{narrative.summary}</p>
+      </div>
+
+      {narrative.keyMoves.length > 0 && (
+        <div>
+          <div className="text-xs uppercase tracking-wider text-blue-300">
+            Key moves before the day
+          </div>
+          <ul className="mt-1 space-y-0.5 text-sm">
+            {narrative.keyMoves.map((m, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-blue-400">▸</span>
+                <span>{m}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {narrative.onDay.length > 0 && (
+        <div>
+          <div className="text-xs uppercase tracking-wider text-blue-300">
+            On the day
+          </div>
+          <ul className="mt-1 space-y-0.5 text-sm">
+            {narrative.onDay.map((m, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-blue-400">▸</span>
+                <span>{m}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {narrative.cutOffs.length > 0 && (
+        <div>
+          <div className="text-xs uppercase tracking-wider text-warn">
+            Turn around if
+          </div>
+          <ul className="mt-1 space-y-0.5 text-sm">
+            {narrative.cutOffs.map((m, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-warn">▸</span>
+                <span>{m}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {narrative.planNarrative && (
+        <p className="text-sm text-muted italic border-t border-blue-500/20 pt-3">
+          {narrative.planNarrative}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function PrepPlanCard({ plan }: { plan: Extract<PrepPlan, { kind: "generated" }> }) {
+  return (
+    <section className="rounded-md border border-panel-border bg-panel p-5 space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-xs uppercase tracking-widest text-muted">
+          Prep plan · {plan.daysAvailable} days
+        </h2>
+        <span className="text-xs text-blue-300 uppercase tracking-wider">
+          Focus: {plan.focus}
+        </span>
+      </div>
+
+      <div className="text-xs text-muted">
+        Weekly shape: {plan.weekly.longSessions} long · {plan.weekly.aerobicSessions} aerobic ·{" "}
+        {plan.weekly.strengthSessions} strength · {plan.weekly.restDays} rest
+      </div>
+
+      <div className="space-y-2">
+        {plan.progressions.map((p, i) => (
+          <div
+            key={i}
+            className="rounded-md border border-panel-border bg-background/40 p-3 space-y-1"
+          >
+            <div className="flex items-baseline justify-between gap-3">
+              <div className="text-sm font-medium">{p.weekLabel}</div>
+              <div className="text-xs text-muted tabular-nums">
+                {p.longSessionMin} min long
+                {p.packLb > 0 && ` · ${p.packLb} lb pack`}
+                {p.verticalTargetFt > 0 && ` · ~${p.verticalTargetFt.toLocaleString()} ft`}
+              </div>
+            </div>
+            <div className="text-xs text-muted">{p.note}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="text-xs text-muted italic border-t border-panel-border pt-3">
+        Then {plan.taperDays}-day taper: reduce volume by 40-50%, keep intensity
+        light. This plan is display-only — it doesn't modify your active
+        training plan.
+      </div>
+
+      {plan.alternativeSuggestion && (
+        <div className="rounded-md border border-warn/30 bg-warn/5 p-3 text-sm text-warn">
+          {plan.alternativeSuggestion}
+        </div>
+      )}
+    </section>
   );
 }
 
