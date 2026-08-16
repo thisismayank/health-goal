@@ -1,15 +1,24 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { saveItineraryTrails } from "@/lib/actions";
+import { generateItineraryAdvice, saveItineraryTrails } from "@/lib/actions";
 import {
   buildItinerary,
   type AssessedPreset,
   type Verdict,
 } from "@/lib/basecamp/itinerary";
 import type { TrailPreset } from "@/lib/basecamp/trail-library";
+
+// Local mirror of ItineraryNarrativeSchema from the coach module. That
+// module imports drizzle/postgres and can't be pulled into a client
+// bundle. Keep this shape in sync.
+type ItineraryNarrative = {
+  headline: string;
+  summary: string;
+  perDay: string[];
+};
 
 // Inlined here so the client bundle stays free of trail-assessment's
 // server-only transitive imports. Keep labels in sync with the server-side
@@ -73,6 +82,10 @@ export function ItineraryPlanner({
   const [pending, startTransition] = useTransition();
   const [savedCount, setSavedCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [narrative, setNarrative] = useState<ItineraryNarrative | null>(null);
+  const [narrativeShape, setNarrativeShape] = useState<string | null>(null);
+  const [narrativePending, startNarrativeTransition] = useTransition();
+  const [narrativeError, setNarrativeError] = useState<string | null>(null);
 
   // Rehydrate presets into the AssessedPreset shape expected by the
   // sequencer. We only care about fields the sequencer reads.
@@ -101,6 +114,81 @@ export function ItineraryPlanner({
       d.kind === "hike",
     )
     .map((d) => ({ presetSlug: d.preset.slug, targetDate: d.dateYmd }));
+
+  // Compact payload for the coach's advice call. Also used as the
+  // fingerprint that determines whether cached narrative is still valid.
+  const advicePayload = useMemo(() => {
+    const totals = {
+      hikes: itinerary.totalHikes,
+      hours: itinerary.totalHours,
+      verticalFt: itinerary.totalVerticalFt,
+    };
+    const coachDays = itinerary.days.map((d) => {
+      if (d.kind === "hike") {
+        return {
+          kind: "hike" as const,
+          dayIndex: d.dayIndex,
+          dateYmd: d.dateYmd,
+          trailName: d.preset.name,
+          distanceKm: d.preset.distanceKm,
+          elevationGainFt: d.preset.elevationGainFt,
+          typicalHours: d.preset.typicalHours,
+          terrainGrade: d.preset.terrainGrade,
+          verdict: d.verdict,
+        };
+      }
+      if (d.kind === "rest") {
+        return {
+          kind: "rest" as const,
+          dayIndex: d.dayIndex,
+          dateYmd: d.dateYmd,
+          reason: d.reason,
+        };
+      }
+      return {
+        kind: "unfilled" as const,
+        dayIndex: d.dayIndex,
+        dateYmd: d.dateYmd,
+      };
+    });
+    return {
+      destination: destinationLabel,
+      days,
+      totals,
+      itinerary: coachDays,
+    };
+  }, [itinerary, destinationLabel, days]);
+
+  const currentShape = useMemo(
+    () => JSON.stringify(advicePayload),
+    [advicePayload],
+  );
+  const narrativeStale = narrative != null && narrativeShape !== currentShape;
+
+  const fetchAdvice = () => {
+    setNarrativeError(null);
+    startNarrativeTransition(async () => {
+      try {
+        const res = await generateItineraryAdvice(advicePayload);
+        if (!res.narrative) {
+          setNarrativeError(
+            "Couldn't generate advice right now — coach service may be down.",
+          );
+          return;
+        }
+        setNarrative(res.narrative);
+        setNarrativeShape(currentShape);
+      } catch (e) {
+        setNarrativeError(e instanceof Error ? e.message : "Failed");
+      }
+    });
+  };
+
+  // Auto-clear narrative saved state if user makes changes so the
+  // narrative and daily notes don't misalign with what they see below.
+  useEffect(() => {
+    if (savedCount != null) setSavedCount(null);
+  }, [currentShape]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveAll = () => {
     setError(null);
@@ -231,10 +319,63 @@ export function ItineraryPlanner({
       </div>
 
       <div className="space-y-2">
-        {itinerary.days.map((day) => (
-          <DayCard key={day.dayIndex} day={day} />
+        {itinerary.days.map((day, i) => (
+          <DayCard
+            key={day.dayIndex}
+            day={day}
+            coachNote={
+              narrative && !narrativeStale ? narrative.perDay[i] : undefined
+            }
+          />
         ))}
       </div>
+
+      {numHikes > 0 && (
+        <div className="rounded-md border border-blue-500/40 bg-blue-950/10 p-4 space-y-2">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
+              [COACH'S TAKE]
+              {narrative && narrativeStale && (
+                <span className="ml-2 text-warn normal-case tracking-normal">
+                  (out of date — refresh)
+                </span>
+              )}
+            </div>
+            {(!narrative || narrativeStale) && (
+              <button
+                type="button"
+                onClick={fetchAdvice}
+                disabled={narrativePending}
+                className="rounded-md border border-blue-500/40 bg-blue-950/20 text-blue-300 text-xs font-medium px-3 py-1.5 hover:border-blue-400 transition disabled:opacity-50"
+              >
+                {narrativePending
+                  ? "Thinking…"
+                  : narrative
+                    ? "Refresh advice →"
+                    : "Get coach's take →"}
+              </button>
+            )}
+          </div>
+
+          {narrative ? (
+            <div className={narrativeStale ? "opacity-60" : ""}>
+              <h4 className="text-sm font-medium">{narrative.headline}</h4>
+              <p className="text-sm text-foreground/85 mt-1 leading-relaxed">
+                {narrative.summary}
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted italic">
+              Ask the coach why this order works for your fitness, and
+              what to focus on each day.
+            </p>
+          )}
+
+          {narrativeError && (
+            <p className="text-xs text-danger">{narrativeError}</p>
+          )}
+        </div>
+      )}
 
       {numHikes === 0 ? (
         <p className="text-xs text-muted italic">
@@ -287,8 +428,10 @@ export function ItineraryPlanner({
 
 function DayCard({
   day,
+  coachNote,
 }: {
   day: ReturnType<typeof buildItinerary>["days"][number];
+  coachNote?: string;
 }) {
   const dayLabel = new Intl.DateTimeFormat("en-US", {
     weekday: "short",
@@ -298,34 +441,40 @@ function DayCard({
 
   if (day.kind === "rest") {
     return (
-      <div className="rounded-md border border-panel-border bg-panel/40 px-4 py-3 flex items-baseline gap-3">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-muted w-14">
-          Day {day.dayIndex + 1}
+      <div className="rounded-md border border-panel-border bg-panel/40 px-4 py-3 space-y-1">
+        <div className="flex items-baseline gap-3">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-muted w-14">
+            Day {day.dayIndex + 1}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium">Rest day</div>
+            <div className="text-xs text-muted">{day.reason}</div>
+          </div>
+          <div className="text-[10px] text-muted whitespace-nowrap">
+            {dayLabel}
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium">Rest day</div>
-          <div className="text-xs text-muted">{day.reason}</div>
-        </div>
-        <div className="text-[10px] text-muted whitespace-nowrap">
-          {dayLabel}
-        </div>
+        {coachNote && <CoachNote text={coachNote} />}
       </div>
     );
   }
 
   if (day.kind === "unfilled") {
     return (
-      <div className="rounded-md border border-dashed border-panel-border bg-panel/20 px-4 py-3 flex items-baseline gap-3">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-muted w-14">
-          Day {day.dayIndex + 1}
+      <div className="rounded-md border border-dashed border-panel-border bg-panel/20 px-4 py-3 space-y-1">
+        <div className="flex items-baseline gap-3">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-muted w-14">
+            Day {day.dayIndex + 1}
+          </div>
+          <div className="flex-1 text-xs text-muted italic">
+            No suitable trail left in the pool. Free time or repeat a
+            favorite.
+          </div>
+          <div className="text-[10px] text-muted whitespace-nowrap">
+            {dayLabel}
+          </div>
         </div>
-        <div className="flex-1 text-xs text-muted italic">
-          No suitable trail left in the pool. Free time or repeat a
-          favorite.
-        </div>
-        <div className="text-[10px] text-muted whitespace-nowrap">
-          {dayLabel}
-        </div>
+        {coachNote && <CoachNote text={coachNote} />}
       </div>
     );
   }
@@ -333,31 +482,43 @@ function DayCard({
   // hike
   return (
     <div
-      className={`rounded-md border px-4 py-3 flex items-baseline gap-3 ${VERDICT_TONE[day.verdict] ?? "border-panel-border bg-panel"}`}
+      className={`rounded-md border px-4 py-3 space-y-1 ${VERDICT_TONE[day.verdict] ?? "border-panel-border bg-panel"}`}
     >
-      <div className="text-[10px] font-mono uppercase tracking-wider text-muted w-14">
-        Day {day.dayIndex + 1}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-sm font-medium truncate">
-            {day.preset.name}
-          </span>
-          <span
-            className={`text-[10px] font-mono uppercase tracking-wider whitespace-nowrap ${VERDICT_COLOR[day.verdict]}`}
-          >
-            {VERDICT_LABEL[day.verdict]}
-          </span>
+      <div className="flex items-baseline gap-3">
+        <div className="text-[10px] font-mono uppercase tracking-wider text-muted w-14">
+          Day {day.dayIndex + 1}
         </div>
-        <div className="text-xs text-muted mt-0.5">
-          {day.preset.distanceKm} km · +
-          {day.preset.elevationGainFt.toLocaleString()} ft · ~
-          {day.preset.typicalHours}h
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="text-sm font-medium truncate">
+              {day.preset.name}
+            </span>
+            <span
+              className={`text-[10px] font-mono uppercase tracking-wider whitespace-nowrap ${VERDICT_COLOR[day.verdict]}`}
+            >
+              {VERDICT_LABEL[day.verdict]}
+            </span>
+          </div>
+          <div className="text-xs text-muted mt-0.5">
+            {day.preset.distanceKm} km · +
+            {day.preset.elevationGainFt.toLocaleString()} ft · ~
+            {day.preset.typicalHours}h
+          </div>
+        </div>
+        <div className="text-[10px] text-muted whitespace-nowrap tabular-nums">
+          {dayLabel}
         </div>
       </div>
-      <div className="text-[10px] text-muted whitespace-nowrap tabular-nums">
-        {dayLabel}
-      </div>
+      {coachNote && <CoachNote text={coachNote} />}
+    </div>
+  );
+}
+
+function CoachNote({ text }: { text: string }) {
+  return (
+    <div className="pl-[calc(3.5rem+0.75rem)] pt-0.5 flex items-start gap-1.5 text-xs text-blue-300/90 italic">
+      <span className="text-blue-400 shrink-0">▸</span>
+      <span>{text}</span>
     </div>
   );
 }

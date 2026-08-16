@@ -352,7 +352,9 @@ export const coachNarrative = pgTable(
     userId: integer("user_id")
       .notNull()
       .references(() => userProfile.id, { onDelete: "cascade" }),
-    kind: text("kind", { enum: ["daily", "weekly", "trail", "plan"] }).notNull(),
+    kind: text("kind", {
+      enum: ["daily", "weekly", "trail", "plan", "itinerary"],
+    }).notNull(),
     // sha256(inputRollupJson + '|' + promptVersion) — deterministic cache key.
     inputHash: text("input_hash").notNull(),
     promptVersion: text("prompt_version").notNull(),

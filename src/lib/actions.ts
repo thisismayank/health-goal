@@ -723,6 +723,46 @@ export async function setNotificationPreference(input: {
  * if the user already has a saved trail for a given presetSlug, we UPDATE
  * its targetDate instead of creating a duplicate.
  */
+/**
+ * Generate an LLM narrative for a client-computed itinerary. Called on
+ * demand from the itinerary planner. Cached in coach_narrative — same
+ * shape + fitness fingerprint returns cached instantly.
+ */
+export async function generateItineraryAdvice(input: {
+  destination: string;
+  days: number;
+  totals: { hikes: number; hours: number; verticalFt: number };
+  itinerary: Array<
+    | {
+        kind: "hike";
+        dayIndex: number;
+        dateYmd: string;
+        trailName: string;
+        distanceKm: number;
+        elevationGainFt: number;
+        typicalHours: number;
+        terrainGrade: string;
+        verdict: "comfortable" | "achievable" | "hard" | "do_not_attempt";
+      }
+    | { kind: "rest"; dayIndex: number; dateYmd: string; reason: string }
+    | { kind: "unfilled"; dayIndex: number; dateYmd: string }
+  >;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const { generateItineraryNarrative } = await import(
+    "./coach/itinerary-narrative"
+  );
+  const narrative = await generateItineraryNarrative({
+    user,
+    destination: input.destination,
+    days: input.days,
+    totals: input.totals,
+    itinerary: input.itinerary,
+  });
+  return { narrative };
+}
+
 export async function saveItineraryTrails(input: {
   entries: Array<{ presetSlug: string; targetDate: string }>;
 }) {
