@@ -11,6 +11,12 @@ import {
   workout,
 } from "@/db/schema";
 import { getCurrentUser } from "./data";
+import {
+  getCumulativeVerticalFt,
+  RAINIER_SUMMIT_FT,
+  WAYPOINTS,
+  type Waypoint,
+} from "./basecamp/summit";
 
 export type LoggedStrengthSet = {
   reps: number | null;
@@ -31,7 +37,21 @@ export type CompleteSessionInput = {
   exercises?: LoggedExercise[];
 };
 
-export async function completeSession(input: CompleteSessionInput) {
+export type CompletionSummary = {
+  sessionTitle: string;
+  categoryDisplay: string;
+  actualDurationMinutes: number;
+  rpe: number;
+  verticalGainedFt: number;
+  newTotalFt: number;
+  waypointCleared: Waypoint | null;
+  summitCount: number;
+};
+
+export async function completeSession(input: CompleteSessionInput): Promise<{
+  workoutId: number;
+  summary: CompletionSummary;
+}> {
   const user = await getCurrentUser();
   if (!user) throw new Error("No user found");
 
@@ -41,6 +61,8 @@ export async function completeSession(input: CompleteSessionInput) {
     .where(eq(plannedSession.id, input.plannedSessionId))
     .limit(1);
   if (!ps) throw new Error("Planned session not found");
+
+  const preTotalFt = await getCumulativeVerticalFt(user.id);
 
   const endTime = new Date();
   const startTime = new Date(
@@ -85,9 +107,42 @@ export async function completeSession(input: CompleteSessionInput) {
     .set({ status: "completed" })
     .where(eq(plannedSession.id, ps.id));
 
+  const postTotalFt = await getCumulativeVerticalFt(user.id);
+  const verticalGainedFt = Math.max(0, postTotalFt - preTotalFt);
+
+  // Waypoint cleared? Compare pre/post within the CURRENT mountain (mod summit).
+  // A single workout can push you past multiple waypoints; report the highest.
+  const perMountain = RAINIER_SUMMIT_FT;
+  const preRemainder = preTotalFt % perMountain;
+  const postRemainder = postTotalFt % perMountain;
+  // Handle the case where we crossed a full summit (preRemainder is high,
+  // postRemainder wraps back). Then anything the postRemainder is above counts.
+  const crossedSummit = Math.floor(postTotalFt / perMountain) > Math.floor(preTotalFt / perMountain);
+  const waypointCleared = WAYPOINTS.reduce<Waypoint | null>((best, w) => {
+    const justCrossed = crossedSummit
+      ? postRemainder >= w.ft
+      : preRemainder < w.ft && postRemainder >= w.ft;
+    if (justCrossed && (!best || w.ft > best.ft)) return w;
+    return best;
+  }, null);
+
   revalidatePath("/");
   revalidatePath("/week");
-  return { workoutId: w.id };
+  revalidatePath("/character");
+
+  return {
+    workoutId: w.id,
+    summary: {
+      sessionTitle: ps.title,
+      categoryDisplay: ps.sessionCategory.replaceAll("_", " ").toLowerCase(),
+      actualDurationMinutes: input.actualDurationMinutes,
+      rpe: input.rpe,
+      verticalGainedFt,
+      newTotalFt: postTotalFt,
+      waypointCleared,
+      summitCount: Math.floor(postTotalFt / perMountain),
+    },
+  };
 }
 
 export async function skipSession(plannedSessionId: number) {

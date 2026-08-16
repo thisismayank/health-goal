@@ -13,6 +13,7 @@ import { phaseForWeek } from "@/lib/plan";
 import { LogSessionForm } from "@/components/log-session-form";
 import { ReopenButton, SkipButton } from "@/components/session-actions";
 import { CoachCardSkeleton, DailyCoachCard } from "@/components/coach-cards";
+import { SummitHero } from "@/components/summit-hero";
 import type { PlannedSession, Workout } from "@/db/schema";
 
 type Prescription = { name: string; sets: number; reps: string }[];
@@ -86,6 +87,8 @@ export default async function TodayPage() {
           )}
         </div>
       </section>
+
+      <SummitHero userId={user.id} />
 
       {!session && (
         <div className="rounded-lg border border-panel-border bg-panel p-6">
@@ -247,7 +250,10 @@ async function SessionBlock({
       <div className="rounded-lg border border-panel-border bg-panel p-5 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs uppercase tracking-widest text-muted">
+            <div className="text-xs font-mono uppercase tracking-widest text-blue-400">
+              [DAILY QUEST]
+            </div>
+            <div className="text-xs uppercase tracking-widest text-muted mt-1">
               {session.sessionCategory.replaceAll("_", " ").toLowerCase()}
             </div>
             <h2 className="text-xl font-medium mt-1">{session.title}</h2>

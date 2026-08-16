@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { completeSession, type LoggedExercise } from "@/lib/actions";
+import { useRouter } from "next/navigation";
+import {
+  completeSession,
+  type CompletionSummary,
+  type LoggedExercise,
+} from "@/lib/actions";
+import { CompletionOverlay } from "./completion-overlay";
 
 type PrescribedExercise = { name: string; sets: number; reps: string };
 
@@ -41,6 +47,8 @@ export function LogSessionForm({
   );
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [completion, setCompletion] = useState<CompletionSummary | null>(null);
+  const router = useRouter();
 
   const updateSet = (
     exIdx: number,
@@ -103,20 +111,30 @@ export function LogSessionForm({
 
     startTransition(async () => {
       try {
-        await completeSession({
+        const result = await completeSession({
           plannedSessionId,
           actualDurationMinutes: durationMin,
           rpe: rpeNum,
           notes: notes.trim() || undefined,
           exercises: loggedExercises.length > 0 ? loggedExercises : undefined,
         });
+        setCompletion(result.summary);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save");
       }
     });
   };
 
+  const dismissCompletion = () => {
+    setCompletion(null);
+    router.refresh();
+  };
+
   return (
+    <>
+    {completion && (
+      <CompletionOverlay summary={completion} onDismiss={dismissCompletion} />
+    )}
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-2 gap-3">
         <label className="block space-y-1.5">
@@ -262,5 +280,6 @@ export function LogSessionForm({
         {pending ? "Saving…" : "Log workout"}
       </button>
     </form>
+    </>
   );
 }
