@@ -32,6 +32,17 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  /* No iOS pull-to-refresh or overscroll rubber-banding when running as a
+     standalone PWA — feels more native. */
+  overscroll-behavior: none;
+  /* Removes the blue mobile tap highlight on interactive elements. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* When installed as a standalone PWA, prevent horizontal overflow from
+   accidental full-width elements. */
+body {
+  overflow-x: hidden;
 }
 
 input,

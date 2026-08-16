@@ -50,7 +50,10 @@ export function BottomNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-50 border-t border-blue-500/20 bg-background/95 backdrop-blur">
+    <nav
+      className="fixed bottom-0 inset-x-0 z-50 border-t border-blue-500/20 bg-background/95 backdrop-blur"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       <div className="mx-auto max-w-2xl grid grid-cols-4">
         {TABS.map((t) => {
           const active = t.matches(pathname);

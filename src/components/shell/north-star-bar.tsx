@@ -132,7 +132,10 @@ export function NorthStarBarSkeleton() {
 
 function NorthStarShell({ children }: { children: React.ReactNode }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-blue-500/20 bg-background/95 backdrop-blur">
+    <header
+      className="sticky top-0 z-40 border-b border-blue-500/20 bg-background/95 backdrop-blur"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
       <div className="mx-auto max-w-2xl px-4 py-2.5 flex items-center gap-2.5">
         {children}
       </div>

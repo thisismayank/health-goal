@@ -6,9 +6,14 @@ const REALM = "Basecamp";
 const SESSION_COOKIE = "basecamp_session";
 
 // Public routes that bypass the session gate. Auth pages need to be
-// reachable when signed out; webhooks authenticate with their own tokens.
+// reachable when signed out; webhooks authenticate with their own tokens;
+// PWA assets (manifest + icons) must be fetchable by the browser without
+// a session cookie so the install prompt and home-screen icon work.
 const PUBLIC_PATHS = new Set<string>([
   "/login",
+  "/manifest.webmanifest",
+  "/icon",
+  "/apple-icon",
 ]);
 const PUBLIC_PREFIXES: string[] = [
   "/api/auth/",
