@@ -53,6 +53,8 @@ export default async function SettingsPage({
     prefRows.find((p) => p.kind === "trip_week")?.emailEnabled ?? true;
   const weekendNudgeEnabled =
     prefRows.find((p) => p.kind === "weekend_nudge")?.emailEnabled ?? true;
+  const squadActivityEnabled =
+    prefRows.find((p) => p.kind === "squad_activity")?.emailEnabled ?? true;
 
   return (
     <div className="space-y-6">
@@ -215,6 +217,12 @@ export default async function SettingsPage({
             label="Weekend nudge"
             description="Thursday email with 3 hikes ready for your fitness — even when nothing's planned. Weekly."
             initialEnabled={weekendNudgeEnabled}
+          />
+          <NotificationToggle
+            kind="squad_activity"
+            label="Squad activity"
+            description="Email when a squadmate logs a trail completion — see what your people are doing."
+            initialEnabled={squadActivityEnabled}
           />
         </div>
       </section>

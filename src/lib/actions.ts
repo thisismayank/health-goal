@@ -3,7 +3,9 @@
 import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { db } from "@/db/client";
+import { notifySquadOfCompletion } from "@/lib/notifications/squad-activity";
 import {
   dailyMetric,
   plannedSession,
@@ -392,6 +394,36 @@ export async function syncIntervalsNow() {
   return result;
 }
 
+// App base URL for links in outbound emails. Prefers explicit env,
+// falls back to Vercel URL, else the request's own origin.
+async function resolveAppUrl(): Promise<string> {
+  if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  try {
+    const h = await headers();
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    const host = h.get("host") ?? "localhost:3000";
+    return `${proto}://${host}`;
+  } catch {
+    return "https://basecamp.example";
+  }
+}
+
+// Fire squad notification for a completion. Awaited inline (~300-500ms
+// on Resend send). Silent on failure so a Resend outage never breaks
+// the log-completion flow.
+async function notifyForCompletion(completionId: number, actorUserId: number) {
+  try {
+    const appUrl = await resolveAppUrl();
+    await notifySquadOfCompletion({ actorUserId, completionId, appUrl });
+  } catch (e) {
+    console.warn(
+      "notifySquadOfCompletion failed:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+}
+
 /**
  * Link an existing workout to a saved trail as a completion. Duration
  * and completedAt are derived from the workout's own data. Idempotent
@@ -462,6 +494,7 @@ export async function linkWorkoutToSavedTrail(input: {
   revalidatePath("/trails/link");
   revalidatePath("/progress");
   revalidatePath(`/trails/${input.trailId}`);
+  await notifyForCompletion(row.id, user.id);
   return { id: row.id, alreadyLinked: false };
 }
 
@@ -520,20 +553,24 @@ export async function logTrailCompletion(input: {
     throw new Error("completedAt must be YYYY-MM-DD");
   }
 
-  await db.insert(trailCompletion).values({
-    userId: user.id,
-    trailId: input.trailId,
-    completedAt: input.completedAt,
-    timeMinutes:
-      input.timeMinutes != null && input.timeMinutes > 0
-        ? input.timeMinutes
-        : null,
-    notes: input.notes?.trim() || null,
-  });
+  const [row] = await db
+    .insert(trailCompletion)
+    .values({
+      userId: user.id,
+      trailId: input.trailId,
+      completedAt: input.completedAt,
+      timeMinutes:
+        input.timeMinutes != null && input.timeMinutes > 0
+          ? input.timeMinutes
+          : null,
+      notes: input.notes?.trim() || null,
+    })
+    .returning({ id: trailCompletion.id });
 
   revalidatePath(`/trails/${input.trailId}`);
   revalidatePath("/progress");
   revalidatePath("/trails");
+  await notifyForCompletion(row.id, user.id);
 }
 
 export async function deleteTrailCompletion(completionId: number) {
