@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { trail } from "@/db/schema";
 import { getCurrentUser } from "@/lib/data";
+import { TRAIL_LIBRARY } from "@/lib/basecamp/trail-library";
 import { TrailForm } from "@/components/trail-form";
 import { TrailSearch } from "@/components/trail-search";
 
@@ -12,7 +13,7 @@ export default async function TrailsPage() {
   const user = await getCurrentUser();
   if (!user) return <p className="text-muted">No user found.</p>;
 
-  const trails = await db
+  const savedTrails = await db
     .select()
     .from(trail)
     .where(eq(trail.userId, user.id))
@@ -23,18 +24,27 @@ export default async function TrailsPage() {
       <section>
         <h1 className="text-2xl font-semibold">Trails</h1>
         <p className="text-sm text-muted mt-1">
-          Assess any hike against your current fitness. Get a verdict and specific
-          adjustments — factoring endurance, vertical, pack, altitude, and recovery.
+          Find any hike and see if you're ready — for you, right now, based on
+          your recent training.
         </p>
       </section>
 
-      {trails.length > 0 && (
+      {/* Search-first — the killer moment */}
+      <section className="space-y-2">
+        <h2 className="text-xs uppercase tracking-widest text-muted">
+          Find a trail
+        </h2>
+        <TrailSearch />
+      </section>
+
+      {/* Your saved trails */}
+      {savedTrails.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-xs uppercase tracking-widest text-muted">
             Your trails
           </h2>
           <div className="space-y-2">
-            {trails.map((t) => (
+            {savedTrails.map((t) => (
               <Link
                 key={t.id}
                 href={`/trails/${t.id}`}
@@ -74,14 +84,9 @@ export default async function TrailsPage() {
         </section>
       )}
 
-      <section className="rounded-lg border border-panel-border bg-panel p-5 space-y-4">
-        <h2 className="text-lg font-medium">Add from library</h2>
-        <TrailSearch />
-      </section>
-
-      <details className="rounded-lg border border-panel-border bg-panel p-5 group">
-        <summary className="cursor-pointer text-lg font-medium select-none">
-          Or add a custom trail
+      <details className="rounded-lg border border-panel-border bg-panel p-4 group">
+        <summary className="cursor-pointer text-sm text-muted select-none hover:text-foreground">
+          Can't find a trail? Add a custom one.
         </summary>
         <div className="mt-4">
           <TrailForm />
@@ -89,8 +94,9 @@ export default async function TrailsPage() {
       </details>
 
       <p className="text-xs text-muted italic">
-        Preset data sourced from Wikipedia (CC-BY-SA), NPS.gov (public domain),
-        USGS, and guidebook consensus. Numbers approximate — verify current
+        Trail data from {TRAIL_LIBRARY.length} curated presets sourced from
+        NPS.gov, Wikipedia (CC-BY-SA), USGS, and other public-domain sources.
+        Attribution shown per trail. Numbers approximate — verify current
         conditions before attempting.
       </p>
     </div>
