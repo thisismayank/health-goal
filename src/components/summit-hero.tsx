@@ -1,12 +1,12 @@
 import {
-  getCumulativeVerticalFt,
+  getCumulativeVertical,
   RAINIER_SUMMIT_FT,
   summitProgressFor,
   WAYPOINTS,
 } from "@/lib/basecamp/summit";
 
 export async function SummitHero({ userId }: { userId: number }) {
-  const totalFt = await getCumulativeVerticalFt(userId);
+  const { totalFt, gpsFt, estimatedFt } = await getCumulativeVertical(userId);
   const progress = summitProgressFor(totalFt);
   const pctToSummit = Math.min(
     100,
@@ -55,6 +55,12 @@ export async function SummitHero({ userId }: { userId: number }) {
         <div className="text-xs text-muted">
           Current position: <span className="text-blue-300">{progress.currentWaypoint.name}</span>
           <span className="text-muted"> — {progress.currentWaypoint.description}</span>
+        </div>
+      )}
+      {estimatedFt > 0 && (
+        <div className="text-[10px] text-muted">
+          {gpsFt.toLocaleString()} ft measured (GPS) · {estimatedFt.toLocaleString()} ft
+          estimated (treadmill @ 12%, stair @ 33 ft/min).
         </div>
       )}
     </div>

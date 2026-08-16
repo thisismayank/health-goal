@@ -16,6 +16,7 @@ import {
 } from "@/db/schema";
 import { hrvBaseline, rhrBaseline } from "@/lib/analytics/baselines";
 import { ymd } from "@/lib/date";
+import { estimatedVerticalMeters } from "./summit";
 
 export type StatKey = "STR" | "END" | "POW" | "REC" | "WILL";
 
@@ -162,7 +163,11 @@ async function computePow(userId: number, now: Date): Promise<Stat> {
     .from(workout)
     .where(and(eq(workout.userId, userId), gte(workout.startTime, windowStart)));
 
-  const totalMeters = rows.reduce((s, w) => s + (w.elevationGainMeters ?? 0), 0);
+  // Use effective vertical (real GPS OR estimated from treadmill/stair).
+  const totalMeters = rows.reduce(
+    (s, w) => s + estimatedVerticalMeters(w).meters,
+    0,
+  );
   const totalFeet = totalMeters * 3.281;
   const weeklyFeet = totalFeet / (WINDOW_DAYS.POW / 7);
 

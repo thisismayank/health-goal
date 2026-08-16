@@ -35,6 +35,7 @@ export type CompleteSessionInput = {
   rpe: number;
   notes?: string;
   exercises?: LoggedExercise[];
+  packWeightLb?: number;
 };
 
 export type CompletionSummary = {
@@ -69,6 +70,10 @@ export async function completeSession(input: CompleteSessionInput): Promise<{
     endTime.getTime() - input.actualDurationMinutes * 60_000,
   );
 
+  const packWeightKg = input.packWeightLb != null
+    ? +(input.packWeightLb / 2.205).toFixed(2)
+    : null;
+
   const [w] = await db
     .insert(workout)
     .values({
@@ -80,6 +85,7 @@ export async function completeSession(input: CompleteSessionInput): Promise<{
       durationSeconds: input.actualDurationMinutes * 60,
       rpe: input.rpe,
       notes: input.notes ?? null,
+      packWeightKg,
       canonicalSource: "manual",
     })
     .returning();

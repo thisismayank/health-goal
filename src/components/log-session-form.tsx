@@ -39,6 +39,7 @@ export function LogSessionForm({
     String(defaultRpeMax ?? defaultRpeMin ?? 5),
   );
   const [notes, setNotes] = useState("");
+  const [packLb, setPackLb] = useState("");
   const [exercises, setExercises] = useState<LocalExercise[]>(
     (prescription ?? []).map((ex) => ({
       name: ex.name,
@@ -109,6 +110,12 @@ export function LogSessionForm({
       })),
     }));
 
+    const packLbNum = packLb === "" ? undefined : Number(packLb);
+    if (packLbNum != null && (!Number.isFinite(packLbNum) || packLbNum < 0)) {
+      setError("Pack weight must be a non-negative number.");
+      return;
+    }
+
     startTransition(async () => {
       try {
         const result = await completeSession({
@@ -117,6 +124,7 @@ export function LogSessionForm({
           rpe: rpeNum,
           notes: notes.trim() || undefined,
           exercises: loggedExercises.length > 0 ? loggedExercises : undefined,
+          packWeightLb: packLbNum,
         });
         setCompletion(result.summary);
       } catch (err) {
@@ -252,6 +260,22 @@ export function LogSessionForm({
           })}
         </div>
       )}
+
+      <label className="block space-y-1.5">
+        <span className="text-xs uppercase tracking-wider text-muted">
+          Pack weight (lb) — optional
+        </span>
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.5"
+          min="0"
+          value={packLb}
+          onChange={(e) => setPackLb(e.target.value)}
+          placeholder="e.g. 10"
+          className="w-full rounded-md bg-panel border border-panel-border px-3 py-2"
+        />
+      </label>
 
       <label className="block space-y-1.5">
         <span className="text-xs uppercase tracking-wider text-muted">
