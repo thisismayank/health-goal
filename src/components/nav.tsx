@@ -6,23 +6,24 @@ import { usePathname } from "next/navigation";
 const tabs = [
   { href: "/", label: "Today" },
   { href: "/week", label: "Week" },
+  { href: "/character", label: "Character" },
   { href: "/history", label: "History" },
   { href: "/body", label: "Body" },
 ];
 
-export function Nav() {
+export function Nav({ chip }: { chip?: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
     <>
       <header className="border-b border-panel-border bg-panel/60 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-baseline gap-2">
-            <span className="text-lg font-semibold tracking-wide">RAINIER</span>
-            <span className="text-xs text-muted uppercase tracking-widest">
-              Companion
-            </span>
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3 gap-3">
+          <Link href="/" className="flex items-baseline gap-2 shrink-0">
+            <span className="text-lg font-semibold tracking-wide">BASECAMP</span>
           </Link>
+
+          {chip}
+
           <nav className="hidden sm:flex items-center gap-1 text-sm">
             {tabs.map((t) => (
               <Link
@@ -62,7 +63,7 @@ export function Nav() {
       </header>
 
       <nav className="fixed bottom-0 inset-x-0 sm:hidden bg-panel/95 backdrop-blur border-t border-panel-border z-50">
-        <div className="mx-auto max-w-2xl grid grid-cols-4">
+        <div className="mx-auto max-w-2xl grid grid-cols-5">
           {tabs.map((t) => (
             <Link
               key={t.href}
