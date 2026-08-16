@@ -11,6 +11,11 @@ import {
   type Verdict,
 } from "@/lib/basecamp/itinerary";
 import type { TrailPreset } from "@/lib/basecamp/trail-library";
+import {
+  fetchDailyForecast,
+  interpretWeatherCode,
+  type DailyForecast,
+} from "@/lib/weather/open-meteo";
 
 // Local mirror of ItineraryNarrativeSchema from the coach module. That
 // module imports drizzle/postgres and can't be pulled into a client
@@ -71,9 +76,14 @@ function todayLocalYmd(): string {
 export function ItineraryPlanner({
   presets,
   destinationLabel,
+  coords,
 }: {
   presets: ItineraryPresetInput[];
   destinationLabel: string;
+  // If provided, planner fetches Open-Meteo forecast when opened + shows
+  // per-day weather badges on each day card. Null = destination coords
+  // aren't in our lookup table; weather section is hidden.
+  coords: { lat: number; lng: number; label: string } | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -89,6 +99,10 @@ export function ItineraryPlanner({
   const [narrativeError, setNarrativeError] = useState<string | null>(null);
   // Per-dayIndex user overrides. Trims to current day range when `days` changes.
   const [overrides, setOverrides] = useState<Overrides>({});
+  const [forecast, setForecast] = useState<Map<string, DailyForecast> | null>(null);
+  const [forecastState, setForecastState] = useState<
+    "idle" | "loading" | "loaded" | "error"
+  >("idle");
 
   // Rehydrate presets into the AssessedPreset shape expected by the
   // sequencer. We only care about fields the sequencer reads.
@@ -112,6 +126,27 @@ export function ItineraryPlanner({
       }),
     [assessed, startDate, days, includeStretch, overrides],
   );
+
+  // Fetch weather forecast when the planner opens for a coords-known
+  // destination. Refetch if coords change (destination change from
+  // parent). Same-session cache: doesn't refetch every open.
+  useEffect(() => {
+    if (!open || !coords) return;
+    if (forecastState === "loading" || forecastState === "loaded") return;
+    setForecastState("loading");
+    const ctrl = new AbortController();
+    fetchDailyForecast(coords.lat, coords.lng, ctrl.signal)
+      .then((res) => {
+        const map = new Map<string, DailyForecast>();
+        for (const d of res.daily) map.set(d.date, d);
+        setForecast(map);
+        setForecastState("loaded");
+      })
+      .catch(() => {
+        setForecastState("error");
+      });
+    return () => ctrl.abort();
+  }, [open, coords, forecastState]);
 
   // Trim overrides for day indices beyond current `days` when user
   // shrinks the trip. Prevents stale keys from lingering.
@@ -327,6 +362,17 @@ export function ItineraryPlanner({
         </span>
       </label>
 
+      {coords && forecastState === "loaded" && (
+        <div className="text-[10px] text-muted italic">
+          Forecast for {coords.label} · via Open-Meteo · local time
+        </div>
+      )}
+      {coords && forecastState === "error" && (
+        <div className="text-[10px] text-warn">
+          Couldn't load forecast — planner still works without it.
+        </div>
+      )}
+
       <div className="text-xs text-muted tabular-nums">
         <span className="text-foreground">{numHikes}</span> hike
         {numHikes === 1 ? "" : "s"}
@@ -383,6 +429,8 @@ export function ItineraryPlanner({
               onSwap={(slug) => setDayOverride(day.dayIndex, slug)}
               onRest={() => setDayRest(day.dayIndex)}
               onRevert={() => clearDayOverride(day.dayIndex)}
+              weather={forecast?.get(day.dateYmd) ?? null}
+              weatherLoading={forecastState === "loading"}
             />
           );
         })}
@@ -504,6 +552,8 @@ function DayCard({
   onSwap,
   onRest,
   onRevert,
+  weather,
+  weatherLoading,
 }: {
   day: ReturnType<typeof buildItinerary>["days"][number];
   coachNote?: string;
@@ -513,6 +563,8 @@ function DayCard({
   onSwap: (slug: string) => void;
   onRest: () => void;
   onRevert: () => void;
+  weather: DailyForecast | null;
+  weatherLoading: boolean;
 }) {
   const dayLabel = new Intl.DateTimeFormat("en-US", {
     weekday: "short",
@@ -530,6 +582,10 @@ function DayCard({
       onRest={onRest}
       onRevert={onRevert}
     />
+  );
+
+  const weatherRow = (
+    <WeatherRow weather={weather} weatherLoading={weatherLoading} />
   );
 
   if (day.kind === "rest") {
@@ -550,6 +606,7 @@ function DayCard({
             {dayLabel}
           </div>
         </div>
+        {weatherRow}
         {coachNote && <CoachNote text={coachNote} />}
         {actions}
       </div>
@@ -571,6 +628,7 @@ function DayCard({
             {dayLabel}
           </div>
         </div>
+        {weatherRow}
         {coachNote && <CoachNote text={coachNote} />}
         {actions}
       </div>
@@ -608,6 +666,7 @@ function DayCard({
           {dayLabel}
         </div>
       </div>
+      {weatherRow}
       {coachNote && <CoachNote text={coachNote} />}
       {actions}
     </div>
@@ -751,6 +810,59 @@ function CoachNote({ text }: { text: string }) {
     <div className="pl-[calc(3.5rem+0.75rem)] pt-0.5 flex items-start gap-1.5 text-xs text-blue-300/90 italic">
       <span className="text-blue-400 shrink-0">▸</span>
       <span>{text}</span>
+    </div>
+  );
+}
+
+function WeatherRow({
+  weather,
+  weatherLoading,
+}: {
+  weather: DailyForecast | null;
+  weatherLoading: boolean;
+}) {
+  if (weatherLoading) {
+    return (
+      <div className="pl-[calc(3.5rem+0.75rem)] pt-0.5 text-[11px] text-muted">
+        Loading forecast…
+      </div>
+    );
+  }
+  if (!weather) return null;
+  const { glyph, label } = interpretWeatherCode(weather.weatherCode);
+  const rainSignal = weather.precipProbabilityPct >= 40;
+  const windSignal = weather.windMaxMph >= 20;
+  return (
+    <div className="pl-[calc(3.5rem+0.75rem)] pt-0.5 text-[11px] text-muted flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      <span className="text-blue-300">
+        {glyph} {label}
+      </span>
+      <span>·</span>
+      <span className="tabular-nums">
+        {weather.tempMinF}–{weather.tempMaxF}°F
+      </span>
+      {(rainSignal || weather.precipInches > 0.05) && (
+        <>
+          <span>·</span>
+          <span
+            className={
+              rainSignal ? "text-warn tabular-nums" : "tabular-nums"
+            }
+          >
+            {weather.precipProbabilityPct}% precip
+            {weather.precipInches >= 0.1 &&
+              ` (${weather.precipInches.toFixed(2)}″)`}
+          </span>
+        </>
+      )}
+      {windSignal && (
+        <>
+          <span>·</span>
+          <span className="text-warn tabular-nums">
+            {weather.windMaxMph} mph wind
+          </span>
+        </>
+      )}
     </div>
   );
 }

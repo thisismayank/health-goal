@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireOnboardedUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
 import { TRAIL_LIBRARY, type TrailPreset } from "@/lib/basecamp/trail-library";
-import { POPULAR_DESTINATIONS } from "@/lib/basecamp/destinations";
+import { POPULAR_DESTINATIONS, coordsForQuery } from "@/lib/basecamp/destinations";
 import { presetToVirtualTrail } from "@/lib/basecamp/preset-trail";
 import {
   assessTrail,
@@ -157,6 +157,7 @@ export default async function DiscoverPage({
         <>
           <ItineraryPlanner
             destinationLabel={query}
+            coords={coordsForQuery(query)}
             presets={assessed.map<ItineraryPresetInput>(({ preset, assessment }) => ({
               slug: preset.slug,
               name: preset.name,
