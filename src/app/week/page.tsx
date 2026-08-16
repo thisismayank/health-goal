@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
-import { CoachCardSkeleton, WeeklyReviewCard } from "@/components/coach-cards";
+import { CoachCardSkeleton } from "@/components/coach-cards";
+import { PlanProgressCard } from "@/components/plan-progress-card";
 
 export const dynamic = "force-dynamic";
 import {
@@ -10,7 +11,7 @@ import {
   getWeekSessions,
   getWeekWorkouts,
 } from "@/lib/data";
-import { DAY_LABELS, todayYmd, weekDays, weekStart, ymd } from "@/lib/date";
+import { DAY_LABELS, todayInTimeZone, weekDays, weekStart, ymd } from "@/lib/date";
 
 export default async function WeekPage() {
   const user = await getCurrentUser();
@@ -30,7 +31,7 @@ export default async function WeekPage() {
       .map((w) => [w.plannedSessionId as number, w]),
   );
 
-  const today = todayYmd();
+  const today = todayInTimeZone(user.timezone);
   const passed = sessions.filter((s) => s.date <= today);
   const completed = passed.filter((s) => s.status === "completed");
   const plannedTotalMin = sessions.reduce(
@@ -122,12 +123,11 @@ export default async function WeekPage() {
         })}
       </div>
 
-      <Suspense fallback={<CoachCardSkeleton label="Week review · thinking" />}>
-        <WeeklyReviewCard
+      <Suspense fallback={<CoachCardSkeleton label="Plan progress · thinking" />}>
+        <PlanProgressCard
           userId={user.id}
-          anchor={anchor}
-          tz={user.timezone}
-          plan={{ id: plan.id, startDate: plan.startDate }}
+          todayYmd={today}
+          summitDateYmd={user.summitDate ?? null}
         />
       </Suspense>
 
