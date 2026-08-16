@@ -96,6 +96,7 @@ export async function upsertActivity(
     averageHr: a.average_heartrate != null ? Math.round(a.average_heartrate) : null,
     maxHr: a.max_heartrate != null ? Math.round(a.max_heartrate) : null,
     notes: a.description?.trim() || null,
+    sourceName: a.name?.trim() || null,
     canonicalSource: "strava",
   };
 

@@ -389,6 +389,113 @@ export async function syncIntervalsNow() {
   return result;
 }
 
+/**
+ * Link an existing workout to a saved trail as a completion. Duration
+ * and completedAt are derived from the workout's own data. Idempotent
+ * on (workoutId, trailId) — safe to call twice.
+ */
+export async function linkWorkoutToSavedTrail(input: {
+  workoutId: number;
+  trailId: number;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+
+  const [w] = await db
+    .select()
+    .from(workout)
+    .where(and(eq(workout.id, input.workoutId), eq(workout.userId, user.id)))
+    .limit(1);
+  if (!w) throw new Error("Workout not found or not yours");
+
+  const [t] = await db
+    .select({ id: trail.id })
+    .from(trail)
+    .where(and(eq(trail.id, input.trailId), eq(trail.userId, user.id)))
+    .limit(1);
+  if (!t) throw new Error("Trail not found or not yours");
+
+  const existing = await db
+    .select({ id: trailCompletion.id })
+    .from(trailCompletion)
+    .where(
+      and(
+        eq(trailCompletion.userId, user.id),
+        eq(trailCompletion.trailId, input.trailId),
+        eq(trailCompletion.workoutId, input.workoutId),
+      ),
+    )
+    .limit(1);
+  if (existing[0]) {
+    revalidatePath("/trails/link");
+    return { id: existing[0].id, alreadyLinked: true };
+  }
+
+  // completedAt: YMD from workout's startTime in user's timezone.
+  const tz = user.timezone;
+  const localDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(w.startTime);
+
+  const durationMin =
+    w.durationSeconds != null && w.durationSeconds > 0
+      ? Math.round(w.durationSeconds / 60)
+      : null;
+
+  const [row] = await db
+    .insert(trailCompletion)
+    .values({
+      userId: user.id,
+      trailId: input.trailId,
+      completedAt: localDate,
+      workoutId: input.workoutId,
+      timeMinutes: durationMin,
+    })
+    .returning({ id: trailCompletion.id });
+
+  revalidatePath("/trails/link");
+  revalidatePath("/progress");
+  revalidatePath(`/trails/${input.trailId}`);
+  return { id: row.id, alreadyLinked: false };
+}
+
+/**
+ * Link a workout to a preset trail — saves the preset first if the user
+ * doesn't have it yet, then attaches the workout as a completion.
+ */
+export async function linkWorkoutToPreset(input: {
+  workoutId: number;
+  presetSlug: string;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+
+  // Reuse or create the saved trail row for this preset.
+  const [existingTrail] = await db
+    .select({ id: trail.id })
+    .from(trail)
+    .where(
+      and(
+        eq(trail.userId, user.id),
+        eq(trail.presetSlug, input.presetSlug),
+      ),
+    )
+    .limit(1);
+
+  let trailId: number;
+  if (existingTrail) {
+    trailId = existingTrail.id;
+  } else {
+    const saved = await createTrailFromPreset(input.presetSlug);
+    trailId = saved.id;
+  }
+
+  return linkWorkoutToSavedTrail({ workoutId: input.workoutId, trailId });
+}
+
 export async function logTrailCompletion(input: {
   trailId: number;
   completedAt: string; // YMD

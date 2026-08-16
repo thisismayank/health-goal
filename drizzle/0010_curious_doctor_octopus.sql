@@ -1,0 +1,1 @@
+ALTER TABLE "workout" ADD COLUMN "source_name" text;

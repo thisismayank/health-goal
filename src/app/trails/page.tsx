@@ -83,6 +83,22 @@ export default async function TrailsPage() {
         </section>
       )}
 
+      <Link
+        href="/trails/link"
+        className="block rounded-lg border border-panel-border bg-panel/60 p-4 hover:border-blue-500/40 transition"
+      >
+        <div className="text-xs font-mono uppercase tracking-widest text-blue-400">
+          [BACKFILL]
+        </div>
+        <div className="text-sm font-medium mt-1">
+          Match your existing hikes to trails →
+        </div>
+        <div className="text-xs text-muted mt-0.5">
+          Scan your synced Strava activities and one-tap stamp each into your
+          Trail Passport.
+        </div>
+      </Link>
+
       <details className="rounded-lg border border-panel-border bg-panel p-4 group">
         <summary className="cursor-pointer text-sm text-muted select-none hover:text-foreground">
           Can't find a trail? Add a custom one.

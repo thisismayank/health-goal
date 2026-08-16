@@ -169,6 +169,10 @@ export const workout = pgTable("workout", {
   rpe: integer("rpe"),
   packWeightKg: real("pack_weight_kg"),
   notes: text("notes"),
+  // External activity name from the source (e.g. Strava activity title like
+  // "Morning at Angel's Landing"). Used by auto-completion linking to
+  // fuzzy-match workouts against the trail library.
+  sourceName: text("source_name"),
   canonicalSource: text("canonical_source").notNull().default("manual"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
