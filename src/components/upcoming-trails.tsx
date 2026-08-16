@@ -32,7 +32,29 @@ export async function UpcomingTrails({
     )
     .orderBy(asc(trail.targetDate));
 
-  if (rows.length === 0) return null;
+  // Empty state promotes destination-recommendation flow. Common case for
+  // new users who haven't saved any trails yet.
+  if (rows.length === 0) {
+    return (
+      <section className="space-y-2">
+        <h3 className="text-xs uppercase tracking-widest text-muted">
+          Planning a trip?
+        </h3>
+        <Link
+          href="/trails/discover"
+          className="block rounded-md border border-accent/40 bg-accent-strong/5 px-4 py-3 hover:border-accent/70 transition"
+        >
+          <div className="text-sm font-medium">
+            Show me hikes at a destination →
+          </div>
+          <div className="text-xs text-muted mt-0.5">
+            Type a national park or region and see which trails are ready for
+            you.
+          </div>
+        </Link>
+      </section>
+    );
+  }
 
   // Assess each — fine at 60-day horizon (max a handful of trails)
   const assessed = await Promise.all(
@@ -89,6 +111,14 @@ export async function UpcomingTrails({
             </Link>
           );
         })}
+      </div>
+      <div className="pt-1">
+        <Link
+          href="/trails/discover"
+          className="text-xs text-blue-300 hover:underline"
+        >
+          Planning another trip? Discover more →
+        </Link>
       </div>
     </section>
   );

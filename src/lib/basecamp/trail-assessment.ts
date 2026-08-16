@@ -641,9 +641,16 @@ export async function assessTrail(
   userId: number,
   trail: Trail,
   todayYmd: string,
-  opts?: { excludeWorkoutIds?: number[] },
+  opts?: {
+    excludeWorkoutIds?: number[];
+    // Pre-loaded snapshot lets callers batch-assess many trails without
+    // re-running the fitness query per call. Used by the /trails/discover
+    // page which scores 10-30 trails at once for a region.
+    snapshot?: FitnessSnapshot;
+  },
 ): Promise<TrailAssessment> {
-  const snap = await loadFitnessSnapshot(userId, opts);
+  const snap =
+    opts?.snapshot ?? (await loadFitnessSnapshot(userId, opts));
 
   const daysUntilTrail = trail.targetDate
     ? Math.max(0, daysBetween(todayYmd, trail.targetDate))

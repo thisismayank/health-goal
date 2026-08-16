@@ -28,10 +28,27 @@ export default async function TrailsPage() {
         </p>
       </section>
 
-      {/* Search-first — the killer moment */}
+      {/* Destination-first flow — the highest-leverage entry point */}
+      <Link
+        href="/trails/discover"
+        className="block rounded-lg border border-accent/50 bg-accent-strong/5 shadow-lg shadow-accent/10 p-4 hover:border-accent transition"
+      >
+        <div className="text-xs font-mono uppercase tracking-widest text-accent">
+          [PLANNING A TRIP?]
+        </div>
+        <div className="text-base font-medium mt-1">
+          Show me hikes at a destination → ranked for me
+        </div>
+        <div className="text-xs text-muted mt-0.5">
+          Type a national park or region — see which hikes are actually right
+          for your fitness right now.
+        </div>
+      </Link>
+
+      {/* Direct trail search (for people who know what they want) */}
       <section className="space-y-2">
         <h2 className="text-xs uppercase tracking-widest text-muted">
-          Find a trail
+          Or search by trail name
         </h2>
         <TrailSearch />
       </section>
