@@ -8,6 +8,11 @@ import { StatsStrip } from "@/components/home/stats-strip";
 import { SummitHero } from "@/components/summit-hero";
 import { UpcomingTrails } from "@/components/upcoming-trails";
 import { CoachCardSkeleton, DailyCoachCard } from "@/components/coach-cards";
+import {
+  computeCompletionDelta,
+  type CompletionDelta,
+} from "@/lib/basecamp/completion-delta";
+import type { StatKey } from "@/lib/basecamp/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +28,29 @@ export default async function HomePage() {
     );
   }
 
+  // Post-workout state = compute the delta once, cascade it through the
+  // hero, stats strip, and summit hero so the whole surface reflects
+  // what just changed.
+  const delta =
+    state.kind === "post_workout"
+      ? await computeCompletionDelta({
+          userId: state.user.id,
+          workoutId: state.workout.id,
+          plannedSessionId: state.workout.plannedSessionId,
+          todayYmd: state.today,
+        })
+      : null;
+
+  const highlightStats: StatKey[] =
+    delta?.stats.filter((s) => s.delta !== 0).map((s) => s.key) ?? [];
+  const summitDeltaFt = delta?.summit.deltaFt ?? 0;
+
   return (
     <div className="space-y-5">
       <Greeting state={state} />
-      <Hero state={state} />
-      <StatsStrip userId={state.user.id} />
-      <SummitHero userId={state.user.id} />
+      <Hero state={state} delta={delta} />
+      <StatsStrip userId={state.user.id} highlightStats={highlightStats} />
+      <SummitHero userId={state.user.id} deltaFt={summitDeltaFt} />
       <UpcomingTrails userId={state.user.id} tz={state.user.timezone} />
       <Suspense fallback={<CoachCardSkeleton label="Coach · thinking" />}>
         <DailyCoachCard
@@ -81,8 +103,10 @@ function greetingFor(name: string): string {
 
 async function Hero({
   state,
+  delta,
 }: {
   state: Exclude<HomeState, { kind: "no_user" }>;
+  delta: CompletionDelta | null;
 }) {
   switch (state.kind) {
     case "session_pending":
@@ -103,6 +127,7 @@ async function Hero({
           session={state.session}
           workout={state.workout}
           freshMinutesAgo={state.freshMinutesAgo}
+          delta={delta}
         />
       );
     case "no_session":

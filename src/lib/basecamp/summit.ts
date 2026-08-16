@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { trail, workout, type Trail, type Workout } from "@/db/schema";
 
@@ -210,7 +210,9 @@ export type VerticalBreakdown = {
 
 export async function getCumulativeVertical(
   userId: number,
+  opts?: { excludeWorkoutIds?: number[] },
 ): Promise<VerticalBreakdown> {
+  const excludes = opts?.excludeWorkoutIds ?? [];
   const rows = await db
     .select({
       type: workout.type,
@@ -219,7 +221,11 @@ export async function getCumulativeVertical(
       elevationGainMeters: workout.elevationGainMeters,
     })
     .from(workout)
-    .where(eq(workout.userId, userId));
+    .where(
+      excludes.length > 0
+        ? and(eq(workout.userId, userId), notInArray(workout.id, excludes))
+        : eq(workout.userId, userId),
+    );
 
   let gpsM = 0;
   let estimatedM = 0;

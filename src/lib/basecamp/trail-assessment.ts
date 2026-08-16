@@ -9,7 +9,7 @@
  * adjustments) that the LLM can then narrate.
  */
 
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, notInArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { dailyMetric, workout, type Trail } from "@/db/schema";
 import {
@@ -49,6 +49,7 @@ const AEROBIC_CATS = [
 
 export async function loadFitnessSnapshot(
   userId: number,
+  opts?: { excludeWorkoutIds?: number[] },
 ): Promise<FitnessSnapshot> {
   const now = new Date();
   // Longest session: 60-day window (freshness — capabilities decay after 8 wks off).
@@ -59,24 +60,36 @@ export async function loadFitnessSnapshot(
   const windowStart60 = new Date(now.getTime() - 60 * 86_400_000);
   const windowStart90 = new Date(now.getTime() - 90 * 86_400_000);
 
+  const excludes = opts?.excludeWorkoutIds ?? [];
+  const applyExcl = (base: ReturnType<typeof and>) =>
+    excludes.length > 0
+      ? and(base, notInArray(workout.id, excludes))
+      : base;
+
   const [workouts28, workouts60, workouts90] = await Promise.all([
     db
       .select()
       .from(workout)
       .where(
-        and(eq(workout.userId, userId), gte(workout.startTime, windowStart28)),
+        applyExcl(
+          and(eq(workout.userId, userId), gte(workout.startTime, windowStart28)),
+        ),
       ),
     db
       .select()
       .from(workout)
       .where(
-        and(eq(workout.userId, userId), gte(workout.startTime, windowStart60)),
+        applyExcl(
+          and(eq(workout.userId, userId), gte(workout.startTime, windowStart60)),
+        ),
       ),
     db
       .select()
       .from(workout)
       .where(
-        and(eq(workout.userId, userId), gte(workout.startTime, windowStart90)),
+        applyExcl(
+          and(eq(workout.userId, userId), gte(workout.startTime, windowStart90)),
+        ),
       ),
   ]);
 
@@ -628,8 +641,9 @@ export async function assessTrail(
   userId: number,
   trail: Trail,
   todayYmd: string,
+  opts?: { excludeWorkoutIds?: number[] },
 ): Promise<TrailAssessment> {
-  const snap = await loadFitnessSnapshot(userId);
+  const snap = await loadFitnessSnapshot(userId, opts);
 
   const daysUntilTrail = trail.targetDate
     ? Math.max(0, daysBetween(todayYmd, trail.targetDate))

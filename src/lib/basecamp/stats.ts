@@ -5,7 +5,7 @@
  * Historical peaks do NOT count; capabilities decay if not practiced.
  */
 
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, notInArray, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   dailyMetric,
@@ -62,9 +62,32 @@ function clamp(n: number, lo = 0, hi = 100): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
+/**
+ * When computing a "pre-workout" snapshot for the completion delta, we
+ * pass excludeWorkoutIds so the fresh workout's contribution is filtered
+ * out. Wraps a where clause with `AND workout.id NOT IN (...)` when the
+ * exclusion list is non-empty.
+ */
+export type ComputeOpts = {
+  excludeWorkoutIds?: number[];
+  // For WILL: sessions in this list are treated as still planned (not
+  // completed). Used when computing pre-completion snapshots — the fresh
+  // workout marked one session complete, but the "before" WILL should
+  // reflect the state before that mark.
+  excludeCompletedPlannedSessionIds?: number[];
+};
+
+function withExclusion(
+  base: SQL,
+  excludeWorkoutIds?: number[],
+): SQL {
+  if (!excludeWorkoutIds || excludeWorkoutIds.length === 0) return base;
+  return and(base, notInArray(workout.id, excludeWorkoutIds)) as SQL;
+}
+
 // ---------- STR ----------
 // S-rank target: ~15 heavy sets/wk + squat 1RM ~= 2x bodyweight (170 kg @ 85 kg)
-async function computeStr(userId: number, now: Date): Promise<Stat> {
+async function computeStr(userId: number, now: Date, opts?: ComputeOpts): Promise<Stat> {
   const windowStart = shiftDate(now, -WINDOW_DAYS.STR);
   const fourWeeksAgo = shiftDate(now, -28);
 
@@ -77,7 +100,12 @@ async function computeStr(userId: number, now: Date): Promise<Stat> {
     })
     .from(strengthExercise)
     .innerJoin(workout, eq(strengthExercise.workoutId, workout.id))
-    .where(and(eq(workout.userId, userId), gte(workout.startTime, windowStart)));
+    .where(
+      withExclusion(
+        and(eq(workout.userId, userId), gte(workout.startTime, windowStart))!,
+        opts?.excludeWorkoutIds,
+      ),
+    );
 
   const recentSets = rows.filter((r) => r.startTime >= fourWeeksAgo);
   const weeklyHardSets = recentSets.length / 4;
@@ -117,13 +145,18 @@ async function computeStr(userId: number, now: Date): Promise<Stat> {
 
 // ---------- END ----------
 // S-rank target: ~450 min/week aerobic AND longest session 6+ hrs
-async function computeEnd(userId: number, now: Date): Promise<Stat> {
+async function computeEnd(userId: number, now: Date, opts?: ComputeOpts): Promise<Stat> {
   const windowStart = shiftDate(now, -WINDOW_DAYS.END);
 
   const rows = await db
     .select()
     .from(workout)
-    .where(and(eq(workout.userId, userId), gte(workout.startTime, windowStart)));
+    .where(
+      withExclusion(
+        and(eq(workout.userId, userId), gte(workout.startTime, windowStart))!,
+        opts?.excludeWorkoutIds,
+      ),
+    );
 
   const aerobicMin = rows
     .filter((w) => AEROBIC_CATS.includes(w.type) || MOUNTAIN_CATS.includes(w.type))
@@ -155,13 +188,18 @@ async function computeEnd(userId: number, now: Date): Promise<Stat> {
 
 // ---------- POW ----------
 // S-rank target: 5000+ ft weekly vertical AND 40+ lb pack tolerance
-async function computePow(userId: number, now: Date): Promise<Stat> {
+async function computePow(userId: number, now: Date, opts?: ComputeOpts): Promise<Stat> {
   const windowStart = shiftDate(now, -WINDOW_DAYS.POW);
 
   const rows = await db
     .select()
     .from(workout)
-    .where(and(eq(workout.userId, userId), gte(workout.startTime, windowStart)));
+    .where(
+      withExclusion(
+        and(eq(workout.userId, userId), gte(workout.startTime, windowStart))!,
+        opts?.excludeWorkoutIds,
+      ),
+    );
 
   // Use effective vertical (real GPS OR estimated from treadmill/stair).
   const totalMeters = rows.reduce(
@@ -268,9 +306,10 @@ async function computeRec(userId: number, now: Date): Promise<Stat> {
 
 // ---------- WILL ----------
 // Compliance % over last 4 weeks + current streak.
-async function computeWill(userId: number, now: Date): Promise<Stat> {
+async function computeWill(userId: number, now: Date, opts?: ComputeOpts): Promise<Stat> {
   const windowStart = shiftDate(now, -WINDOW_DAYS.WILL);
   const todayStr = ymd(now);
+  const excluded = new Set(opts?.excludeCompletedPlannedSessionIds ?? []);
 
   const [plan] = await db
     .select()
@@ -290,7 +329,9 @@ async function computeWill(userId: number, now: Date): Promise<Stat> {
         ),
       );
     const past = sessions.filter((s) => s.date <= todayStr);
-    const completed = past.filter((s) => s.status === "completed").length;
+    const completed = past.filter(
+      (s) => s.status === "completed" && !excluded.has(s.id),
+    ).length;
     compliancePct = past.length === 0 ? 0 : (completed / past.length) * 100;
   }
 
@@ -315,8 +356,10 @@ async function computeWill(userId: number, now: Date): Promise<Stat> {
       streak += 1;
       continue;
     }
+    const effectivelyCompleted =
+      s.status === "completed" && !excluded.has(s.id);
     if (
-      s.status === "completed" ||
+      effectivelyCompleted ||
       s.sessionCategory === "ACTIVE_RECOVERY" ||
       s.sessionCategory === "REST"
     ) {
@@ -345,14 +388,15 @@ async function computeWill(userId: number, now: Date): Promise<Stat> {
 
 export async function computeCharacterSheet(
   userId: number,
+  opts?: ComputeOpts,
 ): Promise<CharacterSheet> {
   const now = new Date();
   const [STR, END, POW, REC, WILL] = await Promise.all([
-    computeStr(userId, now),
-    computeEnd(userId, now),
-    computePow(userId, now),
+    computeStr(userId, now, opts),
+    computeEnd(userId, now, opts),
+    computePow(userId, now, opts),
     computeRec(userId, now),
-    computeWill(userId, now),
+    computeWill(userId, now, opts),
   ]);
   return {
     computedAt: now,

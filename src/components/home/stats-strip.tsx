@@ -2,10 +2,17 @@ import Link from "next/link";
 import { computeCharacterSheet, type StatKey } from "@/lib/basecamp/stats";
 import { computeRank } from "@/lib/basecamp/rank";
 
-export async function StatsStrip({ userId }: { userId: number }) {
+export async function StatsStrip({
+  userId,
+  highlightStats = [],
+}: {
+  userId: number;
+  highlightStats?: StatKey[];
+}) {
   const sheet = await computeCharacterSheet(userId);
   const rank = computeRank(sheet);
   const order: StatKey[] = ["STR", "END", "POW", "REC", "WILL"];
+  const highlightSet = new Set(highlightStats);
 
   return (
     <Link
@@ -28,6 +35,7 @@ export async function StatsStrip({ userId }: { userId: number }) {
       <div className="grid grid-cols-5 gap-2">
         {order.map((k) => {
           const s = sheet.stats[k];
+          const highlighted = highlightSet.has(k);
           const tone =
             s.value >= 70
               ? "text-blue-300"
@@ -41,7 +49,10 @@ export async function StatsStrip({ userId }: { userId: number }) {
                 ? "bg-blue-500/60"
                 : "bg-blue-500/30";
           return (
-            <div key={k} className="space-y-1">
+            <div
+              key={k}
+              className={`space-y-1 rounded px-1 py-0.5 -mx-1 ${highlighted ? "cascade-highlight" : ""}`}
+            >
               <div className="flex items-baseline justify-between">
                 <span className="text-[9px] font-mono uppercase tracking-wider text-muted">
                   {k}
@@ -54,7 +65,7 @@ export async function StatsStrip({ userId }: { userId: number }) {
               </div>
               <div className="h-1 bg-panel-border rounded overflow-hidden">
                 <div
-                  className={`h-full transition-all ${bar}`}
+                  className={`h-full transition-all ${bar} ${highlighted ? "cascade-fill" : ""}`}
                   style={{ width: `${Math.max(2, s.value)}%` }}
                 />
               </div>

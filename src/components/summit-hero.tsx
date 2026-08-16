@@ -6,15 +6,24 @@ import {
   type ActiveGoal,
 } from "@/lib/basecamp/summit";
 
-export async function SummitHero({ userId }: { userId: number }) {
+export async function SummitHero({
+  userId,
+  deltaFt = 0,
+}: {
+  userId: number;
+  deltaFt?: number;
+}) {
   const goal = await getActiveGoal(userId);
   const { totalFt, gpsFt, estimatedFt } = await getCumulativeVertical(userId);
   const progress = summitProgressFor(totalFt, goal);
   const pctToSummit = Math.min(100, progress.fractionThroughCurrent * 100);
   const goalLabel = goal.source === "default_rainier" ? "Rainier" : goal.name;
+  const highlight = deltaFt > 0;
 
   return (
-    <div className="rounded-md border border-blue-500/30 bg-blue-950/10 shadow-lg shadow-blue-500/10 p-5 space-y-4">
+    <div
+      className={`rounded-md border border-blue-500/30 bg-blue-950/10 shadow-lg shadow-blue-500/10 p-5 space-y-4 ${highlight ? "cascade-highlight" : ""}`}
+    >
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <div className="text-xs uppercase tracking-widest text-muted">
@@ -30,6 +39,11 @@ export async function SummitHero({ userId }: { userId: number }) {
             <span className="text-base text-muted">
               {" "}/ {goal.summitFt.toLocaleString()} ft
             </span>
+            {highlight && (
+              <span className="ml-2 text-sm font-mono text-accent align-middle">
+                +{deltaFt.toLocaleString()}
+              </span>
+            )}
           </div>
         </div>
         <div className="text-right text-xs">
@@ -52,7 +66,7 @@ export async function SummitHero({ userId }: { userId: number }) {
         </div>
       </div>
 
-      <MountainBar progress={progress} goal={goal} />
+      <MountainBar progress={progress} goal={goal} highlight={highlight} />
 
       {progress.currentWaypoint && (
         <div className="text-xs text-muted">
@@ -88,9 +102,11 @@ export async function SummitHero({ userId }: { userId: number }) {
 function MountainBar({
   progress,
   goal,
+  highlight = false,
 }: {
   progress: ReturnType<typeof summitProgressFor>;
   goal: ActiveGoal;
+  highlight?: boolean;
 }) {
   const summit = goal.summitFt;
   const yFor = (ft: number) => (ft / summit) * 100;
@@ -100,7 +116,7 @@ function MountainBar({
     <div className="relative">
       <div className="h-3 bg-panel-border rounded-sm overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-blue-500/70 to-blue-300 transition-all duration-1000"
+          className={`h-full bg-gradient-to-r from-blue-500/70 to-blue-300 transition-all duration-1000 ${highlight ? "cascade-fill" : ""}`}
           style={{ width: `${filledPct}%` }}
         />
       </div>
