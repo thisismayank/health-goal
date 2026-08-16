@@ -717,6 +717,71 @@ export async function setNotificationPreference(input: {
   revalidatePath("/settings");
 }
 
+/**
+ * Save all trails from a generated itinerary as user's trails, assigning
+ * each the corresponding day's date as targetDate. Idempotent per preset:
+ * if the user already has a saved trail for a given presetSlug, we UPDATE
+ * its targetDate instead of creating a duplicate.
+ */
+export async function saveItineraryTrails(input: {
+  entries: Array<{ presetSlug: string; targetDate: string }>;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  if (!input.entries.length) return { savedIds: [] };
+  const { findTrailBySlug } = await import("./basecamp/trail-library");
+
+  const savedIds: number[] = [];
+  for (const entry of input.entries) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.targetDate)) {
+      throw new Error(`Invalid date: ${entry.targetDate}`);
+    }
+    const preset = findTrailBySlug(entry.presetSlug);
+    if (!preset) continue;
+
+    const [existing] = await db
+      .select({ id: trail.id })
+      .from(trail)
+      .where(
+        and(
+          eq(trail.userId, user.id),
+          eq(trail.presetSlug, entry.presetSlug),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(trail)
+        .set({ targetDate: entry.targetDate })
+        .where(eq(trail.id, existing.id));
+      savedIds.push(existing.id);
+    } else {
+      const [row] = await db
+        .insert(trail)
+        .values({
+          userId: user.id,
+          name: preset.name,
+          url: null,
+          distanceKm: preset.distanceKm,
+          elevationGainFt: preset.elevationGainFt,
+          maxAltitudeFt: preset.maxAltitudeFt,
+          typicalHours: preset.typicalHours,
+          packWeightLb: preset.packWeightLb,
+          terrainGrade: preset.terrainGrade,
+          targetDate: entry.targetDate,
+          notes: `${preset.notes} · Sources: ${preset.sources.join(", ")}`,
+          presetSlug: preset.slug,
+        })
+        .returning({ id: trail.id });
+      savedIds.push(row.id);
+    }
+  }
+  revalidatePath("/trails");
+  revalidatePath("/");
+  return { savedIds };
+}
+
 export async function markOnboardingComplete() {
   const user = await getCurrentUser();
   if (!user) throw new Error("No user found");

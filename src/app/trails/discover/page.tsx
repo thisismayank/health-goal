@@ -12,6 +12,10 @@ import {
   type Verdict,
 } from "@/lib/basecamp/trail-assessment";
 import { DiscoverSearch } from "@/components/trails/discover-search";
+import {
+  ItineraryPlanner,
+  type ItineraryPresetInput,
+} from "@/components/trails/itinerary-planner";
 
 export const dynamic = "force-dynamic";
 
@@ -151,6 +155,22 @@ export default async function DiscoverPage({
 
       {query && matches.length > 0 && (
         <>
+          <ItineraryPlanner
+            destinationLabel={query}
+            presets={assessed.map<ItineraryPresetInput>(({ preset, assessment }) => ({
+              slug: preset.slug,
+              name: preset.name,
+              region: preset.region,
+              distanceKm: preset.distanceKm,
+              elevationGainFt: preset.elevationGainFt,
+              maxAltitudeFt: preset.maxAltitudeFt,
+              typicalHours: preset.typicalHours,
+              packWeightLb: preset.packWeightLb,
+              terrainGrade: preset.terrainGrade,
+              verdict: assessment.verdict,
+            }))}
+          />
+
           <div className="text-xs text-muted">
             <span className="text-foreground">{matches.length}</span> trail
             {matches.length === 1 ? "" : "s"} match "{query}" — ranked by fit
