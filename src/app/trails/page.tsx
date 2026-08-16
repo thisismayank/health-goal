@@ -38,10 +38,19 @@ export default async function TrailsPage() {
               <Link
                 key={t.id}
                 href={`/trails/${t.id}`}
-                className="block rounded-md border border-panel-border bg-panel px-4 py-3 hover:border-blue-500/40 transition"
+                className={`block rounded-md border px-4 py-3 hover:border-blue-500/40 transition ${
+                  t.isPrimary
+                    ? "border-blue-500/60 bg-blue-950/20"
+                    : "border-panel-border bg-panel"
+                }`}
               >
                 <div className="flex items-baseline justify-between gap-3">
-                  <div className="font-medium truncate">{t.name}</div>
+                  <div className="font-medium truncate">
+                    {t.isPrimary && (
+                      <span className="text-blue-300 mr-1.5">★</span>
+                    )}
+                    {t.name}
+                  </div>
                   {t.targetDate && (
                     <div className="text-xs text-muted whitespace-nowrap">
                       {t.targetDate}
@@ -53,6 +62,11 @@ export default async function TrailsPage() {
                   gain · max {t.maxAltitudeFt.toLocaleString()} ft · ~
                   {t.typicalHours}h
                   {t.packWeightLb > 0 && ` · ${t.packWeightLb} lb pack`}
+                  {t.isPrimary && (
+                    <span className="text-blue-300 ml-2 font-mono uppercase tracking-wider text-[10px]">
+                      · primary goal
+                    </span>
+                  )}
                 </div>
               </Link>
             ))}

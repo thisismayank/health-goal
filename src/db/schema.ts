@@ -1,4 +1,5 @@
 import {
+  boolean,
   integer,
   pgTable,
   real,
@@ -274,6 +275,13 @@ export const trail = pgTable("trail", {
     .default("moderate"),
   targetDate: text("target_date"),
   notes: text("notes"),
+  // If created from the library, remember which preset — used to look up
+  // named waypoints for the Summit hero when this trail is the primary goal.
+  presetSlug: text("preset_slug"),
+  // At most one trail per user should be primary at a time; enforced in the
+  // setPrimaryTrail action (no DB-level partial unique to keep the migration
+  // simple).
+  isPrimary: boolean("is_primary").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

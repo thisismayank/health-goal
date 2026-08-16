@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { workout, type Workout } from "@/db/schema";
+import { trail, workout, type Trail, type Workout } from "@/db/schema";
 
 export type Waypoint = {
   name: string;
@@ -19,6 +19,103 @@ export const WAYPOINTS: Waypoint[] = [
   { name: "Summit", ft: RAINIER_SUMMIT_FT, description: "Columbia Crest" },
 ];
 
+// Waypoints for well-known objectives when they're set as primary goal.
+// If a trail has no preset waypoints, fall back to generic 25/50/75/100 %
+// milestones of its summit height.
+export const PRESET_WAYPOINTS: Record<string, Waypoint[]> = {
+  "rainier-dc": WAYPOINTS,
+  "rainier-emmons": WAYPOINTS,
+  "kilimanjaro-machame": [
+    { name: "Machame Gate", ft: 5900, description: "Trailhead" },
+    { name: "Shira Camp 2", ft: 12500, description: "Day 3" },
+    { name: "Barranco Camp", ft: 13100, description: "Day 4" },
+    { name: "Barafu Camp", ft: 15300, description: "High camp" },
+    { name: "Uhuru Peak", ft: 19341, description: "Summit" },
+  ],
+  "kilimanjaro-lemosho": [
+    { name: "Lemosho Gate", ft: 7700, description: "Trailhead" },
+    { name: "Shira Camp 2", ft: 12500, description: "Day 4" },
+    { name: "Barranco Camp", ft: 13100, description: "Day 5" },
+    { name: "Barafu Camp", ft: 15300, description: "High camp" },
+    { name: "Uhuru Peak", ft: 19341, description: "Summit" },
+  ],
+  "denali-west-buttress": [
+    { name: "Basecamp", ft: 7200, description: "Kahiltna Glacier" },
+    { name: "Camp 2", ft: 11200, description: "Motorcycle Hill" },
+    { name: "Camp 3 (14 Camp)", ft: 14200, description: "Medical station" },
+    { name: "High Camp", ft: 17200, description: "West Buttress" },
+    { name: "Summit", ft: 20310, description: "Denali" },
+  ],
+  "ebc-trek": [
+    { name: "Lukla", ft: 9300, description: "Trailhead" },
+    { name: "Namche Bazaar", ft: 11290, description: "Sherpa capital" },
+    { name: "Dingboche", ft: 14470, description: "Acclimatization" },
+    { name: "Lobuche", ft: 16110, description: "" },
+    { name: "Everest BC / Kala Patthar", ft: 18192, description: "Trek high point" },
+  ],
+  "aconcagua-normal": [
+    { name: "Confluencia", ft: 11150, description: "Day 1" },
+    { name: "Plaza de Mulas (BC)", ft: 14340, description: "Basecamp" },
+    { name: "Nido de Cóndores", ft: 18300, description: "Camp 2" },
+    { name: "Cólera / Berlin", ft: 19700, description: "High camp" },
+    { name: "Summit", ft: 22841, description: "Cerro Aconcagua" },
+  ],
+  "elbrus-south": [
+    { name: "Azau", ft: 7550, description: "Trailhead" },
+    { name: "Barrels Hut", ft: 12500, description: "Cable car end" },
+    { name: "Pastukhov Rocks", ft: 15400, description: "Snowcat drop" },
+    { name: "Saddle", ft: 17700, description: "West-East saddle" },
+    { name: "West Summit", ft: 18510, description: "Highest point Europe" },
+  ],
+};
+
+export function genericWaypoints(summitFt: number): Waypoint[] {
+  return [
+    { name: "1/4", ft: Math.round(summitFt * 0.25), description: "" },
+    { name: "Halfway", ft: Math.round(summitFt * 0.5), description: "" },
+    { name: "3/4", ft: Math.round(summitFt * 0.75), description: "" },
+    { name: "Summit", ft: summitFt, description: "Goal" },
+  ];
+}
+
+export type ActiveGoal = {
+  source: "primary_trail" | "default_rainier";
+  name: string;
+  summitFt: number;
+  waypoints: Waypoint[];
+  primaryTrailId: number | null;
+};
+
+const DEFAULT_GOAL: ActiveGoal = {
+  source: "default_rainier",
+  name: "Mount Rainier",
+  summitFt: RAINIER_SUMMIT_FT,
+  waypoints: WAYPOINTS,
+  primaryTrailId: null,
+};
+
+function goalFromTrail(t: Trail): ActiveGoal {
+  const summitFt = t.maxAltitudeFt;
+  const presetWaypoints = t.presetSlug ? PRESET_WAYPOINTS[t.presetSlug] : null;
+  return {
+    source: "primary_trail",
+    name: t.name,
+    summitFt,
+    waypoints: presetWaypoints ?? genericWaypoints(summitFt),
+    primaryTrailId: t.id,
+  };
+}
+
+export async function getActiveGoal(userId: number): Promise<ActiveGoal> {
+  const [primary] = await db
+    .select()
+    .from(trail)
+    .where(and(eq(trail.userId, userId), eq(trail.isPrimary, true)))
+    .limit(1);
+  if (!primary) return DEFAULT_GOAL;
+  return goalFromTrail(primary);
+}
+
 export type SummitProgress = {
   totalFt: number;
   currentWaypoint: Waypoint | null;
@@ -28,13 +125,16 @@ export type SummitProgress = {
   fractionThroughCurrent: number; // 0-1 through the current mountain
 };
 
-export function summitProgressFor(totalFt: number): SummitProgress {
-  const perMountain = RAINIER_SUMMIT_FT;
+export function summitProgressFor(
+  totalFt: number,
+  goal: ActiveGoal = DEFAULT_GOAL,
+): SummitProgress {
+  const perMountain = goal.summitFt;
   const summitCount = Math.floor(totalFt / perMountain);
   const remainderFt = totalFt % perMountain;
 
-  const belowRemainder = WAYPOINTS.filter((w) => w.ft <= remainderFt);
-  const aboveRemainder = WAYPOINTS.filter((w) => w.ft > remainderFt);
+  const belowRemainder = goal.waypoints.filter((w) => w.ft <= remainderFt);
+  const aboveRemainder = goal.waypoints.filter((w) => w.ft > remainderFt);
 
   const current = belowRemainder.at(-1) ?? null;
   const next = aboveRemainder[0] ?? null;

@@ -20,7 +20,7 @@ import {
   type PrepPlan,
 } from "@/lib/basecamp/trail-prep-plan";
 import { generateTrailNarrative } from "@/lib/coach/trail-narrative";
-import { TrailDeleteButton } from "@/components/trail-actions";
+import { PrimaryGoalButton, TrailDeleteButton } from "@/components/trail-actions";
 import { CoachCardSkeleton } from "@/components/coach-cards";
 import type { Trail as TrailRow } from "@/db/schema";
 
@@ -150,7 +150,8 @@ export default async function TrailDetailPage({
         </section>
       )}
 
-      <section className="pt-4 border-t border-panel-border">
+      <section className="pt-4 border-t border-panel-border flex items-center justify-between gap-3">
+        <PrimaryGoalButton trailId={t.id} isPrimary={t.isPrimary} />
         <TrailDeleteButton trailId={t.id} />
       </section>
     </div>

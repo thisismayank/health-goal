@@ -264,10 +264,47 @@ export async function createTrailFromPreset(slug: string, targetDate?: string): 
       terrainGrade: preset.terrainGrade,
       targetDate: targetDate ?? null,
       notes: `${preset.notes} · Sources: ${preset.sources.join(", ")}`,
+      presetSlug: preset.slug,
     })
     .returning({ id: trail.id });
   revalidatePath("/trails");
   return { id: row.id };
+}
+
+export async function setPrimaryTrail(trailId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  // Ensure the trail belongs to this user
+  const [existing] = await db
+    .select()
+    .from(trail)
+    .where(and(eq(trail.id, trailId), eq(trail.userId, user.id)))
+    .limit(1);
+  if (!existing) throw new Error("Trail not found");
+  // Unset any current primary, then set the new one
+  await db
+    .update(trail)
+    .set({ isPrimary: false })
+    .where(and(eq(trail.userId, user.id), eq(trail.isPrimary, true)));
+  await db
+    .update(trail)
+    .set({ isPrimary: true })
+    .where(eq(trail.id, trailId));
+  revalidatePath("/trails");
+  revalidatePath("/");
+  revalidatePath(`/trails/${trailId}`);
+}
+
+export async function unsetPrimaryTrail(trailId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  await db
+    .update(trail)
+    .set({ isPrimary: false })
+    .where(and(eq(trail.id, trailId), eq(trail.userId, user.id)));
+  revalidatePath("/trails");
+  revalidatePath("/");
+  revalidatePath(`/trails/${trailId}`);
 }
 
 export async function createTrail(input: CreateTrailInput): Promise<{ id: number }> {

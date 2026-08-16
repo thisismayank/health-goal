@@ -14,6 +14,7 @@ import { LogSessionForm } from "@/components/log-session-form";
 import { ReopenButton, SkipButton } from "@/components/session-actions";
 import { CoachCardSkeleton, DailyCoachCard } from "@/components/coach-cards";
 import { SummitHero } from "@/components/summit-hero";
+import { UpcomingTrails } from "@/components/upcoming-trails";
 import type { PlannedSession, Workout } from "@/db/schema";
 
 type Prescription = { name: string; sets: number; reps: string }[];
@@ -115,6 +116,8 @@ export default async function TodayPage() {
           plannedTargetMin={session?.targetDurationMinutes ?? null}
         />
       )}
+
+      <UpcomingTrails userId={user.id} tz={user.timezone} />
 
       <Suspense fallback={<CoachCardSkeleton label="Coach · thinking" />}>
         <DailyCoachCard
