@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { issueMagicLink, magicLinkUrl } from "@/lib/auth/magic-links";
+import {
+  checkMagicLinkRateLimit,
+  issueMagicLink,
+  magicLinkUrl,
+} from "@/lib/auth/magic-links";
 import { sendMagicLinkEmail } from "@/lib/auth/email";
 import { isValidEmail } from "@/lib/auth/tokens";
 
@@ -21,6 +25,14 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { ok: false, error: "invalid_email" },
       { status: 400 },
+    );
+  }
+
+  const limitReason = await checkMagicLinkRateLimit(email);
+  if (limitReason) {
+    return NextResponse.json(
+      { ok: false, error: "rate_limited" },
+      { status: 429 },
     );
   }
 

@@ -1,9 +1,53 @@
-import { and, eq, gte, isNull } from "drizzle-orm";
+import { and, count, eq, gte, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { magicLink, userProfile } from "@/db/schema";
 import { generateToken, normalizeEmail } from "./tokens";
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+// Rate-limit thresholds.
+const PER_EMAIL_WINDOW_MS = 15 * 60 * 1000; // 15 min
+const PER_EMAIL_MAX = 5; // per window
+const GLOBAL_WINDOW_MS = 60 * 1000; // 1 min
+const GLOBAL_MAX = 30; // per window
+
+export type RateLimitReason = "per_email" | "global";
+
+/**
+ * Cheap rate-limit check using the existing magic_link table as its own
+ * counter. No extra Redis dependency; correctness good enough for
+ * pre-launch (attacker rotating emails will still hit the global cap +
+ * fill their own dedupe entries).
+ *
+ * Returns null when OK to proceed, or the reason when limited.
+ */
+export async function checkMagicLinkRateLimit(
+  rawEmail: string,
+): Promise<RateLimitReason | null> {
+  const email = normalizeEmail(rawEmail);
+  const now = Date.now();
+
+  const perEmailCutoff = new Date(now - PER_EMAIL_WINDOW_MS);
+  const [perEmail] = await db
+    .select({ n: count() })
+    .from(magicLink)
+    .where(
+      and(
+        eq(magicLink.requestedEmail, email),
+        gte(magicLink.createdAt, perEmailCutoff),
+      ),
+    );
+  if ((perEmail?.n ?? 0) >= PER_EMAIL_MAX) return "per_email";
+
+  const globalCutoff = new Date(now - GLOBAL_WINDOW_MS);
+  const [global] = await db
+    .select({ n: count() })
+    .from(magicLink)
+    .where(gte(magicLink.createdAt, globalCutoff));
+  if ((global?.n ?? 0) >= GLOBAL_MAX) return "global";
+
+  return null;
+}
 
 /**
  * Issue a magic-link token for an email. If a user with this email exists,

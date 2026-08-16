@@ -8,6 +8,8 @@ const ERROR_COPY: Record<string, string> = {
   send_failed: "Couldn't send the email. Try again in a moment.",
   invalid_token: "This link is invalid or has already been used.",
   expired_token: "This link expired. Request a new one below.",
+  rate_limited:
+    "Too many requests. Wait a few minutes and try again.",
 };
 
 export function LoginForm({
