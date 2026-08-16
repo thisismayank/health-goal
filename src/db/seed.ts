@@ -194,6 +194,10 @@ async function main() {
     if (!existingUsers[0].onboardedAt) {
       patch.onboardedAt = new Date();
     }
+    // Seed users bypass all freemium limits.
+    if (existingUsers[0].plan !== "admin") {
+      patch.plan = "admin";
+    }
     if (Object.keys(patch).length > 0) {
       await db.update(userProfile).set(patch).where(eq(userProfile.id, userId));
       console.log(`  backfilled: ${Object.keys(patch).join(", ")}`);

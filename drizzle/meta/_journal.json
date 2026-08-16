@@ -92,6 +92,13 @@
       "when": 1786903148434,
       "tag": "0012_loving_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786906342872,
+      "tag": "0013_giant_lady_vermin",
+      "breakpoints": true
     }
   ]
 }

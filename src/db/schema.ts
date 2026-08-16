@@ -33,6 +33,11 @@ export const userProfile = pgTable(
     // Null = hasn't completed onboarding yet → routed to /welcome.
     // Set = timestamp of finish (or skip). Seed users are backfilled to now().
     onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
+    // Subscription tier — 'free' (default), 'pro' (paid), 'admin' (bypass
+    // all limits, no billing). Stripe integration lives in a future slice;
+    // this column exists now so gates can be enforced immediately and
+    // upgrade paths can be surfaced. Seed users backfilled to 'admin'.
+    plan: text("plan").notNull().default("free"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
