@@ -125,7 +125,7 @@ const WEEKLY_TEMPLATE: DayTemplate[] = [
     targetRpeMin: 1,
     targetRpeMax: 2,
     instructions:
-      "45–75 min easy walking + mobility. No hard running, no heavy legs, no hard StairMaster.",
+      "45–75 min easy movement — walking, mobility, gentle stretching. Can be one continuous session OR distributed across the day (walks between meetings, errands, subway transfers all count). Goal: total time on feet in Zone 1.",
   },
 ];
 

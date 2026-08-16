@@ -21,6 +21,7 @@ import {
 } from "@/lib/basecamp/trail-prep-plan";
 import { generateTrailNarrative } from "@/lib/coach/trail-narrative";
 import { PrimaryGoalButton, TrailDeleteButton } from "@/components/trail-actions";
+import { TrailEditForm } from "@/components/trail-edit-form";
 import { CoachCardSkeleton } from "@/components/coach-cards";
 import type { Trail as TrailRow } from "@/db/schema";
 
@@ -58,7 +59,10 @@ export default async function TrailDetailPage({
         >
           ← All trails
         </Link>
-        <h1 className="text-2xl font-semibold mt-2">{t.name}</h1>
+        <div className="flex items-start justify-between gap-3 mt-2">
+          <h1 className="text-2xl font-semibold">{t.name}</h1>
+          <TrailEditForm trail={t} />
+        </div>
         <div className="text-sm text-muted mt-1">
           {t.distanceKm} km · {t.elevationGainFt.toLocaleString()} ft gain ·
           max {t.maxAltitudeFt.toLocaleString()} ft · ~{t.typicalHours}h

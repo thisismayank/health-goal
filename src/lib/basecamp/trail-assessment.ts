@@ -190,44 +190,95 @@ function analyzeEndurance(
   hasDate: boolean,
 ): DimensionAnalysis {
   const neededMin = trail.typicalHours * 60;
-  const cur = snap.longestRecentSessionMin;
-  const projected = projectedCapacity(
-    Math.max(cur, 15), // avoid 0-baseline case
+  const longest = snap.longestRecentSessionMin;
+  const weekly = snap.weeklyAerobicMinutes;
+
+  // Multi-signal endurance readiness. Steve House / Uphill Athlete guidance:
+  // - You do NOT need to pre-record a session equal to the trail duration.
+  // - Longest recent session ~50% of trail + weekly aerobic base ≥ trail
+  //   duration ≈ ready to extend on the day.
+  // - Terrain grade adjusts thresholds (technical/mountaineering strict,
+  //   easy relaxed).
+  const strictness =
+    trail.terrainGrade === "mountaineering"
+      ? 1.15
+      : trail.terrainGrade === "technical"
+        ? 1.1
+        : trail.terrainGrade === "easy"
+          ? 0.85
+          : 1.0;
+
+  const longestReadyMin = neededMin * 0.5 * strictness; // e.g. 105 min for a 210-min trail
+  const longestSoloReadyMin = neededMin * 0.65 * strictness; // strong solo signal
+  const weeklyReadyMin = neededMin * 1.0 * strictness; // e.g. 210 min/wk for 210-min trail
+  const longestClosableMin = neededMin * 0.3 * strictness;
+  const weeklyClosableMin = neededMin * 0.7 * strictness;
+
+  // Projected fitness given time to build (used only when hasDate is true
+  // and there's meaningful time — otherwise projections should not carry
+  // the "closable" verdict)
+  const projLongest = projectedCapacity(
+    Math.max(longest, 15),
     weeksAvail,
     WEEKLY_ENDURANCE_GROWTH,
   );
-  const ratio = cur / Math.max(1, neededMin);
-  const projRatio = projected / neededMin;
+  const projWeekly = projectedCapacity(
+    Math.max(weekly, 30),
+    weeksAvail,
+    WEEKLY_ENDURANCE_GROWTH,
+  );
+
+  const readyByCombined =
+    longest >= longestReadyMin && weekly >= weeklyReadyMin;
+  const readyBySolo = longest >= longestSoloReadyMin;
+  const closableByProjection =
+    (projLongest >= longestReadyMin && projWeekly >= weeklyReadyMin) ||
+    projLongest >= longestSoloReadyMin;
+  const stretchByProjection =
+    projLongest >= longestClosableMin || projWeekly >= weeklyClosableMin;
 
   let status: DimensionStatus;
-  if (ratio >= 0.85) status = "ready";
-  else if (projRatio >= 0.85) status = "closable";
-  else if (projRatio >= 0.55) status = "stretch";
+  if (readyByCombined || readyBySolo) status = "ready";
+  else if (closableByProjection) status = "closable";
+  else if (stretchByProjection) status = "stretch";
   else status = "not_in_timeframe";
 
-  const noteBase = `Your longest recent session is ${cur} min; the trail runs ~${Math.round(neededMin)} min`;
-  const weekPhrase = hasDate ? `in ${weeksAvail.toFixed(1)} weeks` : "with a focused block";
-  const stretchPhrase = hasDate
-    ? `Only ${weeksAvail.toFixed(1)} weeks — expect fatigue late in the day`
-    : "Real duration gap — expect fatigue late in the day without a proper build";
+  // Ratio for the progress bar: blend longest-vs-target + weekly-vs-target
+  const longestRatio = longest / Math.max(1, longestReadyMin);
+  const weeklyRatio = weekly / Math.max(1, weeklyReadyMin);
+  const combinedRatio = Math.min(1, (longestRatio + weeklyRatio) / 2);
+
+  const noteReady =
+    `Your longest recent session (${longest} min) is ~${Math.round((longest / neededMin) * 100)}% of trail duration; ` +
+    `weekly aerobic base is ${weekly} min/wk. Base fitness supports extending to the trail duration on the day.`;
+  const noteClosable =
+    `Longest recent session ${longest} min · weekly aerobic ${weekly} min/wk. Target: longest ~${Math.round(longestReadyMin)} min + weekly ~${Math.round(weeklyReadyMin)} min. ` +
+    (hasDate ? `Buildable in ${weeksAvail.toFixed(1)} weeks.` : "Buildable with a focused block.");
+  const noteStretch =
+    `Longest ${longest} min + weekly ${weekly} min/wk are both below target (need ~${Math.round(longestReadyMin)} min longest, ~${Math.round(weeklyReadyMin)} min/wk). ` +
+    (hasDate
+      ? `${weeksAvail.toFixed(1)} weeks is tight — expect real fatigue.`
+      : "Expect fatigue late in the day without a proper build.");
+  const noteGap =
+    `Aerobic gap is large: longest ${longest} min and weekly ${weekly} min/wk are well below the ~${Math.round(longestReadyMin)} min / ~${Math.round(weeklyReadyMin)} min-per-week base needed.` +
+    (hasDate ? " Time available not enough to close it." : " Requires a substantial training block.");
+
   const notes: Record<DimensionStatus, string> = {
-    ready: `${noteBase}. You already handle this duration.`,
-    closable: `${noteBase}. Buildable ${weekPhrase} with progressive long sessions.`,
-    stretch: `${noteBase}. ${stretchPhrase}.`,
-    not_in_timeframe: hasDate
-      ? `${noteBase}. Duration gap too large for the time available.`
-      : `${noteBase}. Very large gap — this trail requires a substantial training block.`,
-    concern: noteBase,
-    not_applicable: noteBase,
+    ready: noteReady,
+    closable: noteClosable,
+    stretch: noteStretch,
+    not_in_timeframe: noteGap,
+    concern: noteReady,
+    not_applicable: noteReady,
   };
 
   return {
     key: "endurance",
     label: "Endurance",
     status,
-    ratio: Math.min(1, ratio),
-    current: `${cur} min`,
-    required: `${Math.round(neededMin)} min`,
+    ratio: combinedRatio,
+    current: `${longest} min longest · ${weekly} min/wk`,
+    required: `~${Math.round(longestReadyMin)} min longest · ~${Math.round(weeklyReadyMin)} min/wk`,
     note: notes[status],
   };
 }

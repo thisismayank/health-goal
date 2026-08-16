@@ -70,10 +70,10 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 1700,
     maxAltitudeFt: 6800,
     typicalHours: 3.5,
-    packWeightLb: 12,
+    packWeightLb: 5,
     terrainGrade: "moderate",
     notes:
-      "Classic Paradise-area loop with sweeping Rainier views. Panorama Point is the high point. Snow patches often linger into July.",
+      "Classic Paradise-area loop with sweeping Rainier views. Panorama Point is the high point. Snow patches often linger into July. Day-pack: water + snacks + layers.",
     sources: ["NPS.gov"],
   },
   {
@@ -85,10 +85,10 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 2600,
     maxAltitudeFt: 7800,
     typicalHours: 6,
-    packWeightLb: 15,
+    packWeightLb: 10,
     terrainGrade: "hard",
     notes:
-      "From Sunrise trailhead. Exposed alpine terrain with dramatic Rainier north-face views. Wind and weather can flip quickly.",
+      "From Sunrise trailhead. Exposed alpine terrain with dramatic Rainier north-face views. Wind and weather can flip quickly. Extra layers for exposure.",
     sources: ["NPS.gov"],
   },
   {
@@ -100,7 +100,7 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 1700,
     maxAltitudeFt: 7200,
     typicalHours: 4,
-    packWeightLb: 12,
+    packWeightLb: 7,
     terrainGrade: "moderate",
     notes: "Shorter Burroughs variant if 3rd feels too ambitious.",
     sources: ["NPS.gov"],
@@ -129,7 +129,7 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 4650,
     maxAltitudeFt: 10188,
     typicalHours: 7,
-    packWeightLb: 15,
+    packWeightLb: 10,
     terrainGrade: "hard",
     notes:
       "Excellent altitude + vertical training day. No glacier travel required — snow slope in summer, class-1 terrain. Ends at the summit-day base camp.",
@@ -223,10 +223,10 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 6100,
     maxAltitudeFt: 14505,
     typicalHours: 14,
-    packWeightLb: 20,
+    packWeightLb: 15,
     terrainGrade: "hard",
     notes:
-      "Highest point in the contiguous US done as a very long day. Permit lottery. Real altitude at the top; sea-level residents struggle.",
+      "Highest point in the contiguous US done as a very long day. Permit lottery. Real altitude at the top; sea-level residents struggle. Water + food is the pack weight (~14 hrs).",
     sources: ["USFS Inyo"],
   },
   {
@@ -238,7 +238,7 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 4800,
     maxAltitudeFt: 8842,
     typicalHours: 10,
-    packWeightLb: 15,
+    packWeightLb: 10,
     terrainGrade: "hard",
     notes:
       "Cables section on the final 400 ft is exposed and can be crowded. Permit lottery. Approx moderate altitude; conditioning is the gate.",
@@ -253,7 +253,7 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 3300,
     maxAltitudeFt: 9926,
     typicalHours: 8,
-    packWeightLb: 12,
+    packWeightLb: 8,
     terrainGrade: "moderate",
     notes:
       "Excellent Yosemite alternative to Half Dome. Narrow ridge finish is exposed but non-technical.",
@@ -268,10 +268,10 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 10300,
     maxAltitudeFt: 10834,
     typicalHours: 14,
-    packWeightLb: 15,
+    packWeightLb: 10,
     terrainGrade: "hard",
     notes:
-      "One of the largest single-day vertical gains in the US. Palm Springs desert floor to alpine summit. Extreme heat + water logistics matter.",
+      "One of the largest single-day vertical gains in the US. Palm Springs desert floor to alpine summit. Extreme heat + water logistics matter (water alone is heavy).",
     sources: ["Wikipedia"],
   },
 
@@ -285,7 +285,7 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 4900,
     maxAltitudeFt: 14259,
     typicalHours: 13,
-    packWeightLb: 15,
+    packWeightLb: 10,
     terrainGrade: "technical",
     notes:
       "Class 3 scrambling above the Keyhole. Alpine start required to be off summit by noon (afternoon storms). Real fatality history.",
@@ -300,7 +300,7 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 4700,
     maxAltitudeFt: 14440,
     typicalHours: 8,
-    packWeightLb: 12,
+    packWeightLb: 7,
     terrainGrade: "moderate",
     notes:
       "Highest point in the Rockies. Non-technical Class 1 trail. Altitude is the primary challenge.",
@@ -315,7 +315,7 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 2900,
     maxAltitudeFt: 14065,
     typicalHours: 6,
-    packWeightLb: 10,
+    packWeightLb: 6,
     terrainGrade: "moderate",
     notes:
       "One of the most accessible 14ers. Class 2 talus. Popular first-14er.",
@@ -330,7 +330,7 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 3600,
     maxAltitudeFt: 14275,
     typicalHours: 7,
-    packWeightLb: 12,
+    packWeightLb: 8,
     terrainGrade: "moderate",
     notes: "Two 14ers on one outing. Class 2. Weather window matters.",
     sources: ["USFS"],
@@ -363,7 +363,7 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 9000,
     maxAltitudeFt: 6288,
     typicalHours: 14,
-    packWeightLb: 15,
+    packWeightLb: 12,
     terrainGrade: "hard",
     notes:
       "Full Presi traverse (Madison → Washington). Notorious for sudden weather. Above treeline much of the day.",
@@ -378,7 +378,7 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 4200,
     maxAltitudeFt: 6288,
     typicalHours: 6,
-    packWeightLb: 12,
+    packWeightLb: 8,
     terrainGrade: "hard",
     notes:
       "Highest point in the Northeast. Weather is the story — 'worst weather in North America' claim. Wind + cold above treeline.",
@@ -393,7 +393,7 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
     elevationGainFt: 4200,
     maxAltitudeFt: 5267,
     typicalHours: 9,
-    packWeightLb: 12,
+    packWeightLb: 8,
     terrainGrade: "technical",
     notes:
       "Knife Edge is a narrow exposed ridge (Class 3). Do NOT attempt in wind or bad weather. Permit required.",

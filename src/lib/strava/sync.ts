@@ -7,8 +7,13 @@ import {
   workoutSource,
 } from "@/db/schema";
 import { ymd } from "@/lib/date";
-import { getActivePlan } from "@/lib/data";
-import { sessionCompletionQualifies } from "@/lib/plan";
+import {
+  getActivePlan,
+  getCurrentUser,
+  getWorkoutsOnLocalDate,
+} from "@/lib/data";
+import { categoriesCompatible, sessionCompletionQualifies } from "@/lib/plan";
+import type { SessionCategory } from "@/db/schema";
 import type { StravaActivity } from "./client";
 import { getActivity, listActivitiesSince } from "./client";
 import { mapStravaType } from "./mapping";
@@ -126,16 +131,38 @@ export async function upsertActivity(
     action = "created";
   }
 
-  // Auto-mark the planned session complete whenever a qualifying activity
-  // links to a still-open planned session. Idempotent — safe to fire on
-  // both create AND update. Previously gated on action==="created" which
-  // meant an existing activity that later became qualifying (e.g. after a
-  // classification rule change) wouldn't flip the session status.
-  if (plannedSessionId && plannedIsOpen && plannedQualifies) {
-    await db
-      .update(plannedSession)
-      .set({ status: "completed" })
-      .where(eq(plannedSession.id, plannedSessionId));
+  // Auto-mark the planned session complete whenever the AGGREGATE of
+  // same-day compatible workouts qualifies. Distributed active-recovery
+  // walks, split cardio sessions, and multi-part strength blocks all sum
+  // toward the target. Idempotent — safe to fire on create AND update.
+  if (plannedSessionId && plannedIsOpen) {
+    const user = await getCurrentUser();
+    const tz = user?.timezone ?? "UTC";
+    const sameDayRows = await getWorkoutsOnLocalDate(userId, dateStr, tz);
+    const [ps] = await db
+      .select()
+      .from(plannedSession)
+      .where(eq(plannedSession.id, plannedSessionId))
+      .limit(1);
+    if (ps) {
+      const compatibleSeconds = sameDayRows
+        .filter((w) =>
+          categoriesCompatible(w.type as SessionCategory, ps.sessionCategory),
+        )
+        .reduce((sum, w) => sum + (w.durationSeconds ?? 0), 0);
+      if (
+        sessionCompletionQualifies(
+          compatibleSeconds,
+          ps.sessionCategory,
+          ps,
+        )
+      ) {
+        await db
+          .update(plannedSession)
+          .set({ status: "completed" })
+          .where(eq(plannedSession.id, plannedSessionId));
+      }
+    }
   }
 
   // Retroactive un-completion: if we just unlinked from a previously-linked

@@ -330,6 +330,43 @@ export async function createTrail(input: CreateTrailInput): Promise<{ id: number
   return { id: row.id };
 }
 
+export type UpdateTrailInput = {
+  trailId: number;
+  name?: string;
+  packWeightLb?: number;
+  targetDate?: string | null;
+  notes?: string | null;
+};
+
+export async function updateTrail(input: UpdateTrailInput) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+
+  const patch: Record<string, unknown> = {};
+  if (input.name != null && input.name.trim()) patch.name = input.name.trim();
+  if (input.packWeightLb != null) {
+    if (input.packWeightLb < 0)
+      throw new Error("Pack weight must be non-negative");
+    patch.packWeightLb = input.packWeightLb;
+  }
+  if (input.targetDate !== undefined) {
+    patch.targetDate = input.targetDate || null;
+  }
+  if (input.notes !== undefined) {
+    patch.notes = input.notes?.trim() || null;
+  }
+
+  if (Object.keys(patch).length === 0) return;
+
+  await db
+    .update(trail)
+    .set(patch)
+    .where(and(eq(trail.id, input.trailId), eq(trail.userId, user.id)));
+  revalidatePath("/trails");
+  revalidatePath(`/trails/${input.trailId}`);
+  revalidatePath("/");
+}
+
 export async function deleteTrail(trailId: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("No user found");
