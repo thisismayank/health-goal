@@ -187,6 +187,7 @@ function analyzeEndurance(
   trail: Trail,
   snap: FitnessSnapshot,
   weeksAvail: number,
+  hasDate: boolean,
 ): DimensionAnalysis {
   const neededMin = trail.typicalHours * 60;
   const cur = snap.longestRecentSessionMin;
@@ -205,11 +206,17 @@ function analyzeEndurance(
   else status = "not_in_timeframe";
 
   const noteBase = `Your longest recent session is ${cur} min; the trail runs ~${Math.round(neededMin)} min`;
+  const weekPhrase = hasDate ? `in ${weeksAvail.toFixed(1)} weeks` : "with a focused block";
+  const stretchPhrase = hasDate
+    ? `Only ${weeksAvail.toFixed(1)} weeks — expect fatigue late in the day`
+    : "Real duration gap — expect fatigue late in the day without a proper build";
   const notes: Record<DimensionStatus, string> = {
     ready: `${noteBase}. You already handle this duration.`,
-    closable: `${noteBase}. Buildable in ${weeksAvail.toFixed(1)} weeks with progressive long sessions.`,
-    stretch: `${noteBase}. Only ${weeksAvail.toFixed(1)} weeks — expect fatigue late in the day.`,
-    not_in_timeframe: `${noteBase}. Duration gap too large for the time available.`,
+    closable: `${noteBase}. Buildable ${weekPhrase} with progressive long sessions.`,
+    stretch: `${noteBase}. ${stretchPhrase}.`,
+    not_in_timeframe: hasDate
+      ? `${noteBase}. Duration gap too large for the time available.`
+      : `${noteBase}. Very large gap — this trail requires a substantial training block.`,
     concern: noteBase,
     not_applicable: noteBase,
   };
@@ -229,6 +236,7 @@ function analyzeVertical(
   trail: Trail,
   snap: FitnessSnapshot,
   weeksAvail: number,
+  _hasDate: boolean,
 ): DimensionAnalysis {
   const needed = trail.elevationGainFt;
   const cur = snap.maxSingleSessionVertFt;
@@ -257,7 +265,7 @@ function analyzeVertical(
       status === "ready"
         ? "Your recent vertical range covers the trail."
         : status === "closable"
-          ? `Add stair or incline sessions to reach ${needed.toLocaleString()} ft/day.`
+          ? `Add stair or incline sessions to build toward ${needed.toLocaleString()} ft/day.`
           : status === "stretch"
             ? "Real vertical work needed; pace yourself on the day."
             : "Vertical gap too large — consider a shorter alternative.",
@@ -268,6 +276,7 @@ function analyzePack(
   trail: Trail,
   snap: FitnessSnapshot,
   weeksAvail: number,
+  _hasDate: boolean,
 ): DimensionAnalysis {
   const needed = trail.packWeightLb;
   const cur = snap.maxPackLb;
@@ -440,12 +449,15 @@ export async function assessTrail(
   const daysUntilTrail = trail.targetDate
     ? Math.max(0, daysBetween(todayYmd, trail.targetDate))
     : null;
-  const weeksAvailable = daysUntilTrail != null ? daysUntilTrail / 7 : 100; // if no date, treat as future
+  const hasDate = daysUntilTrail != null;
+  // If no date, project against a generous 12-week window (a real training
+  // block). Not a user-facing number — just the ceiling for gap projection.
+  const weeksAvailable = hasDate ? daysUntilTrail / 7 : 12;
 
   const dimensions: DimensionAnalysis[] = [
-    analyzeEndurance(trail, snap, weeksAvailable),
-    analyzeVertical(trail, snap, weeksAvailable),
-    analyzePack(trail, snap, weeksAvailable),
+    analyzeEndurance(trail, snap, weeksAvailable, hasDate),
+    analyzeVertical(trail, snap, weeksAvailable, hasDate),
+    analyzePack(trail, snap, weeksAvailable, hasDate),
     analyzeAltitude(trail, snap),
     analyzeRecovery(snap),
   ];
@@ -456,7 +468,7 @@ export async function assessTrail(
   return {
     verdict,
     daysUntilTrail,
-    weeksAvailable: daysUntilTrail != null ? +weeksAvailable.toFixed(1) : null,
+    weeksAvailable: hasDate ? +weeksAvailable.toFixed(1) : null,
     dimensions,
     suggestedAdjustments,
     fitnessSnapshot: snap,
