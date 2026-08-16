@@ -341,22 +341,47 @@ function analyzeVertical(
   snap: FitnessSnapshot,
   weeksAvail: number,
   _hasDate: boolean,
+  kind: TrailKind,
 ): DimensionAnalysis {
-  const needed = trail.elevationGainFt;
+  const totalNeeded = trail.elevationGainFt;
   const cur = snap.maxSingleSessionVertFt;
+
+  // For multi-day objectives, elevationGainFt is TOTAL cumulative across
+  // all days. Summit day is typically 25-35% of total. For summit-push
+  // single-day objectives, the whole gain is in one day but often split
+  // approach + summit. Adjust the threshold accordingly.
+  const readyPct =
+    kind === "day_hike"
+      ? 0.6
+      : kind === "long_day"
+        ? 0.5
+        : kind === "summit_push"
+          ? 0.4
+          : /* multi_day */ 0.25;
+
+  // Effective per-day peak the user should have hit
+  const effectiveTarget = Math.round(totalNeeded * readyPct);
+
   const projected = projectedCapacity(
     Math.max(cur, 100),
     weeksAvail,
     WEEKLY_VERTICAL_GROWTH,
   );
-  const ratio = cur / Math.max(1, needed);
-  const projRatio = projected / needed;
+  const ratio = cur / Math.max(1, effectiveTarget);
+  const projRatio = projected / Math.max(1, effectiveTarget);
 
   let status: DimensionStatus;
-  if (ratio >= 0.8) status = "ready";
-  else if (projRatio >= 0.8) status = "closable";
-  else if (projRatio >= 0.5) status = "stretch";
+  if (ratio >= 1) status = "ready";
+  else if (projRatio >= 1) status = "closable";
+  else if (projRatio >= 0.6) status = "stretch";
   else status = "not_in_timeframe";
+
+  const kindNote =
+    kind === "multi_day"
+      ? `Multi-day objectives spread vertical across days — target is a single-day peak of ~${effectiveTarget.toLocaleString()} ft (the biggest day, usually summit).`
+      : kind === "summit_push"
+        ? `Summit pushes are done in one day but often split approach + summit — target a single-day peak of ~${effectiveTarget.toLocaleString()} ft.`
+        : `Target a single-day peak of ~${effectiveTarget.toLocaleString()} ft (${Math.round(readyPct * 100)}% of trail total).`;
 
   return {
     key: "vertical",
@@ -364,15 +389,15 @@ function analyzeVertical(
     status,
     ratio: Math.min(1, ratio),
     current: `${cur.toLocaleString()} ft (best recent session)`,
-    required: `${needed.toLocaleString()} ft`,
+    required: `~${effectiveTarget.toLocaleString()} ft single-day peak · ${totalNeeded.toLocaleString()} ft total`,
     note:
       status === "ready"
-        ? "Your recent vertical range covers the trail."
+        ? `${kindNote} Your recent range covers it.`
         : status === "closable"
-          ? `Add stair or incline sessions to build toward ${needed.toLocaleString()} ft/day.`
+          ? `${kindNote} Add stair or incline sessions to build toward it.`
           : status === "stretch"
-            ? "Real vertical work needed; pace yourself on the day."
-            : "Vertical gap too large — consider a shorter alternative.",
+            ? `${kindNote} Real vertical work needed; pace yourself on the day.`
+            : `${kindNote} Vertical gap too large — consider a shorter alternative or a lower-elevation warmup objective first.`,
   };
 }
 
@@ -381,6 +406,7 @@ function analyzePack(
   snap: FitnessSnapshot,
   weeksAvail: number,
   _hasDate: boolean,
+  kind: TrailKind,
 ): DimensionAnalysis {
   const needed = trail.packWeightLb;
   const cur = snap.maxPackLb;
@@ -397,15 +423,35 @@ function analyzePack(
     };
   }
 
+  // For day hikes, pack is a light day pack — full match matters.
+  // For multi-day treks, pack weight is often smaller (porters carry the
+  // bulk on Kili/EBC) or spread across days. Slightly relaxed.
+  // For summit pushes / expeditions, the number IS what you carry.
+  const readyPct =
+    kind === "day_hike"
+      ? 0.8
+      : kind === "long_day"
+        ? 0.8
+        : kind === "summit_push"
+          ? 0.7
+          : /* multi_day */ 0.65;
+
   const projected = cur + PACK_GROWTH_LB_PER_WEEK * Math.max(0, weeksAvail);
   const ratio = cur / Math.max(0.01, needed);
   const projRatio = projected / needed;
 
   let status: DimensionStatus;
-  if (ratio >= 0.9) status = "ready";
-  else if (projRatio >= 0.9) status = "closable";
-  else if (projRatio >= 0.6) status = "stretch";
+  if (ratio >= readyPct) status = "ready";
+  else if (projRatio >= readyPct) status = "closable";
+  else if (projRatio >= readyPct * 0.6) status = "stretch";
   else status = "not_in_timeframe";
+
+  const kindNote =
+    kind === "multi_day"
+      ? "Multi-day: pack matters for sustained carry, though many treks (Kili/EBC) use porters."
+      : kind === "summit_push"
+        ? "Summit push: this is what you carry on the day, no porters."
+        : "Day pack — water, layers, food.";
 
   return {
     key: "pack",
@@ -416,77 +462,112 @@ function analyzePack(
     required: `${needed} lb`,
     note:
       status === "ready"
-        ? "You've handled this pack weight recently."
+        ? `${kindNote} You've handled this recently.`
         : status === "closable"
-          ? `Progressive loaded hikes: +${PACK_GROWTH_LB_PER_WEEK} lb/wk to reach ${needed} lb.`
+          ? `${kindNote} Progressive loaded hikes: +${PACK_GROWTH_LB_PER_WEEK} lb/wk to reach ${needed} lb.`
           : status === "stretch"
-            ? "Pack tolerance thin — consider going lighter on the day."
-            : "Pack weight ambitious given your recent loading. Reduce or postpone.",
+            ? `${kindNote} Pack tolerance thin — consider going lighter on the day.`
+            : `${kindNote} Pack weight ambitious given your recent loading. Reduce or postpone.`,
   };
 }
 
-function analyzeAltitude(trail: Trail, snap: FitnessSnapshot): DimensionAnalysis {
+function analyzeAltitude(
+  trail: Trail,
+  snap: FitnessSnapshot,
+  kind: TrailKind,
+): DimensionAnalysis {
   const alt = trail.maxAltitudeFt;
   const known = snap.maxAltitudeReachedFt;
 
+  // Multi-day treks bake acclimatization into the itinerary (climb high,
+  // sleep low over N days). A day hike or summit push to the same altitude
+  // hits you much harder — thin air with no time to adapt.
+  const acclimatizationBuffer = kind === "multi_day" ? 3000 : 0;
+  const effectiveAlt = alt - acclimatizationBuffer;
+
   let status: DimensionStatus;
   let note: string;
-  if (alt < 6000) {
+  const modeNote =
+    kind === "multi_day"
+      ? "Multi-day acclimatization built into the trek (climb high, sleep low over days) — altitude tolerance is dramatically better than a single-day push to the same height. "
+      : "";
+
+  if (effectiveAlt < 6000) {
     status = "ready";
-    note = "Sub-alpine altitude — no acclimatization concern.";
-  } else if (alt < 8000) {
+    note = `${modeNote}Sub-alpine altitude — no acclimatization concern.`;
+  } else if (effectiveAlt < 8000) {
     status = "ready";
-    note = "Mild elevation — most sea-level residents handle this fine.";
-  } else if (alt < 10000) {
+    note = `${modeNote}Mild elevation — most sea-level residents handle this fine.`;
+  } else if (effectiveAlt < 10000) {
     status = "stretch";
-    note =
-      "8–10k ft — sea-level residents may feel it (headache, shortness of breath). Pace conservatively.";
-  } else if (alt < 12000) {
+    note = `${modeNote}Effective ~8–10k ft — sea-level residents may feel it (headache, shortness of breath). Pace conservatively.`;
+  } else if (effectiveAlt < 12000) {
     status = "concern";
-    note =
-      "10–12k ft — real altitude. Prior acclimatization within the last 60 days helps; going direct from sea level is uncomfortable.";
-  } else if (alt < 14000) {
+    note = `${modeNote}Effective ~10–12k ft — real altitude. Prior acclimatization within the last 60 days helps; going direct from sea level is uncomfortable.`;
+  } else if (effectiveAlt < 14000) {
     status = "concern";
-    note =
-      "12–14k ft — significant thin air. Sleep the night before at moderate altitude if possible.";
+    note = `${modeNote}Effective ~12–14k ft — significant thin air. Sleep the night before at moderate altitude if possible.`;
   } else {
     status = "not_in_timeframe";
-    note =
-      "Above 14k ft — needs proper acclimatization protocol (multiple days at intermediate altitudes) before attempting.";
+    note = `${modeNote}Effective above 14k ft — needs proper acclimatization protocol (multiple days at intermediate altitudes) before attempting.`;
   }
 
   return {
     key: "altitude",
     label: "Altitude",
     status,
-    ratio: alt < 8000 ? 1 : alt < 10000 ? 0.7 : alt < 12000 ? 0.5 : 0.3,
-    current: known != null ? `last high point: ${known.toLocaleString()} ft` : "no altitude history",
-    required: `${alt.toLocaleString()} ft`,
+    ratio:
+      effectiveAlt < 8000
+        ? 1
+        : effectiveAlt < 10000
+          ? 0.7
+          : effectiveAlt < 12000
+            ? 0.5
+            : 0.3,
+    current:
+      known != null
+        ? `last high point: ${known.toLocaleString()} ft`
+        : "no altitude history",
+    required: `${alt.toLocaleString()} ft${kind === "multi_day" ? ` (effective ~${effectiveAlt.toLocaleString()} ft with acclimatization)` : ""}`,
     note,
   };
 }
 
-function analyzeRecovery(snap: FitnessSnapshot): DimensionAnalysis {
+function analyzeRecovery(
+  snap: FitnessSnapshot,
+  kind: TrailKind,
+): DimensionAnalysis {
   const rhrDelta = snap.rhr.deltaAbs;
   const hrvDelta = snap.hrv.deltaPct;
   const sleep = snap.sleepAvgHours;
 
+  // Multi-day objectives are stricter on recovery — you don't get a full
+  // recovery night at home to bounce back if you go in already fatigued.
+  const strict = kind === "multi_day";
+  const rhrThreshold = strict ? 6 : 8;
+  const hrvThreshold = strict ? -10 : -15;
+  const sleepThreshold = strict ? 7.0 : 6.5;
+
   const flags: string[] = [];
-  if (rhrDelta != null && rhrDelta >= 8) flags.push(`RHR +${rhrDelta} bpm`);
-  if (hrvDelta != null && hrvDelta <= -15) flags.push(`HRV ${hrvDelta}%`);
-  if (sleep != null && sleep < 6.5) flags.push(`sleep ${sleep}h avg`);
+  if (rhrDelta != null && rhrDelta >= rhrThreshold)
+    flags.push(`RHR +${rhrDelta} bpm`);
+  if (hrvDelta != null && hrvDelta <= hrvThreshold)
+    flags.push(`HRV ${hrvDelta}%`);
+  if (sleep != null && sleep < sleepThreshold) flags.push(`sleep ${sleep}h avg`);
+
+  const modePrefix = strict ? "Multi-day objectives set a stricter recovery bar — you don't get to recover at home mid-trek. " : "";
 
   let status: DimensionStatus;
   let note: string;
   if (flags.length >= 2) {
     status = "concern";
-    note = `Recovery signals suggest stress: ${flags.join(", ")}. Rest a day or two before attempting.`;
+    note = `${modePrefix}Recovery signals suggest stress: ${flags.join(", ")}. Rest a day or two before attempting.`;
   } else if (flags.length === 1) {
     status = "stretch";
-    note = `One recovery flag: ${flags[0]}. Not blocking, but sleep well tonight.`;
+    note = `${modePrefix}One recovery flag: ${flags[0]}. Not blocking, but sleep well tonight.`;
   } else {
     status = "ready";
-    note = "Recovery baselines within normal range.";
+    note = `${modePrefix}Recovery baselines within normal range.`;
   }
 
   return {
@@ -495,7 +576,7 @@ function analyzeRecovery(snap: FitnessSnapshot): DimensionAnalysis {
     status,
     ratio: status === "ready" ? 1 : status === "stretch" ? 0.7 : 0.4,
     current: sleep != null ? `sleep ${sleep}h avg` : "no recovery data",
-    required: "≥6.5h sleep, RHR within +7 bpm, HRV within -15% of baseline",
+    required: `≥${sleepThreshold}h sleep, RHR within +${rhrThreshold - 1} bpm, HRV within ${hrvThreshold + 1}% of baseline`,
     note,
   };
 }
@@ -558,12 +639,13 @@ export async function assessTrail(
   // block). Not a user-facing number — just the ceiling for gap projection.
   const weeksAvailable = hasDate ? daysUntilTrail / 7 : 12;
 
+  const kind = classifyTrail(trail);
   const dimensions: DimensionAnalysis[] = [
     analyzeEndurance(trail, snap, weeksAvailable, hasDate),
-    analyzeVertical(trail, snap, weeksAvailable, hasDate),
-    analyzePack(trail, snap, weeksAvailable, hasDate),
-    analyzeAltitude(trail, snap),
-    analyzeRecovery(snap),
+    analyzeVertical(trail, snap, weeksAvailable, hasDate, kind),
+    analyzePack(trail, snap, weeksAvailable, hasDate, kind),
+    analyzeAltitude(trail, snap, kind),
+    analyzeRecovery(snap, kind),
   ];
 
   const verdict = verdictFromDimensions(dimensions);
