@@ -683,6 +683,40 @@ export async function renameSquad(input: { squadId: number; name: string }) {
   revalidatePath(`/squad/${input.squadId}`);
 }
 
+export async function setNotificationPreference(input: {
+  kind: string;
+  emailEnabled: boolean;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const { notificationPreference } = await import("@/db/schema");
+  const existing = await db
+    .select({ id: notificationPreference.id })
+    .from(notificationPreference)
+    .where(
+      and(
+        eq(notificationPreference.userId, user.id),
+        eq(notificationPreference.kind, input.kind),
+      ),
+    )
+    .limit(1);
+  if (existing[0]) {
+    await db
+      .update(notificationPreference)
+      .set({ emailEnabled: input.emailEnabled })
+      .where(eq(notificationPreference.id, existing[0].id));
+  } else {
+    await db
+      .insert(notificationPreference)
+      .values({
+        userId: user.id,
+        kind: input.kind,
+        emailEnabled: input.emailEnabled,
+      });
+  }
+  revalidatePath("/settings");
+}
+
 export async function markOnboardingComplete() {
   const user = await getCurrentUser();
   if (!user) throw new Error("No user found");

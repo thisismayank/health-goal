@@ -1,8 +1,13 @@
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { dailyMetric, stravaAccount } from "@/db/schema";
+import {
+  dailyMetric,
+  notificationPreference,
+  stravaAccount,
+} from "@/db/schema";
 import { requireCurrentUser } from "@/lib/data";
+import { NotificationToggle } from "@/components/settings/notification-toggle";
 import { isConfigured as intervalsConfigured } from "@/lib/intervals/client";
 import {
   StravaDisconnectButton,
@@ -39,6 +44,13 @@ export default async function SettingsPage({
   )[0];
   const lastAutoSync = lastAutoRow?.lastAutoSyncAt ?? null;
   const intervalsOn = intervalsConfigured();
+
+  const prefRows = await db
+    .select()
+    .from(notificationPreference)
+    .where(eq(notificationPreference.userId, user.id));
+  const tripWeekEnabled =
+    prefRows.find((p) => p.kind === "trip_week")?.emailEnabled ?? true;
 
   return (
     <div className="space-y-6">
@@ -178,6 +190,25 @@ export default async function SettingsPage({
         <code className="block text-xs text-muted break-all">
           POST /api/health-import/webhook
         </code>
+      </section>
+
+      <section className="rounded-lg border border-panel-border bg-panel p-5 space-y-3">
+        <h2 className="text-lg font-medium">Notifications</h2>
+        <p className="text-xs text-muted">
+          Emails go to{" "}
+          <span className="text-foreground">{user.email ?? "your account"}</span>
+          . Requires{" "}
+          <code className="text-foreground">RESEND_API_KEY</code> in the deploy;
+          otherwise sends are logged to Vercel runtime output only.
+        </p>
+        <div className="divide-y divide-panel-border">
+          <NotificationToggle
+            kind="trip_week"
+            label="Trip-week countdown"
+            description="1-week, 3-day, 1-day, day-of, and post-trip emails for saved trails with a target date."
+            initialEnabled={tripWeekEnabled}
+          />
+        </div>
       </section>
 
       <section className="rounded-lg border border-panel-border bg-panel p-5 space-y-3">

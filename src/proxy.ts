@@ -19,6 +19,8 @@ const PUBLIC_PREFIXES: string[] = [
   "/api/auth/",
   "/api/strava/webhook",
   "/api/health-import",
+  // Cron jobs authenticate with Bearer $CRON_SECRET, not session cookies.
+  "/api/cron/",
 ];
 
 function safeEqual(a: string, b: string): boolean {

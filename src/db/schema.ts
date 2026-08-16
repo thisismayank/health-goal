@@ -401,6 +401,61 @@ export const squadMember = pgTable(
   }),
 );
 
+// Per-user notification preferences. Opt-out design: if no row exists
+// for a (userId, kind) pair, treat as enabled. Missing rows are the
+// common case for new users — they get notifications until they opt
+// out from /settings.
+export const notificationPreference = pgTable(
+  "notification_preference",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userProfile.id, { onDelete: "cascade" }),
+    // Notification event type. Extensible; current values used are:
+    //   'trip_week' — T-7 / T-3 / T-1 / T-0 / T+1 trip countdown emails
+    //   'squad_activity' — future: squadmate completion pings
+    //   'weekly_summary' — future: Sunday recap
+    kind: text("kind").notNull(),
+    emailEnabled: boolean("email_enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqPref: uniqueIndex("notification_preference_uniq").on(t.userId, t.kind),
+  }),
+);
+
+// One row per notification sent. dedupeKey is a per-user unique key
+// used to prevent double-sends when the cron reruns (e.g. trip_45_t-3
+// = at most one send per trail per phase). channel is 'email' today,
+// 'push' once we ship web push.
+export const notificationDelivery = pgTable(
+  "notification_delivery",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userProfile.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    dedupeKey: text("dedupe_key").notNull(),
+    channel: text("channel").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    providerMessageId: text("provider_message_id"),
+    ok: boolean("ok").notNull().default(true),
+    errorMessage: text("error_message"),
+  },
+  (t) => ({
+    uniqDelivery: uniqueIndex("notification_delivery_uniq").on(
+      t.userId,
+      t.dedupeKey,
+    ),
+  }),
+);
+
 // One row per attempt/completion of a trail. A single trail can accumulate
 // many completions over time (Mount Si → 10x). workoutId links to the
 // specific workout that captured the effort, when known.
@@ -440,3 +495,5 @@ export type MagicLink = typeof magicLink.$inferSelect;
 export type TrailCompletion = typeof trailCompletion.$inferSelect;
 export type Squad = typeof squad.$inferSelect;
 export type SquadMember = typeof squadMember.$inferSelect;
+export type NotificationPreference = typeof notificationPreference.$inferSelect;
+export type NotificationDelivery = typeof notificationDelivery.$inferSelect;
