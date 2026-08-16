@@ -1,11 +1,15 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { trail } from "@/db/schema";
+import { trail, trailCompletion } from "@/db/schema";
 import { requireOnboardedUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
+import {
+  DeleteCompletionButton,
+  LogCompletionForm,
+} from "@/components/trails/log-completion";
 import {
   assessTrail,
   STATUS_COLOR,
@@ -49,6 +53,17 @@ export default async function TrailDetailPage({
   const assessment = await assessTrail(user.id, t, today);
   const prepPlan = generatePrepPlan(assessment, t);
 
+  const completions = await db
+    .select()
+    .from(trailCompletion)
+    .where(
+      and(
+        eq(trailCompletion.trailId, t.id),
+        eq(trailCompletion.userId, user.id),
+      ),
+    )
+    .orderBy(desc(trailCompletion.completedAt));
+
   return (
     <div className="space-y-6">
       <section>
@@ -86,6 +101,71 @@ export default async function TrailDetailPage({
           >
             View route ↗
           </a>
+        )}
+      </section>
+
+      <section className="rounded-md border border-panel-border bg-panel p-4 space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-widest text-accent">
+              [COMPLETIONS]
+            </div>
+            {completions.length > 0 ? (
+              <div className="text-sm mt-1">
+                You've done this{" "}
+                <span className="font-medium">{completions.length}</span>{" "}
+                time{completions.length === 1 ? "" : "s"}
+                {(() => {
+                  const withTime = completions.filter(
+                    (c) => c.timeMinutes != null,
+                  );
+                  if (withTime.length === 0) return null;
+                  const fastest = withTime.reduce((min, c) =>
+                    (c.timeMinutes ?? Infinity) < (min.timeMinutes ?? Infinity)
+                      ? c
+                      : min,
+                  );
+                  return (
+                    <span className="text-muted">
+                      {" "}· fastest {formatMinutes(fastest.timeMinutes!)}
+                    </span>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="text-sm text-muted mt-1">
+                No completions logged yet.
+              </div>
+            )}
+          </div>
+        </div>
+        <LogCompletionForm trailId={t.id} todayYmd={today} />
+        {completions.length > 0 && (
+          <ul className="divide-y divide-panel-border border-t border-panel-border mt-2">
+            {completions.map((c) => (
+              <li
+                key={c.id}
+                className="flex items-baseline gap-3 py-2 text-sm"
+              >
+                <span className="font-mono tabular-nums text-blue-300">
+                  {c.completedAt}
+                </span>
+                <span className="text-muted">
+                  {c.timeMinutes != null
+                    ? formatMinutes(c.timeMinutes)
+                    : "no time"}
+                </span>
+                {c.notes && (
+                  <span className="text-xs text-muted italic truncate flex-1 min-w-0">
+                    "{c.notes}"
+                  </span>
+                )}
+                <span className="ml-auto">
+                  <DeleteCompletionButton id={c.id} />
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
@@ -333,4 +413,11 @@ function DimensionCard({ d }: { d: DimensionAnalysis }) {
       <p className="text-sm">{d.note}</p>
     </div>
   );
+}
+
+function formatMinutes(m: number): string {
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (h === 0) return `${mm}m`;
+  return mm === 0 ? `${h}h` : `${h}h ${mm}m`;
 }

@@ -358,6 +358,29 @@ export const coachNarrative = pgTable(
   ],
 );
 
+// One row per attempt/completion of a trail. A single trail can accumulate
+// many completions over time (Mount Si → 10x). workoutId links to the
+// specific workout that captured the effort, when known.
+export const trailCompletion = pgTable("trail_completion", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => userProfile.id, { onDelete: "cascade" }),
+  trailId: integer("trail_id")
+    .notNull()
+    .references(() => trail.id, { onDelete: "cascade" }),
+  // YMD in user's local timezone at time of logging.
+  completedAt: text("completed_at").notNull(),
+  workoutId: integer("workout_id").references(() => workout.id, {
+    onDelete: "set null",
+  }),
+  timeMinutes: integer("time_minutes"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export type UserProfile = typeof userProfile.$inferSelect;
 export type TrainingPlan = typeof trainingPlan.$inferSelect;
 export type PlannedSession = typeof plannedSession.$inferSelect;
@@ -371,3 +394,4 @@ export type CoachNarrative = typeof coachNarrative.$inferSelect;
 export type Trail = typeof trail.$inferSelect;
 export type AuthSession = typeof authSession.$inferSelect;
 export type MagicLink = typeof magicLink.$inferSelect;
+export type TrailCompletion = typeof trailCompletion.$inferSelect;

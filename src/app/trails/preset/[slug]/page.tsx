@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { db } from "@/db/client";
-import { trail } from "@/db/schema";
+import { trail, trailCompletion } from "@/db/schema";
 import { requireOnboardedUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
 import { findTrailBySlug } from "@/lib/basecamp/trail-library";
@@ -59,6 +59,20 @@ export default async function PresetDetailPage({
     .where(and(eq(trail.userId, user.id), eq(trail.presetSlug, slug)))
     .limit(1);
 
+  // Any completions for this preset (via saved trail)?
+  const completions = existing
+    ? await db
+        .select()
+        .from(trailCompletion)
+        .where(
+          and(
+            eq(trailCompletion.trailId, existing.id),
+            eq(trailCompletion.userId, user.id),
+          ),
+        )
+        .orderBy(desc(trailCompletion.completedAt))
+    : [];
+
   const verdictColor = VERDICT_COLOR[assessment.verdict];
 
   return (
@@ -102,6 +116,29 @@ export default async function PresetDetailPage({
         )}
         <MetricPill label="Terrain" value={preset.terrainGrade} />
       </div>
+
+      {completions.length > 0 && (
+        <section className="rounded-md border border-accent/40 bg-accent-strong/5 px-4 py-3 flex items-baseline justify-between gap-3">
+          <div className="text-sm">
+            <span className="text-accent font-mono">✓</span>{" "}
+            <span className="font-medium">You've done this </span>
+            <span className="font-mono text-accent">{completions.length}</span>
+            <span className="font-medium">
+              {" "}
+              time{completions.length === 1 ? "" : "s"}
+            </span>
+            <span className="text-muted"> · last {completions[0].completedAt}</span>
+          </div>
+          {existing && (
+            <Link
+              href={`/trails/${existing.id}`}
+              className="text-xs text-blue-300 hover:underline whitespace-nowrap"
+            >
+              View history →
+            </Link>
+          )}
+        </section>
+      )}
 
       {/* For You card */}
       <section

@@ -21,16 +21,16 @@ export async function StatsStrip({
     >
       <div className="flex items-baseline justify-between mb-2">
         <div className="text-[10px] uppercase tracking-widest text-muted">
-          Character
+          Class <span className="text-blue-300 font-mono">{rank.current}</span>
+          <span className="ml-1.5 text-muted normal-case tracking-normal">
+            · {rank.currentLabel}
+          </span>
         </div>
-        <div className="text-[10px] text-muted">
-          <span className="font-mono text-blue-300">{rank.current}</span>
-          {rank.nextRank && (
-            <span className="ml-1.5">
-              · {rank.progressPct}% to {rank.nextRank}
-            </span>
-          )}
-        </div>
+        {rank.nextRank && (
+          <div className="text-[10px] text-muted tabular-nums">
+            {rank.progressPct}% → {rank.nextRank}
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-5 gap-2">
         {order.map((k) => {

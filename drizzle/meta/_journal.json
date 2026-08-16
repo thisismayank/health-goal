@@ -64,6 +64,13 @@
       "when": 1786868242667,
       "tag": "0008_narrow_apocalypse",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786869653101,
+      "tag": "0009_nice_goliath",
+      "breakpoints": true
     }
   ]
 }

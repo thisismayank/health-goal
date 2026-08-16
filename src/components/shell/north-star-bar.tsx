@@ -78,10 +78,10 @@ export async function NorthStarBar() {
       <Link
         href="/progress"
         className="flex items-baseline gap-1 hover:opacity-80 transition shrink-0"
-        title={`${rank.currentLabel}`}
+        title={`${rank.currentLabel} — ${rank.currentDescription}`}
       >
         <span className="text-[10px] uppercase tracking-wider text-muted">
-          Rank
+          Class
         </span>
         <span className="font-mono font-semibold text-blue-300 text-sm">
           {rank.current}

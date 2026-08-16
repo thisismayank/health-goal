@@ -1,25 +1,74 @@
-import type { CharacterSheet, StatKey } from "./stats";
+import type { CharacterSheet } from "./stats";
 
+/**
+ * Fitness Class ladder (formerly "Rank"). Concrete labels tied to what
+ * kind of trail objectives an athlete is realistically capable of at
+ * each tier — not abstract E/D/C/B/A/S badges without context.
+ *
+ * The single-letter code is kept for compact display (chips, headers)
+ * and so existing storage/serialization stays stable. The label +
+ * unlocks are what users actually see and reason about.
+ */
 export type Rank = "E" | "D" | "C" | "B" | "A" | "S";
 
 export const RANKS: Rank[] = ["E", "D", "C", "B", "A", "S"];
 
 export const RANK_LABELS: Record<Rank, string> = {
-  E: "Rebuilding",
-  D: "Base Fit",
-  C: "Weekend Warrior",
-  B: "Alpine-Ready",
-  A: "Rainier-Ready",
-  S: "Expedition-Ready",
+  E: "Casual Walker",
+  D: "Weekend Hiker",
+  C: "Regular Hiker",
+  B: "Serious Hiker",
+  A: "Mountain Athlete",
+  S: "Alpinist",
 };
 
 export const RANK_DESCRIPTIONS: Record<Rank, string> = {
-  E: "Starting or returning. Building consistency.",
-  D: "Comfortable with a 60-min continuous effort and a sub-30 5K.",
-  C: "Handles 2+ hour hikes with a 20 lb pack, ~2000 ft vertical. End-of-Month-3 Rainier prep target.",
-  B: "Handles 3–4 hour sessions with 25–30 lb, ~3000 ft vertical.",
-  A: "Rainier-ready: 5–7 hour sessions with 40–45 lb pack, ~4000–5000 ft vertical.",
-  S: "Expedition-ready: Denali / Aconcagua tolerance. Back-to-back long days.",
+  E: "Starting or rebuilding. Building consistency and base fitness.",
+  D: "Comfortable with short day hikes on easy terrain (2–4 hours, moderate elevation).",
+  C: "Handles standard day hikes: 4–8 hours, up to 3,500 ft, moderate terrain.",
+  B: "Ready for long day hikes, multi-day treks, and altitude up to 14,000 ft.",
+  A: "Handles summit pushes and alpine terrain up to 18,000 ft — Rainier / Kili class objectives.",
+  S: "Expedition-capable: Denali, Aconcagua, technical mountaineering. Back-to-back big days.",
+};
+
+/**
+ * What kinds of trails a user at this class is realistically ready for.
+ * These are DESCRIPTIVE not prescriptive — no trail is gated in the UI
+ * yet. Used in the "unlocks" section on /progress so users see what
+ * levelling up actually gets them.
+ */
+export const RANK_UNLOCKS: Record<Rank, string[]> = {
+  E: [
+    "Short day hikes (≤ 4 hours, ≤ 2,000 ft gain)",
+    "Easy terrain — established trails, no scrambling",
+  ],
+  D: [
+    "Longer day hikes (4–6 hours, up to 3,500 ft)",
+    "Moderate terrain — occasional scrambling, well-maintained routes",
+  ],
+  C: [
+    "Full day hikes with steep terrain (6–8 hours, up to 5,000 ft)",
+    "Light backpacking (up to 20 lb pack, 1–2 nights)",
+    "Popular Class 1–2 peaks (Colorado 14ers via easy routes)",
+  ],
+  B: [
+    "Multi-day treks (Kilimanjaro, EBC, Annapurna Circuit)",
+    "Long day hikes with real vertical (Whitney, Rim-to-Rim)",
+    "Altitude up to 14,000 ft with proper acclimatization",
+    "Technical scrambles (Class 3 with exposure)",
+  ],
+  A: [
+    "Mountaineering objectives (Rainier, Mont Blanc, Elbrus)",
+    "Summit pushes with glacier travel + ice axe + crampons",
+    "Altitude up to 18,000 ft",
+    "Sustained heavy-pack days (35–45 lb, multi-day)",
+  ],
+  S: [
+    "Expedition mountaineering (Denali, Aconcagua)",
+    "Technical alpine climbing",
+    "Extended above 18,000 ft with cold + weight tolerance",
+    "Consecutive summit-length days without recovery collapse",
+  ],
 };
 
 type Requirement = {
@@ -29,11 +78,10 @@ type Requirement = {
   met: boolean;
 };
 
-// Requirements are AND-ed: all must be met to reach the rank.
-// Thresholds are calibrated so that a returning athlete on-plan hits D in
-// ~4-6 weeks, C in ~3 months, B in ~5 months, A in ~9 months (Rainier peak).
-// S is not achievable on the Rainier plan alone — requires expedition-level
-// deliberate loading.
+// Requirements are AND-ed: all must be met to reach the class.
+// Thresholds are calibrated so a returning athlete on-plan hits D in
+// ~4-6 weeks, C in ~3 months, B in ~5 months, A in ~9 months. S is not
+// achievable without deliberate expedition-level loading.
 type RankGate = {
   rank: Rank;
   requirements: (sheet: CharacterSheet) => Requirement[];
@@ -52,18 +100,8 @@ const GATES: RankGate[] = [
   {
     rank: "D",
     requirements: (s) => [
-      req(
-        "Strength score",
-        "≥ 25",
-        s.stats.STR.value,
-        s.stats.STR.value >= 25,
-      ),
-      req(
-        "Endurance score",
-        "≥ 25",
-        s.stats.END.value,
-        s.stats.END.value >= 25,
-      ),
+      req("Strength score", "≥ 25", s.stats.STR.value, s.stats.STR.value >= 25),
+      req("Endurance score", "≥ 25", s.stats.END.value, s.stats.END.value >= 25),
       req(
         "Discipline score",
         "≥ 40",
@@ -151,9 +189,11 @@ export type RankResult = {
   current: Rank;
   currentLabel: string;
   currentDescription: string;
+  currentUnlocks: string[];
   nextRank: Rank | null;
   nextLabel: string | null;
-  progressPct: number; // 0-100 progress toward next rank
+  nextUnlocks: string[];
+  progressPct: number;
   requirementsForNext: Requirement[];
   requirementsMetCount: number;
 };
@@ -183,8 +223,10 @@ export function computeRank(sheet: CharacterSheet): RankResult {
     current,
     currentLabel: RANK_LABELS[current],
     currentDescription: RANK_DESCRIPTIONS[current],
+    currentUnlocks: RANK_UNLOCKS[current],
     nextRank: nextGate ? nextGate.rank : null,
     nextLabel: nextGate ? RANK_LABELS[nextGate.rank] : null,
+    nextUnlocks: nextGate ? RANK_UNLOCKS[nextGate.rank] : [],
     progressPct,
     requirementsForNext: nextReqs,
     requirementsMetCount: metCount,

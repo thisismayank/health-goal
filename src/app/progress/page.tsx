@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { and, desc, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { trail, trailCompletion } from "@/db/schema";
 import { requireOnboardedUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
 import {
@@ -20,6 +23,26 @@ export default async function ProgressPage() {
   const rank = computeRank(sheet);
   const today = todayInTimeZone(user.timezone);
 
+  // Trail Passport data — one row per completion, joined to the trail.
+  const passportRows = await db
+    .select({
+      completionId: trailCompletion.id,
+      completedAt: trailCompletion.completedAt,
+      timeMinutes: trailCompletion.timeMinutes,
+      trailId: trail.id,
+      trailName: trail.name,
+      region: trail.notes, // no region column; fall back to null and derive later if we add one
+      distanceKm: trail.distanceKm,
+      elevationGainFt: trail.elevationGainFt,
+      terrainGrade: trail.terrainGrade,
+    })
+    .from(trailCompletion)
+    .innerJoin(trail, eq(trail.id, trailCompletion.trailId))
+    .where(eq(trailCompletion.userId, user.id))
+    .orderBy(desc(trailCompletion.completedAt));
+
+  const uniqueTrailIds = new Set(passportRows.map((r) => r.trailId));
+
   return (
     <div className="space-y-5">
       <section>
@@ -30,7 +53,10 @@ export default async function ProgressPage() {
       </section>
 
       <SystemPanel>
-        <div className="flex items-baseline gap-4">
+        <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
+          [HIKER CLASS]
+        </div>
+        <div className="flex items-baseline gap-4 mt-2">
           <div className="text-6xl font-mono font-semibold text-blue-300 leading-none">
             {rank.current}
           </div>
@@ -42,11 +68,27 @@ export default async function ProgressPage() {
           </div>
         </div>
 
+        {rank.currentUnlocks.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-blue-500/20">
+            <div className="text-[10px] uppercase tracking-widest text-blue-300 mb-1.5">
+              What you can attempt
+            </div>
+            <ul className="space-y-1 text-sm">
+              {rank.currentUnlocks.map((u, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="text-blue-400">✓</span>
+                  <span className="text-foreground/90">{u}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {rank.nextRank && (
           <div className="mt-4 pt-4 border-t border-blue-500/20 space-y-3">
             <div className="flex items-baseline justify-between">
               <div className="text-xs uppercase tracking-widest text-muted">
-                Next: {rank.nextRank} · {rank.nextLabel}
+                Next class: {rank.nextRank} · {rank.nextLabel}
               </div>
               <div className="text-xs text-muted tabular-nums">
                 {rank.requirementsMetCount} / {rank.requirementsForNext.length}
@@ -75,12 +117,27 @@ export default async function ProgressPage() {
                 </li>
               ))}
             </ul>
+            {rank.nextUnlocks.length > 0 && (
+              <div className="pt-2 border-t border-blue-500/10">
+                <div className="text-[10px] uppercase tracking-widest text-muted mb-1">
+                  Unlocks at {rank.nextRank}
+                </div>
+                <ul className="space-y-0.5 text-xs">
+                  {rank.nextUnlocks.map((u, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span className="text-muted">🔒</span>
+                      <span className="text-muted">{u}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
         {!rank.nextRank && (
           <div className="mt-4 pt-4 border-t border-blue-500/20 text-xs text-muted">
-            Max rank achieved. All benchmarks cleared.
+            Max class achieved. All benchmarks cleared.
           </div>
         )}
       </SystemPanel>
@@ -109,6 +166,66 @@ export default async function ProgressPage() {
           summitDateYmd={user.summitDate ?? null}
         />
       </Suspense>
+
+      {/* Trail Passport */}
+      <section className="rounded-lg border border-blue-500/30 bg-blue-950/10 shadow-lg shadow-blue-500/10 p-5 space-y-3">
+        <div className="flex items-baseline justify-between">
+          <div className="text-xs font-mono uppercase tracking-widest text-blue-400">
+            [TRAIL PASSPORT]
+          </div>
+          <div className="text-xs text-muted tabular-nums">
+            <span className="text-blue-300 font-mono">{uniqueTrailIds.size}</span>{" "}
+            unique · {passportRows.length} total
+          </div>
+        </div>
+
+        {passportRows.length === 0 ? (
+          <div className="text-sm text-muted leading-relaxed">
+            No stamps yet. Log completions from any saved trail — open a
+            trail, tap{" "}
+            <span className="text-accent font-medium">✓ I've done this</span>,
+            add the date, and it appears here.
+            <div className="mt-3">
+              <Link
+                href="/trails"
+                className="text-xs text-blue-300 hover:underline"
+              >
+                Browse trails →
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {passportRows.slice(0, 12).map((r) => (
+                <Link
+                  key={r.completionId}
+                  href={`/trails/${r.trailId}`}
+                  className="rounded-md border border-blue-500/30 bg-background/40 p-3 hover:border-blue-500/60 transition"
+                >
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-accent">
+                    ✓ STAMPED
+                  </div>
+                  <div className="text-sm font-medium truncate mt-1">
+                    {r.trailName}
+                  </div>
+                  <div className="text-[10px] text-muted mt-0.5 tabular-nums">
+                    {r.completedAt}
+                    {r.timeMinutes != null && (
+                      <span> · {formatMinutes(r.timeMinutes)}</span>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+            {passportRows.length > 12 && (
+              <div className="text-[11px] text-muted italic">
+                + {passportRows.length - 12} more…
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       <div className="grid grid-cols-2 gap-2 pt-2">
         <Link
@@ -176,4 +293,11 @@ function StatCard({ stat }: { stat: Stat }) {
       <div className="text-xs text-muted">{stat.metric}</div>
     </div>
   );
+}
+
+function formatMinutes(m: number): string {
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (h === 0) return `${mm}m`;
+  return mm === 0 ? `${h}h` : `${h}h ${mm}m`;
 }

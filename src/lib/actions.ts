@@ -9,6 +9,7 @@ import {
   stravaAccount,
   strengthExercise,
   trail,
+  trailCompletion,
   userProfile,
   workout,
   type TrailTerrainGrade,
@@ -386,6 +387,58 @@ export async function syncIntervalsNow() {
   revalidatePath("/body");
   revalidatePath("/settings");
   return result;
+}
+
+export async function logTrailCompletion(input: {
+  trailId: number;
+  completedAt: string; // YMD
+  timeMinutes?: number;
+  notes?: string;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+
+  // Verify the trail belongs to the user (basic authorization).
+  const [t] = await db
+    .select({ id: trail.id })
+    .from(trail)
+    .where(and(eq(trail.id, input.trailId), eq(trail.userId, user.id)))
+    .limit(1);
+  if (!t) throw new Error("Trail not found or not yours");
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.completedAt)) {
+    throw new Error("completedAt must be YYYY-MM-DD");
+  }
+
+  await db.insert(trailCompletion).values({
+    userId: user.id,
+    trailId: input.trailId,
+    completedAt: input.completedAt,
+    timeMinutes:
+      input.timeMinutes != null && input.timeMinutes > 0
+        ? input.timeMinutes
+        : null,
+    notes: input.notes?.trim() || null,
+  });
+
+  revalidatePath(`/trails/${input.trailId}`);
+  revalidatePath("/progress");
+  revalidatePath("/trails");
+}
+
+export async function deleteTrailCompletion(completionId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  await db
+    .delete(trailCompletion)
+    .where(
+      and(
+        eq(trailCompletion.id, completionId),
+        eq(trailCompletion.userId, user.id),
+      ),
+    );
+  revalidatePath("/progress");
+  revalidatePath("/trails");
 }
 
 export async function markOnboardingComplete() {
