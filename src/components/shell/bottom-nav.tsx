@@ -44,6 +44,11 @@ const TABS: Tab[] = [
 export function BottomNav() {
   const pathname = usePathname();
 
+  // Hide the shell on auth pages so they feel like their own thing.
+  if (pathname === "/login" || pathname === "/welcome" || pathname.startsWith("/welcome/")) {
+    return null;
+  }
+
   return (
     <nav className="fixed bottom-0 inset-x-0 z-50 border-t border-blue-500/20 bg-background/95 backdrop-blur">
       <div className="mx-auto max-w-2xl grid grid-cols-4">

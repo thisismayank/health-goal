@@ -33,6 +33,18 @@ export async function requireCurrentUser(): Promise<UserProfile> {
   return user;
 }
 
+/**
+ * Like requireCurrentUser but also redirects users who haven't finished the
+ * onboarding wizard to /welcome. Use on pages that assume a set-up account
+ * (home, trails, progress, train, body, history). /welcome + /settings +
+ * /login use plain requireCurrentUser so they're reachable mid-onboarding.
+ */
+export async function requireOnboardedUser(): Promise<UserProfile> {
+  const user = await requireCurrentUser();
+  if (!user.onboardedAt) redirect("/welcome");
+  return user;
+}
+
 export async function getActivePlan(userId: number) {
   const plans = await db
     .select()

@@ -9,6 +9,7 @@ import {
   stravaAccount,
   strengthExercise,
   trail,
+  userProfile,
   workout,
   type TrailTerrainGrade,
 } from "@/db/schema";
@@ -385,6 +386,18 @@ export async function syncIntervalsNow() {
   revalidatePath("/body");
   revalidatePath("/settings");
   return result;
+}
+
+export async function markOnboardingComplete() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  if (user.onboardedAt) return; // idempotent
+  await db
+    .update(userProfile)
+    .set({ onboardedAt: new Date(), updatedAt: new Date() })
+    .where(eq(userProfile.id, user.id));
+  revalidatePath("/");
+  revalidatePath("/welcome");
 }
 
 export async function disconnectStrava() {

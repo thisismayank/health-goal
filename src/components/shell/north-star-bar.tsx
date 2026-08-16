@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { differenceInCalendarWeeks } from "date-fns";
 import { getActivePlan, getCurrentUser } from "@/lib/data";
 import {
@@ -10,7 +11,17 @@ import { computeRank } from "@/lib/basecamp/rank";
 import { parseYmd, todayInTimeZone } from "@/lib/date";
 import { TOTAL_SEEDED_WEEKS } from "@/lib/plan";
 
+// Paths where the shell should be hidden entirely — auth pages that need
+// to feel like their own thing, not a page inside the app.
+const CHROMELESS_PREFIXES = ["/login", "/welcome"];
+
 export async function NorthStarBar() {
+  const h = await headers();
+  const pathname = h.get("x-pathname") ?? "";
+  if (CHROMELESS_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+    return null;
+  }
+
   const user = await getCurrentUser();
   if (!user) {
     return (

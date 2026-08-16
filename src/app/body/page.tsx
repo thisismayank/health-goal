@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import {
-  requireCurrentUser,
+  requireOnboardedUser,
   getRecentBodyMetrics,
   rollingAverage,
 } from "@/lib/data";
@@ -15,7 +15,7 @@ import {
 import { BodyMetricForm } from "@/components/body-metric-form";
 
 export default async function BodyPage() {
-  const user = await requireCurrentUser();
+  const user = await requireOnboardedUser();
 
   const today = todayInTimeZone(user.timezone);
   const metrics = await getRecentBodyMetrics(user.id, 60);

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { requireCurrentUser } from "@/lib/data";
+import { requireOnboardedUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
 import {
   computeCharacterSheet,
@@ -14,7 +14,7 @@ import { PlanProgressCard } from "@/components/plan-progress-card";
 export const dynamic = "force-dynamic";
 
 export default async function ProgressPage() {
-  const user = await requireCurrentUser();
+  const user = await requireOnboardedUser();
 
   const sheet = await computeCharacterSheet(user.id);
   const rank = computeRank(sheet);

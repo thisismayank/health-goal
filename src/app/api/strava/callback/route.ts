@@ -52,7 +52,10 @@ export async function GET(request: Request) {
     } else {
       await db.insert(stravaAccount).values(values);
     }
-    return NextResponse.redirect(`${url.origin}/settings?connected=1`);
+    // Bounce back into the onboarding wizard if they connected from there;
+    // otherwise the settings screen (default post-OAuth landing).
+    const dest = user.onboardedAt ? "/settings?connected=1" : "/welcome?step=2";
+    return NextResponse.redirect(`${url.origin}${dest}`);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown";
     return NextResponse.redirect(

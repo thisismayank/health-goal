@@ -184,12 +184,19 @@ async function main() {
     userId = existingUsers[0].id;
     console.log(`  user exists: id=${userId}`);
     // Backfill email for pre-auth seed users so magic-link sign-in works.
+    const patch: Partial<typeof userProfile.$inferInsert> = {};
     if (!existingUsers[0].email) {
-      await db
-        .update(userProfile)
-        .set({ email: seedEmail, createdVia: "seed" })
-        .where(eq(userProfile.id, userId));
-      console.log(`  backfilled email → ${seedEmail}`);
+      patch.email = seedEmail;
+      patch.createdVia = "seed";
+    }
+    // Seed users pre-date onboarding — mark them as already-onboarded so
+    // they don't get funneled through the /welcome wizard on next login.
+    if (!existingUsers[0].onboardedAt) {
+      patch.onboardedAt = new Date();
+    }
+    if (Object.keys(patch).length > 0) {
+      await db.update(userProfile).set(patch).where(eq(userProfile.id, userId));
+      console.log(`  backfilled: ${Object.keys(patch).join(", ")}`);
     }
   } else {
     const [u] = await db
@@ -198,6 +205,7 @@ async function main() {
         email: seedEmail,
         name: "Mayank",
         createdVia: "seed",
+        onboardedAt: new Date(),
         sex: "M",
         heightCm: 183,
         currentWeightKg: 85,

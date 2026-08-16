@@ -66,7 +66,7 @@ export function proxy(request: NextRequest) {
   if (basicRejection) return basicRejection;
 
   const { pathname, search } = request.nextUrl;
-  if (isPublicPath(pathname)) return NextResponse.next();
+  if (isPublicPath(pathname)) return withPathname(request, pathname);
 
   // Session gate: cookie must be present. Actual validity is verified in
   // pages via getCurrentUser (stale/expired sessions trigger a redirect
@@ -80,7 +80,15 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return withPathname(request, pathname);
+}
+
+// Attach x-pathname on the forwarded request so server components can
+// tailor the shell (hide North Star bar on /login and /welcome, etc.).
+function withPathname(request: NextRequest, pathname: string) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

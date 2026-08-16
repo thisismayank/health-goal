@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import {
-  requireCurrentUser,
+  requireOnboardedUser,
   getRecentWorkouts,
   getStrengthSetsForWorkouts,
 } from "@/lib/data";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const LIMIT = 30;
 
 export default async function HistoryPage() {
-  const user = await requireCurrentUser();
+  const user = await requireOnboardedUser();
 
   const rows = await getRecentWorkouts(user.id, LIMIT);
   const sets = await getStrengthSetsForWorkouts(rows.map((r) => r.workout.id));

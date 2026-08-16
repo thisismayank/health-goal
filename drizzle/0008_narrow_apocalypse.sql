@@ -1,0 +1,1 @@
+ALTER TABLE "user_profile" ADD COLUMN "onboarded_at" timestamp with time zone;

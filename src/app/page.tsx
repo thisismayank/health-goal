@@ -25,6 +25,11 @@ export default async function HomePage() {
     redirect("/login");
   }
 
+  // Route new users through the onboarding wizard.
+  if (!state.user.onboardedAt) {
+    redirect("/welcome");
+  }
+
   // Post-workout state = compute the delta once, cascade it through the
   // hero, stats strip, and summit hero so the whole surface reflects
   // what just changed.

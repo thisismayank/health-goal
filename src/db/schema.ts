@@ -30,6 +30,9 @@ export const userProfile = pgTable(
     summitGoal: text("summit_goal"),
     summitDate: text("summit_date"),
     dietaryPreference: text("dietary_preference"),
+    // Null = hasn't completed onboarding yet → routed to /welcome.
+    // Set = timestamp of finish (or skip). Seed users are backfilled to now().
+    onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
