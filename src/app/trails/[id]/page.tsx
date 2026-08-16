@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { trail } from "@/db/schema";
-import { getCurrentUser } from "@/lib/data";
+import { requireCurrentUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
 import {
   assessTrail,
@@ -36,8 +36,7 @@ export default async function TrailDetailPage({
   const trailId = Number(id);
   if (!Number.isFinite(trailId)) notFound();
 
-  const user = await getCurrentUser();
-  if (!user) return <p className="text-muted">No user found.</p>;
+  const user = await requireCurrentUser();
 
   const [t] = await db
     .select()

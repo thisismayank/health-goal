@@ -2,7 +2,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import {
   getActivePlan,
-  getCurrentUser,
+  requireCurrentUser,
   getWeekSessions,
   getWeekWorkouts,
 } from "@/lib/data";
@@ -11,8 +11,7 @@ import { DAY_LABELS, todayInTimeZone, weekDays, weekStart, ymd } from "@/lib/dat
 export const dynamic = "force-dynamic";
 
 export default async function TrainPage() {
-  const user = await getCurrentUser();
-  if (!user) return <p className="text-muted">No user found.</p>;
+  const user = await requireCurrentUser();
   const plan = await getActivePlan(user.id);
   if (!plan) return <p className="text-muted">No active training plan.</p>;
 

@@ -50,6 +50,13 @@
       "when": 1786850298709,
       "tag": "0006_next_gladiator",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786866892687,
+      "tag": "0007_aromatic_malcolm_colcord",
+      "breakpoints": true
     }
   ]
 }

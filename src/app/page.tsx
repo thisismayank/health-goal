@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { getHomeState, type HomeState } from "@/lib/home/state";
 import { QuestPendingHero } from "@/components/home/quest-pending-hero";
 import { QuestDoneHero } from "@/components/home/quest-done-hero";
@@ -20,12 +21,8 @@ export default async function HomePage() {
   const state = await getHomeState();
 
   if (state.kind === "no_user") {
-    return (
-      <div className="text-center text-muted py-16">
-        No user found. Run <code className="text-foreground">npm run db:seed</code>{" "}
-        to initialize.
-      </div>
-    );
+    // Session cookie was present but invalid/expired — send back to login.
+    redirect("/login");
   }
 
   // Post-workout state = compute the delta once, cascade it through the

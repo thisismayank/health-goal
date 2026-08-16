@@ -9,21 +9,67 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-export const userProfile = pgTable("user_profile", {
+export const userProfile = pgTable(
+  "user_profile",
+  {
+    id: serial("id").primaryKey(),
+    // Email is nullable during the transition from single-user seed to
+    // multi-tenant, then backfilled + treated as required in application
+    // code. Case-insensitive uniqueness enforced via lowercase index below.
+    email: text("email"),
+    name: text("name").notNull(),
+    // Where the user account came from: "seed" for the original single-user
+    // install (Mayank), "magic_link" for self-service signups, "invite" for
+    // squad invites once that ships.
+    createdVia: text("created_via").notNull().default("magic_link"),
+    sex: text("sex"),
+    heightCm: real("height_cm"),
+    currentWeightKg: real("current_weight_kg"),
+    timezone: text("timezone").notNull().default("America/New_York"),
+    homeLocation: text("home_location"),
+    summitGoal: text("summit_goal"),
+    summitDate: text("summit_date"),
+    dietaryPreference: text("dietary_preference"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    emailLowerIdx: uniqueIndex("user_profile_email_lower_idx").on(t.email),
+  }),
+);
+
+// Auth session — one row per active login. Deleted on sign-out or expiry.
+export const authSession = pgTable("auth_session", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  sex: text("sex"),
-  heightCm: real("height_cm"),
-  currentWeightKg: real("current_weight_kg"),
-  timezone: text("timezone").notNull().default("America/New_York"),
-  homeLocation: text("home_location"),
-  summitGoal: text("summit_goal"),
-  summitDate: text("summit_date"),
-  dietaryPreference: text("dietary_preference"),
+  token: text("token").notNull().unique(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => userProfile.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// Magic-link tokens for passwordless sign-in / signup. userId is nullable
+// when the request is for a new email (we upsert the user on verify).
+export const magicLink = pgTable("magic_link", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  requestedEmail: text("requested_email").notNull(),
+  userId: integer("user_id").references(() => userProfile.id, {
+    onDelete: "cascade",
+  }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
@@ -320,3 +366,5 @@ export type StravaAccount = typeof stravaAccount.$inferSelect;
 export type StravaWebhookSubscription = typeof stravaWebhookSubscription.$inferSelect;
 export type CoachNarrative = typeof coachNarrative.$inferSelect;
 export type Trail = typeof trail.$inferSelect;
+export type AuthSession = typeof authSession.$inferSelect;
+export type MagicLink = typeof magicLink.$inferSelect;

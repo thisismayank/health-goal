@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/data";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { userProfile } from "@/db/schema";
 import { importHealthPayload } from "@/lib/health-import/parser";
 
 export const dynamic = "force-dynamic";
@@ -35,10 +37,23 @@ export async function POST(request: Request) {
     return new NextResponse("bad json", { status: 400 });
   }
 
-  const user = await getCurrentUser();
+  // External webhook — no session cookie. Route to a specific user via
+  // HEALTH_IMPORT_USER_EMAIL env until we ship per-user webhook tokens.
+  const routeEmail = process.env.HEALTH_IMPORT_USER_EMAIL?.trim().toLowerCase();
+  if (!routeEmail) {
+    return NextResponse.json(
+      { ok: false, error: "HEALTH_IMPORT_USER_EMAIL not set" },
+      { status: 500 },
+    );
+  }
+  const [user] = await db
+    .select()
+    .from(userProfile)
+    .where(eq(userProfile.email, routeEmail))
+    .limit(1);
   if (!user) {
     return NextResponse.json(
-      { ok: false, error: "no user configured" },
+      { ok: false, error: `no user with email ${routeEmail}` },
       { status: 500 },
     );
   }

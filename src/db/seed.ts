@@ -177,16 +177,27 @@ function planForWeek(week: number, tpl: DayTemplate): PlannedRow {
 async function main() {
   console.log("Seeding Rainier Companion…");
 
+  const seedEmail = "mayank.uiet7@gmail.com";
   const existingUsers = await db.select().from(userProfile).limit(1);
   let userId: number;
   if (existingUsers.length > 0) {
     userId = existingUsers[0].id;
     console.log(`  user exists: id=${userId}`);
+    // Backfill email for pre-auth seed users so magic-link sign-in works.
+    if (!existingUsers[0].email) {
+      await db
+        .update(userProfile)
+        .set({ email: seedEmail, createdVia: "seed" })
+        .where(eq(userProfile.id, userId));
+      console.log(`  backfilled email → ${seedEmail}`);
+    }
   } else {
     const [u] = await db
       .insert(userProfile)
       .values({
+        email: seedEmail,
         name: "Mayank",
+        createdVia: "seed",
         sex: "M",
         heightCm: 183,
         currentWeightKg: 85,

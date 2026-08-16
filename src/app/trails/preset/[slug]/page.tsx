@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/db/client";
 import { trail } from "@/db/schema";
-import { getCurrentUser } from "@/lib/data";
+import { requireCurrentUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
 import { findTrailBySlug } from "@/lib/basecamp/trail-library";
 import { presetToVirtualTrail } from "@/lib/basecamp/preset-trail";
@@ -46,8 +46,7 @@ export default async function PresetDetailPage({
   const preset = findTrailBySlug(slug);
   if (!preset) notFound();
 
-  const user = await getCurrentUser();
-  if (!user) return <p className="text-muted">No user found.</p>;
+  const user = await requireCurrentUser();
 
   const today = todayInTimeZone(user.timezone);
   const virtual = presetToVirtualTrail(preset, user.id);

@@ -2,8 +2,19 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const REALM = "Rainier";
-const USERNAME = "mayank";
+const REALM = "Basecamp";
+const SESSION_COOKIE = "basecamp_session";
+
+// Public routes that bypass the session gate. Auth pages need to be
+// reachable when signed out; webhooks authenticate with their own tokens.
+const PUBLIC_PATHS = new Set<string>([
+  "/login",
+]);
+const PUBLIC_PREFIXES: string[] = [
+  "/api/auth/",
+  "/api/strava/webhook",
+  "/api/health-import",
+];
 
 function safeEqual(a: string, b: string): boolean {
   const aBuf = Buffer.from(a);
@@ -12,22 +23,24 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(aBuf, bBuf);
 }
 
-export function proxy(request: NextRequest) {
+// Optional outer HTTP-Basic gate for pre-launch staging. When AUTH_PASSWORD
+// (and optionally AUTH_USERNAME) are set, every request must satisfy basic
+// auth AS WELL AS the per-user session gate below. Remove the env vars in
+// production once you're ready to open the doors.
+function passesBasicAuthGate(request: NextRequest): NextResponse | null {
   const password = process.env.AUTH_PASSWORD;
+  if (!password) return null;
 
-  if (!password) return NextResponse.next();
-
+  const username = process.env.AUTH_USERNAME ?? "basecamp";
   const auth = request.headers.get("authorization");
   if (auth?.startsWith("Basic ")) {
     try {
       const decoded = Buffer.from(auth.slice(6), "base64").toString("utf8");
       const idx = decoded.indexOf(":");
       if (idx !== -1) {
-        const user = decoded.slice(0, idx);
-        const pass = decoded.slice(idx + 1);
-        if (safeEqual(user, USERNAME) && safeEqual(pass, password)) {
-          return NextResponse.next();
-        }
+        const u = decoded.slice(0, idx);
+        const p = decoded.slice(idx + 1);
+        if (safeEqual(u, username) && safeEqual(p, password)) return null;
       }
     } catch {
       // fall through to 401
@@ -42,10 +55,35 @@ export function proxy(request: NextRequest) {
   });
 }
 
+function isPublicPath(pathname: string): boolean {
+  if (PUBLIC_PATHS.has(pathname)) return true;
+  return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+export function proxy(request: NextRequest) {
+  // Outer staging gate (optional).
+  const basicRejection = passesBasicAuthGate(request);
+  if (basicRejection) return basicRejection;
+
+  const { pathname, search } = request.nextUrl;
+  if (isPublicPath(pathname)) return NextResponse.next();
+
+  // Session gate: cookie must be present. Actual validity is verified in
+  // pages via getCurrentUser (stale/expired sessions trigger a redirect
+  // there). This edge check keeps the fast path free of DB work.
+  const sessionToken = request.cookies.get(SESSION_COOKIE)?.value;
+  if (!sessionToken) {
+    const loginUrl = new URL("/login", request.url);
+    if (pathname !== "/" && pathname !== "/login") {
+      loginUrl.searchParams.set("next", pathname + search);
+    }
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
+}
+
 export const config = {
-  // Exempt webhooks that third-party services POST to us without basic-auth
-  // creds (they authenticate with their own tokens instead).
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/strava/webhook|api/health-import).*)",
-  ],
+  // Everything except static assets and Next internals runs through the proxy.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

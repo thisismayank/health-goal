@@ -2,7 +2,7 @@ import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { trail } from "@/db/schema";
-import { getCurrentUser } from "@/lib/data";
+import { requireCurrentUser } from "@/lib/data";
 import { TRAIL_LIBRARY } from "@/lib/basecamp/trail-library";
 import { TrailForm } from "@/components/trail-form";
 import { TrailSearch } from "@/components/trail-search";
@@ -10,8 +10,7 @@ import { TrailSearch } from "@/components/trail-search";
 export const dynamic = "force-dynamic";
 
 export default async function TrailsPage() {
-  const user = await getCurrentUser();
-  if (!user) return <p className="text-muted">No user found.</p>;
+  const user = await requireCurrentUser();
 
   const savedTrails = await db
     .select()

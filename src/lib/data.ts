@@ -1,4 +1,5 @@
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import {
   dailyMetric,
@@ -9,13 +10,27 @@ import {
   workout,
   type PlannedSession,
   type StrengthExercise,
+  type UserProfile,
   type Workout,
 } from "@/db/schema";
+import { getUserFromSession } from "./auth/sessions";
 import { todayInTimeZone, weekDays, weekStart, ymd, ymdInTimeZone } from "./date";
 
-export async function getCurrentUser() {
-  const users = await db.select().from(userProfile).limit(1);
-  return users[0] ?? null;
+export async function getCurrentUser(): Promise<UserProfile | null> {
+  // Slice 4: resolve from session cookie instead of "the first user". All
+  // callers continue to get a UserProfile row or null with the same shape.
+  return getUserFromSession();
+}
+
+/**
+ * Same as getCurrentUser but redirects to /login instead of returning null.
+ * Use this in page components (server components) that require an
+ * authenticated user. The redirect throws, so nothing after it runs.
+ */
+export async function requireCurrentUser(): Promise<UserProfile> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  return user;
 }
 
 export async function getActivePlan(userId: number) {

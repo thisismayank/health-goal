@@ -2,7 +2,7 @@ import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { dailyMetric, stravaAccount } from "@/db/schema";
-import { getCurrentUser } from "@/lib/data";
+import { requireCurrentUser } from "@/lib/data";
 import { isConfigured as intervalsConfigured } from "@/lib/intervals/client";
 import {
   StravaDisconnectButton,
@@ -19,8 +19,7 @@ export default async function SettingsPage({
   const connected = params.connected === "1";
   const err = typeof params.error === "string" ? params.error : null;
 
-  const user = await getCurrentUser();
-  if (!user) return <p className="text-muted">No user found.</p>;
+  const user = await requireCurrentUser();
 
   const stravaRow = (
     await db
@@ -179,6 +178,26 @@ export default async function SettingsPage({
         <code className="block text-xs text-muted break-all">
           POST /api/health-import/webhook
         </code>
+      </section>
+
+      <section className="rounded-lg border border-panel-border bg-panel p-5 space-y-3">
+        <h2 className="text-lg font-medium">Account</h2>
+        <dl className="text-sm text-muted space-y-1">
+          <div>
+            Signed in as{" "}
+            <span className="text-foreground">
+              {user.email ?? user.name}
+            </span>
+          </div>
+        </dl>
+        <form action="/api/auth/logout" method="post">
+          <button
+            type="submit"
+            className="rounded-md border border-panel-border px-4 py-2 text-sm text-muted hover:text-foreground hover:border-blue-500/40 transition"
+          >
+            Sign out
+          </button>
+        </form>
       </section>
 
       <section className="rounded-lg border border-panel-border bg-panel p-5 space-y-2">
