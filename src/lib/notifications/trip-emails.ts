@@ -6,6 +6,10 @@
 
 import type { Trail, UserProfile } from "@/db/schema";
 import type { TripPhase } from "@/lib/home/state";
+import {
+  interpretWeatherCode,
+  type DailyForecast,
+} from "@/lib/weather/open-meteo";
 
 export type TripEmail = {
   subject: string;
@@ -19,16 +23,22 @@ export function buildTripEmail({
   phase,
   daysUntil,
   appUrl,
+  forecast,
 }: {
   user: UserProfile;
   trail: Trail;
   phase: TripPhase;
   daysUntil: number;
   appUrl: string;
+  // Weather forecast for the trip date, if we could resolve destination
+  // coords and fetch it. Undefined = weather section omitted from the email.
+  forecast?: DailyForecast | null;
 }): TripEmail {
   const firstName = user.name.split(" ")[0];
   const trailUrl = `${appUrl}/trails/${trail.id}`;
   const homeUrl = appUrl;
+  const weatherText = forecast ? renderWeatherText(forecast, phase) : null;
+  const weatherHtml = forecast ? renderWeatherHtml(forecast, phase) : "";
 
   if (phase === "final_prep") {
     return {
@@ -45,6 +55,7 @@ export function buildTripEmail({
         trail.packWeightLb > 0
           ? `  - Test your pack at ${trail.packWeightLb} lb on one session.`
           : null,
+        weatherText,
         ``,
         `Open Basecamp: ${homeUrl}`,
         `Trail details: ${trailUrl}`,
@@ -62,7 +73,8 @@ export function buildTripEmail({
             trail.packWeightLb > 0
               ? `Test your pack at ${trail.packWeightLb} lb on one session.`
               : null,
-          ]),
+          ]) +
+          weatherHtml,
         homeUrl,
         "Open Basecamp",
       ),
@@ -84,6 +96,7 @@ export function buildTripEmail({
         trail.maxAltitudeFt >= 10000
           ? `  - Altitude ${trail.maxAltitudeFt.toLocaleString()} ft — sleep high the night before if possible.`
           : null,
+        weatherText,
         ``,
         `Open Basecamp: ${homeUrl}`,
       ),
@@ -100,7 +113,8 @@ export function buildTripEmail({
             trail.maxAltitudeFt >= 10000
               ? `Altitude ${trail.maxAltitudeFt.toLocaleString()} ft — sleep as high as you can the night before if possible.`
               : null,
-          ]),
+          ]) +
+          weatherHtml,
         homeUrl,
         "Open Basecamp",
       ),
@@ -119,6 +133,7 @@ export function buildTripEmail({
         `  - Start early. Weather + light are both easier in the AM.`,
         `  - Eat + drink on schedule, not by feel. Prevent bonking.`,
         `  - Turnaround time non-negotiable. Summit is optional; going home is not.`,
+        weatherText,
         ``,
         `Log it when you're back: ${trailUrl}`,
       ),
@@ -132,7 +147,8 @@ export function buildTripEmail({
             "Start early. Weather + light are both easier in the AM.",
             "Eat + drink on schedule, not by feel. Prevent bonking.",
             "Turnaround time non-negotiable. Summit is optional; going home is not.",
-          ]),
+          ]) +
+          weatherHtml,
         trailUrl,
         "Log completion when back",
       ),
@@ -163,6 +179,73 @@ export function buildTripEmail({
 
 function plainText(...lines: (string | null)[]): string {
   return lines.filter((l) => l !== null).join("\n") + "\n\nBasecamp\n";
+}
+
+/**
+ * Short weather advice string tuned to trip conditions. Fires only when
+ * something's actionable (rain, wind, cold, storms). Empty string otherwise
+ * — we let the standard reminders do their job.
+ */
+function weatherAdvice(f: DailyForecast): string {
+  const bits: string[] = [];
+  if (f.weatherCode >= 95) {
+    bits.push("Thunderstorms possible — off exposed terrain by 1pm.");
+  }
+  if (f.precipProbabilityPct >= 60) {
+    bits.push("Wet day — waterproof layers, extra grip on rocks.");
+  } else if (f.precipProbabilityPct >= 40) {
+    bits.push("Chance of rain — pack a shell.");
+  }
+  if (f.windMaxMph >= 30) {
+    bits.push("High wind — helmet or hood on ridges; watch for cornices.");
+  } else if (f.windMaxMph >= 20) {
+    bits.push("Windy — layer up on exposed sections.");
+  }
+  if (f.tempMaxF <= 40) {
+    bits.push("Cold — layer up + protect extremities early.");
+  } else if (f.tempMaxF >= 85) {
+    bits.push("Hot — front-load water, start early.");
+  }
+  return bits.join(" ");
+}
+
+function renderWeatherText(f: DailyForecast, phase: TripPhase): string {
+  const { label, glyph } = interpretWeatherCode(f.weatherCode);
+  const advice = weatherAdvice(f);
+  const label2 =
+    phase === "final_prep"
+      ? "Trip-day outlook"
+      : phase === "trip_day"
+        ? "Conditions today"
+        : "Trip-day conditions";
+  return `\n${label2} (${f.date}): ${glyph} ${label} · ${f.tempMinF}–${f.tempMaxF}°F · ${f.precipProbabilityPct}% precip · ${f.windMaxMph} mph wind${advice ? `\n  ${advice}` : ""}`;
+}
+
+function renderWeatherHtml(f: DailyForecast, phase: TripPhase): string {
+  const { label, glyph } = interpretWeatherCode(f.weatherCode);
+  const advice = weatherAdvice(f);
+  const header =
+    phase === "final_prep"
+      ? "Trip-day outlook"
+      : phase === "trip_day"
+        ? "Conditions today"
+        : "Trip-day conditions";
+  const precipFlagged = f.precipProbabilityPct >= 40;
+  const windFlagged = f.windMaxMph >= 20;
+  const precipStyle = precipFlagged ? "color:#f5c26b" : "color:#9aa0a6";
+  const windStyle = windFlagged ? "color:#f5c26b" : "color:#9aa0a6";
+  return (
+    `<p style="margin:16px 0 4px 0;font-family:ui-monospace,monospace;font-size:11px;letter-spacing:0.15em;color:#7dd3fc;text-transform:uppercase">${header} · ${escape(f.date)}</p>` +
+    `<p style="margin:4px 0 0 0;font-size:14px;line-height:1.5;color:#e8eaed">` +
+    `<span style="color:#7dd3fc">${glyph} ${escape(label)}</span> · ` +
+    `<span>${f.tempMinF}–${f.tempMaxF}°F</span>` +
+    ` · <span style="${precipStyle}">${f.precipProbabilityPct}% precip</span>` +
+    ` · <span style="${windStyle}">${f.windMaxMph} mph wind</span>` +
+    `</p>` +
+    (advice
+      ? `<p style="margin:6px 0 0 0;font-size:13px;line-height:1.5;color:#f5c26b">${escape(advice)}</p>`
+      : "")
+  );
 }
 
 function escape(s: string): string {

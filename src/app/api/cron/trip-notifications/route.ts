@@ -20,6 +20,11 @@ import { parseYmd, todayInTimeZone, ymd } from "@/lib/date";
 import { buildTripEmail } from "@/lib/notifications/trip-emails";
 import { isEmailEnabled, sendNotificationEmail } from "@/lib/notifications/send";
 import type { TripPhase } from "@/lib/home/state";
+import { coordsForQuery } from "@/lib/basecamp/destinations";
+import {
+  fetchDailyForecast,
+  type DailyForecast,
+} from "@/lib/weather/open-meteo";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -89,6 +94,34 @@ function daysBetween(fromYmd: string, toYmd: string): number {
   return Math.round((b - a) / 86_400_000);
 }
 
+/**
+ * Best-effort forecast lookup for a trail's trip date. Tries to resolve
+ * destination coords by fuzzy-matching the trail's name + notes against
+ * POPULAR_DESTINATIONS. Returns null if we can't resolve coords, if the
+ * date is outside Open-Meteo's 16-day horizon, or if the fetch fails —
+ * the email still sends without weather.
+ */
+async function tryFetchTripForecast(
+  trailName: string,
+  notes: string | null,
+  targetDate: string,
+): Promise<DailyForecast | null> {
+  // Concatenate name + notes so region-y words in either can match.
+  const searchable = `${trailName} ${notes ?? ""}`;
+  const coords = coordsForQuery(searchable);
+  if (!coords) return null;
+  try {
+    const res = await fetchDailyForecast(coords.lat, coords.lng);
+    return res.daily.find((d) => d.date === targetDate) ?? null;
+  } catch (e) {
+    console.warn(
+      `[trip-notifications] forecast fetch failed for ${trailName}:`,
+      e instanceof Error ? e.message : e,
+    );
+    return null;
+  }
+}
+
 type ProcessResult = {
   userId: number;
   email: string;
@@ -122,12 +155,18 @@ async function processUser(user: UserProfile, appUrl: string): Promise<ProcessRe
   }
   const phase = phaseFor(days);
   const dedupeKey = `trip_${trip.id}_${trip.targetDate}_${tagFor(days)}`;
+  // Weather adds real value on prep/taper/trip-day, but not on post-trip.
+  const forecast =
+    phase === "post_trip"
+      ? null
+      : await tryFetchTripForecast(trip.name, trip.notes, trip.targetDate);
   const email = buildTripEmail({
     user,
     trail: trip,
     phase,
     daysUntil: Math.max(0, days),
     appUrl,
+    forecast,
   });
   const send = await sendNotificationEmail({
     userId: user.id,
