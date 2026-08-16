@@ -55,6 +55,8 @@ export default async function SettingsPage({
     prefRows.find((p) => p.kind === "weekend_nudge")?.emailEnabled ?? true;
   const squadActivityEnabled =
     prefRows.find((p) => p.kind === "squad_activity")?.emailEnabled ?? true;
+  const featuredTrailEnabled =
+    prefRows.find((p) => p.kind === "featured_trail")?.emailEnabled ?? true;
 
   return (
     <div className="space-y-6">
@@ -223,6 +225,12 @@ export default async function SettingsPage({
             label="Squad activity"
             description="Email when a squadmate logs a trail completion — see what your people are doing."
             initialEnabled={squadActivityEnabled}
+          />
+          <NotificationToggle
+            kind="featured_trail"
+            label="Featured trail of the week"
+            description="Monday morning email with one hand-picked trail matched to your Hiker Class. New each week."
+            initialEnabled={featuredTrailEnabled}
           />
         </div>
       </section>
