@@ -227,7 +227,13 @@ export default async function ProgressPage() {
         )}
       </section>
 
-      <div className="grid grid-cols-2 gap-2 pt-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2">
+        <Link
+          href="/squad"
+          className="rounded-md border border-blue-500/40 bg-blue-950/10 px-4 py-3 text-sm text-blue-300 hover:border-blue-400 transition text-center"
+        >
+          Squads →
+        </Link>
         <Link
           href="/body"
           className="rounded-md border border-panel-border bg-panel/60 px-4 py-3 text-sm hover:border-blue-500/40 transition text-center"

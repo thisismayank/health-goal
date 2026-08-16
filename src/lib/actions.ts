@@ -1,11 +1,14 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import {
   dailyMetric,
   plannedSession,
+  squad,
+  squadMember,
   stravaAccount,
   strengthExercise,
   trail,
@@ -546,6 +549,138 @@ export async function deleteTrailCompletion(completionId: number) {
     );
   revalidatePath("/progress");
   revalidatePath("/trails");
+}
+
+// ─────────────────────────── Squads ───────────────────────────
+
+const SQUAD_MEMBER_CAP = 8;
+
+function generateSquadInviteToken(): string {
+  // Same format as magic-link tokens: base64url, plenty of entropy.
+  return randomBytes(24).toString("base64url");
+}
+
+export async function createSquad(input: { name: string }) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const name = input.name.trim();
+  if (!name) throw new Error("Squad name is required");
+  if (name.length > 60) throw new Error("Squad name too long");
+
+  const [created] = await db
+    .insert(squad)
+    .values({
+      name,
+      inviteToken: generateSquadInviteToken(),
+      createdBy: user.id,
+    })
+    .returning();
+
+  await db.insert(squadMember).values({
+    squadId: created.id,
+    userId: user.id,
+    role: "admin",
+  });
+
+  revalidatePath("/squad");
+  revalidatePath("/progress");
+  return { id: created.id };
+}
+
+export async function regenerateSquadInviteToken(squadId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const [membership] = await db
+    .select({ role: squadMember.role })
+    .from(squadMember)
+    .where(
+      and(eq(squadMember.squadId, squadId), eq(squadMember.userId, user.id)),
+    )
+    .limit(1);
+  if (!membership || membership.role !== "admin") {
+    throw new Error("Only squad admins can regenerate invite tokens");
+  }
+  const token = generateSquadInviteToken();
+  await db.update(squad).set({ inviteToken: token }).where(eq(squad.id, squadId));
+  revalidatePath(`/squad/${squadId}`);
+  return { token };
+}
+
+export async function joinSquadByToken(token: string) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const [target] = await db
+    .select()
+    .from(squad)
+    .where(eq(squad.inviteToken, token))
+    .limit(1);
+  if (!target) throw new Error("Invite link is invalid or has been revoked");
+
+  // Already a member? Return the id — the join page will redirect.
+  const [existing] = await db
+    .select({ id: squadMember.id })
+    .from(squadMember)
+    .where(
+      and(eq(squadMember.squadId, target.id), eq(squadMember.userId, user.id)),
+    )
+    .limit(1);
+  if (existing) {
+    return { id: target.id, alreadyMember: true };
+  }
+
+  // Enforce member cap.
+  const members = await db
+    .select({ id: squadMember.id })
+    .from(squadMember)
+    .where(eq(squadMember.squadId, target.id));
+  if (members.length >= SQUAD_MEMBER_CAP) {
+    throw new Error(
+      `This squad is at capacity (${SQUAD_MEMBER_CAP} members). Ask the admin to make room or start a new squad.`,
+    );
+  }
+
+  await db.insert(squadMember).values({
+    squadId: target.id,
+    userId: user.id,
+    role: "member",
+  });
+
+  revalidatePath("/squad");
+  revalidatePath(`/squad/${target.id}`);
+  return { id: target.id, alreadyMember: false };
+}
+
+export async function leaveSquad(squadId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  await db
+    .delete(squadMember)
+    .where(
+      and(eq(squadMember.squadId, squadId), eq(squadMember.userId, user.id)),
+    );
+  revalidatePath("/squad");
+  revalidatePath(`/squad/${squadId}`);
+}
+
+export async function renameSquad(input: { squadId: number; name: string }) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const [m] = await db
+    .select({ role: squadMember.role })
+    .from(squadMember)
+    .where(
+      and(
+        eq(squadMember.squadId, input.squadId),
+        eq(squadMember.userId, user.id),
+      ),
+    )
+    .limit(1);
+  if (!m || m.role !== "admin") throw new Error("Only admins can rename");
+  const name = input.name.trim();
+  if (!name) throw new Error("Name is required");
+  if (name.length > 60) throw new Error("Name too long");
+  await db.update(squad).set({ name }).where(eq(squad.id, input.squadId));
+  revalidatePath(`/squad/${input.squadId}`);
 }
 
 export async function markOnboardingComplete() {

@@ -17,6 +17,7 @@ import {
   type Verdict,
 } from "@/lib/basecamp/trail-assessment";
 import { SavePresetButton } from "@/components/trails/save-preset-button";
+import { getSquadCompletionsForPreset } from "@/lib/squad/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +73,9 @@ export default async function PresetDetailPage({
         )
         .orderBy(desc(trailCompletion.completedAt))
     : [];
+
+  const squadCompletions = await getSquadCompletionsForPreset(user.id, slug);
+  const squadmatesOnly = squadCompletions.filter((c) => !c.isYou);
 
   const verdictColor = VERDICT_COLOR[assessment.verdict];
 
@@ -136,6 +140,35 @@ export default async function PresetDetailPage({
             >
               View history →
             </Link>
+          )}
+        </section>
+      )}
+
+      {squadmatesOnly.length > 0 && (
+        <section className="rounded-md border border-blue-500/40 bg-blue-950/10 p-4 space-y-2">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-blue-300">
+            [YOUR SQUAD · DID THIS TRAIL]
+          </div>
+          <ul className="divide-y divide-panel-border">
+            {squadmatesOnly.slice(0, 5).map((c, i) => (
+              <li
+                key={i}
+                className="flex items-baseline justify-between gap-3 py-1.5 text-sm"
+              >
+                <span className="font-medium truncate">{c.userName}</span>
+                <span className="text-xs text-muted tabular-nums whitespace-nowrap">
+                  {c.completedAt}
+                  {c.timeMinutes != null && (
+                    <span> · {formatMinutes(c.timeMinutes)}</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {squadmatesOnly.length > 5 && (
+            <div className="text-[10px] text-muted italic">
+              + {squadmatesOnly.length - 5} more
+            </div>
           )}
         </section>
       )}
@@ -309,4 +342,11 @@ function DimensionCompact({ d }: { d: DimensionAnalysis }) {
       </div>
     </div>
   );
+}
+
+function formatMinutes(m: number): string {
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (h === 0) return `${mm}m`;
+  return mm === 0 ? `${h}h` : `${h}h ${mm}m`;
 }
