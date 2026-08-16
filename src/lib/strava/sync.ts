@@ -35,7 +35,12 @@ export async function upsertActivity(
   userId: number,
   a: StravaActivity,
 ): Promise<SyncResult> {
-  const category = mapStravaType(a.sport_type, a.type);
+  const category = mapStravaType(
+    a.sport_type,
+    a.type,
+    a.average_speed ?? null,
+    a.total_elevation_gain ?? null,
+  );
   const startTime = new Date(a.start_date);
   const localStart = new Date(a.start_date_local);
   const dateStr = ymd(localStart);

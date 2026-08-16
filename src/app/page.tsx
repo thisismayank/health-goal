@@ -103,7 +103,15 @@ export default async function TodayPage() {
         />
       )}
 
-      {extras.length > 0 && <ExtrasSection workouts={extras} />}
+      {extras.length > 0 && (
+        <ExtrasSection
+          workouts={extras}
+          plannedStillOpen={session?.status === "planned"}
+          plannedTitle={session?.title ?? null}
+          plannedCategory={session?.sessionCategory ?? null}
+          plannedTargetMin={session?.targetDurationMinutes ?? null}
+        />
+      )}
 
       <Suspense fallback={<CoachCardSkeleton label="Coach · thinking" />}>
         <DailyCoachCard
@@ -117,7 +125,22 @@ export default async function TodayPage() {
   );
 }
 
-function ExtrasSection({ workouts }: { workouts: Workout[] }) {
+function ExtrasSection({
+  workouts,
+  plannedStillOpen,
+  plannedTitle,
+  plannedCategory,
+  plannedTargetMin,
+}: {
+  workouts: Workout[];
+  plannedStillOpen: boolean;
+  plannedTitle: string | null;
+  plannedCategory: string | null;
+  plannedTargetMin: number | null;
+}) {
+  const explanation = plannedStillOpen && plannedTitle && plannedCategory
+    ? explainerFor(plannedCategory, plannedTargetMin)
+    : null;
   return (
     <section className="space-y-2">
       <h3 className="text-xs uppercase tracking-widest text-muted">
@@ -128,8 +151,45 @@ function ExtrasSection({ workouts }: { workouts: Workout[] }) {
           <ExtraActivityCard key={w.id} workout={w} />
         ))}
       </div>
+      {explanation && (
+        <p className="text-xs text-muted italic px-1">
+          These don't qualify as {plannedTitle} — {explanation}
+        </p>
+      )}
     </section>
   );
+}
+
+function explainerFor(category: string, targetMin: number | null): string {
+  const strengthCats = [
+    "UPPER_STRENGTH",
+    "LOWER_STRENGTH",
+    "FULL_BODY_STRENGTH",
+    "MOUNTAIN_LEGS",
+  ];
+  const mountainCats = [
+    "STAIRMASTER",
+    "INCLINE_TREADMILL",
+    "OUTDOOR_HIKE",
+    "LOADED_HIKE",
+    "LONG_MOUNTAIN_SESSION",
+  ];
+  if (strengthCats.includes(category)) {
+    const min = targetMin != null ? Math.max(15, Math.round(targetMin * 0.5)) : 15;
+    return `need a strength/leg session of at least ${min} min. Log manually or import as WeightTraining.`;
+  }
+  if (mountainCats.includes(category)) {
+    const min = targetMin != null ? Math.round(targetMin * 0.7) : 30;
+    return `need uphill/mountain-category work (stairs, incline, hike, loaded) of at least ${min} min.`;
+  }
+  if (category === "EASY_RUN" || category === "QUALITY_RUN" || category === "ZONE2_CARDIO") {
+    const min = targetMin != null ? Math.round(targetMin * 0.7) : 30;
+    return `need aerobic/run of at least ${min} min.`;
+  }
+  if (category === "ACTIVE_RECOVERY" || category === "MOBILITY") {
+    return `need a matching recovery/mobility session.`;
+  }
+  return `activity type doesn't match this session's category.`;
 }
 
 function ExtraActivityCard({ workout: w }: { workout: Workout }) {

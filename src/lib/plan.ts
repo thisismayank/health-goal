@@ -120,11 +120,11 @@ const STRENGTH_CATEGORIES: SessionCategory[] = [
   "MOUNTAIN_LEGS",
 ];
 
-// Fraction of planned duration a cardio-focused activity must hit to be
-// counted as the planned session's completion. Below the threshold, the
-// workout is treated as a bonus/extra activity instead.
+// Fractions of planned duration that qualify as a completion. Below the
+// threshold, the workout is treated as a bonus/extra activity instead.
 const CARDIO_DURATION_FLOOR = 0.7;
-const STRENGTH_MIN_MINUTES = 15;
+const STRENGTH_DURATION_FLOOR = 0.5;
+const ABSOLUTE_MIN_MINUTES = 15;
 
 export function sessionCompletionQualifies(
   actualDurationSeconds: number | null,
@@ -140,14 +140,22 @@ export function sessionCompletionQualifies(
   const actualMin =
     actualDurationSeconds != null ? actualDurationSeconds / 60 : 0;
 
-  // Strength: require a meaningful session length; duration is a poor proxy
-  // for strength quality, so we don't gate on % of target.
+  // Strength: require at least half the planned duration OR 15 min if
+  // planned duration is unset. Prior rule (flat 15 min minimum) was too
+  // lenient — a 15-min "Mountain Legs" isn't a real leg session.
   if (STRENGTH_CATEGORIES.includes(planned.sessionCategory)) {
-    return actualMin >= STRENGTH_MIN_MINUTES;
+    const floor =
+      planned.targetDurationMinutes != null
+        ? Math.max(
+            ABSOLUTE_MIN_MINUTES,
+            planned.targetDurationMinutes * STRENGTH_DURATION_FLOOR,
+          )
+        : ABSOLUTE_MIN_MINUTES;
+    return actualMin >= floor;
   }
 
   // Cardio-focused (runs, hikes, stairs, long mountain, recovery walks):
   // must hit ≥70% of the target duration.
-  if (planned.targetDurationMinutes == null) return actualMin >= STRENGTH_MIN_MINUTES;
+  if (planned.targetDurationMinutes == null) return actualMin >= ABSOLUTE_MIN_MINUTES;
   return actualMin >= planned.targetDurationMinutes * CARDIO_DURATION_FLOOR;
 }
