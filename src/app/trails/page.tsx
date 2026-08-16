@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { trail } from "@/db/schema";
 import { getCurrentUser } from "@/lib/data";
 import { TrailForm } from "@/components/trail-form";
+import { TrailSearch } from "@/components/trail-search";
 
 export const dynamic = "force-dynamic";
 
@@ -60,9 +61,24 @@ export default async function TrailsPage() {
       )}
 
       <section className="rounded-lg border border-panel-border bg-panel p-5 space-y-4">
-        <h2 className="text-lg font-medium">Add a trail</h2>
-        <TrailForm />
+        <h2 className="text-lg font-medium">Add from library</h2>
+        <TrailSearch />
       </section>
+
+      <details className="rounded-lg border border-panel-border bg-panel p-5 group">
+        <summary className="cursor-pointer text-lg font-medium select-none">
+          Or add a custom trail
+        </summary>
+        <div className="mt-4">
+          <TrailForm />
+        </div>
+      </details>
+
+      <p className="text-xs text-muted italic">
+        Preset data sourced from Wikipedia (CC-BY-SA), NPS.gov (public domain),
+        USGS, and guidebook consensus. Numbers approximate — verify current
+        conditions before attempting.
+      </p>
     </div>
   );
 }

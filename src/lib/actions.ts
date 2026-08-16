@@ -243,6 +243,33 @@ export type CreateTrailInput = {
   notes?: string;
 };
 
+export async function createTrailFromPreset(slug: string, targetDate?: string): Promise<{ id: number }> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const { findTrailBySlug } = await import("./basecamp/trail-library");
+  const preset = findTrailBySlug(slug);
+  if (!preset) throw new Error(`Preset not found: ${slug}`);
+
+  const [row] = await db
+    .insert(trail)
+    .values({
+      userId: user.id,
+      name: preset.name,
+      url: null,
+      distanceKm: preset.distanceKm,
+      elevationGainFt: preset.elevationGainFt,
+      maxAltitudeFt: preset.maxAltitudeFt,
+      typicalHours: preset.typicalHours,
+      packWeightLb: preset.packWeightLb,
+      terrainGrade: preset.terrainGrade,
+      targetDate: targetDate ?? null,
+      notes: `${preset.notes} · Sources: ${preset.sources.join(", ")}`,
+    })
+    .returning({ id: trail.id });
+  revalidatePath("/trails");
+  return { id: row.id };
+}
+
 export async function createTrail(input: CreateTrailInput): Promise<{ id: number }> {
   const user = await getCurrentUser();
   if (!user) throw new Error("No user found");
