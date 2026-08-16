@@ -120,11 +120,15 @@ const STRENGTH_CATEGORIES: SessionCategory[] = [
   "MOUNTAIN_LEGS",
 ];
 
-// Fractions of planned duration that qualify as a completion. Below the
-// threshold, the workout is treated as a bonus/extra activity instead.
+// Fractions of planned duration that qualify as a completion for
+// duration-measurable session types.
 const CARDIO_DURATION_FLOOR = 0.7;
-const STRENGTH_DURATION_FLOOR = 0.5;
-const ABSOLUTE_MIN_MINUTES = 15;
+// Strength floor is deliberately low — Strava strips rest-between-sets from
+// activity duration, so a real 60-min lift session often reports as 15-20 min
+// active time. If a strength-category workout exists on the planned date,
+// that's the honest signal that the session happened.
+const STRENGTH_MIN_MINUTES = 5;
+const CARDIO_MIN_MINUTES = 15;
 
 export function sessionCompletionQualifies(
   actualDurationSeconds: number | null,
@@ -140,22 +144,17 @@ export function sessionCompletionQualifies(
   const actualMin =
     actualDurationSeconds != null ? actualDurationSeconds / 60 : 0;
 
-  // Strength: require at least half the planned duration OR 15 min if
-  // planned duration is unset. Prior rule (flat 15 min minimum) was too
-  // lenient — a 15-min "Mountain Legs" isn't a real leg session.
+  // Strength: presence-based, not duration-based. Strava's activity duration
+  // strips rest between sets — a real 60-min lift often reports as 15-20 min
+  // of "active time." Trust that a strength-category workout on the day means
+  // the strength session happened.
   if (STRENGTH_CATEGORIES.includes(planned.sessionCategory)) {
-    const floor =
-      planned.targetDurationMinutes != null
-        ? Math.max(
-            ABSOLUTE_MIN_MINUTES,
-            planned.targetDurationMinutes * STRENGTH_DURATION_FLOOR,
-          )
-        : ABSOLUTE_MIN_MINUTES;
-    return actualMin >= floor;
+    return actualMin >= STRENGTH_MIN_MINUTES;
   }
 
   // Cardio-focused (runs, hikes, stairs, long mountain, recovery walks):
-  // must hit ≥70% of the target duration.
-  if (planned.targetDurationMinutes == null) return actualMin >= ABSOLUTE_MIN_MINUTES;
+  // must hit ≥70% of the target duration. Cardio duration is a real signal
+  // because there's no "rest between sets" — you're moving or you're not.
+  if (planned.targetDurationMinutes == null) return actualMin >= CARDIO_MIN_MINUTES;
   return actualMin >= planned.targetDurationMinutes * CARDIO_DURATION_FLOOR;
 }

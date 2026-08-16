@@ -175,8 +175,7 @@ function explainerFor(category: string, targetMin: number | null): string {
     "LONG_MOUNTAIN_SESSION",
   ];
   if (strengthCats.includes(category)) {
-    const min = targetMin != null ? Math.max(15, Math.round(targetMin * 0.5)) : 15;
-    return `need a strength/leg session of at least ${min} min. Log manually or import as WeightTraining.`;
+    return `need a strength-category workout logged for today. Import as WeightTraining/Workout in Strava, or log manually.`;
   }
   if (mountainCats.includes(category)) {
     const min = targetMin != null ? Math.round(targetMin * 0.7) : 30;
