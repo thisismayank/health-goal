@@ -7,6 +7,7 @@ import { generateItineraryAdvice, saveItineraryTrails } from "@/lib/actions";
 import {
   buildItinerary,
   type AssessedPreset,
+  type Overrides,
   type Verdict,
 } from "@/lib/basecamp/itinerary";
 import type { TrailPreset } from "@/lib/basecamp/trail-library";
@@ -86,6 +87,8 @@ export function ItineraryPlanner({
   const [narrativeShape, setNarrativeShape] = useState<string | null>(null);
   const [narrativePending, startNarrativeTransition] = useTransition();
   const [narrativeError, setNarrativeError] = useState<string | null>(null);
+  // Per-dayIndex user overrides. Trims to current day range when `days` changes.
+  const [overrides, setOverrides] = useState<Overrides>({});
 
   // Rehydrate presets into the AssessedPreset shape expected by the
   // sequencer. We only care about fields the sequencer reads.
@@ -105,9 +108,41 @@ export function ItineraryPlanner({
         startDateYmd: startDate,
         days,
         includeStretch,
+        overrides,
       }),
-    [assessed, startDate, days, includeStretch],
+    [assessed, startDate, days, includeStretch, overrides],
   );
+
+  // Trim overrides for day indices beyond current `days` when user
+  // shrinks the trip. Prevents stale keys from lingering.
+  useEffect(() => {
+    setOverrides((prev) => {
+      const next: Overrides = {};
+      let changed = false;
+      for (const [key, val] of Object.entries(prev)) {
+        const idx = Number(key);
+        if (idx < days) next[idx] = val;
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [days]);
+
+  const setDayOverride = (dayIndex: number, slug: string) => {
+    setOverrides((prev) => ({ ...prev, [dayIndex]: { kind: "slug", slug } }));
+  };
+  const setDayRest = (dayIndex: number) => {
+    setOverrides((prev) => ({ ...prev, [dayIndex]: { kind: "rest" } }));
+  };
+  const clearDayOverride = (dayIndex: number) => {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      delete next[dayIndex];
+      return next;
+    });
+  };
+  const resetAllOverrides = () => setOverrides({});
+  const hasOverrides = Object.keys(overrides).length > 0;
 
   const hikeEntries = itinerary.days
     .filter((d): d is Extract<typeof itinerary.days[number], { kind: "hike" }> =>
@@ -319,16 +354,50 @@ export function ItineraryPlanner({
       </div>
 
       <div className="space-y-2">
-        {itinerary.days.map((day, i) => (
-          <DayCard
-            key={day.dayIndex}
-            day={day}
-            coachNote={
-              narrative && !narrativeStale ? narrative.perDay[i] : undefined
-            }
-          />
-        ))}
+        {itinerary.days.map((day, i) => {
+          const currentSlug =
+            day.kind === "hike" ? day.preset.slug : null;
+          // Trails available for THIS day's swap: everything in the pool
+          // except trails already placed elsewhere in the itinerary.
+          const inItinerarySlugs = new Set(
+            itinerary.days
+              .filter((d): d is Extract<typeof itinerary.days[number], { kind: "hike" }> =>
+                d.kind === "hike",
+              )
+              .filter((d) => d.dayIndex !== day.dayIndex)
+              .map((d) => d.preset.slug),
+          );
+          const availableForSwap = presets.filter(
+            (p) => !inItinerarySlugs.has(p.slug),
+          );
+          return (
+            <DayCard
+              key={day.dayIndex}
+              day={day}
+              coachNote={
+                narrative && !narrativeStale ? narrative.perDay[i] : undefined
+              }
+              overridden={overrides[day.dayIndex] != null}
+              availableForSwap={availableForSwap}
+              currentSlug={currentSlug}
+              onSwap={(slug) => setDayOverride(day.dayIndex, slug)}
+              onRest={() => setDayRest(day.dayIndex)}
+              onRevert={() => clearDayOverride(day.dayIndex)}
+            />
+          );
+        })}
       </div>
+      {hasOverrides && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={resetAllOverrides}
+            className="text-[11px] text-muted hover:text-foreground transition"
+          >
+            ↺ Reset all to auto
+          </button>
+        </div>
+      )}
 
       {numHikes > 0 && (
         <div className="rounded-md border border-blue-500/40 bg-blue-950/10 p-4 space-y-2">
@@ -429,15 +498,39 @@ export function ItineraryPlanner({
 function DayCard({
   day,
   coachNote,
+  overridden = false,
+  availableForSwap,
+  currentSlug,
+  onSwap,
+  onRest,
+  onRevert,
 }: {
   day: ReturnType<typeof buildItinerary>["days"][number];
   coachNote?: string;
+  overridden?: boolean;
+  availableForSwap: ItineraryPresetInput[];
+  currentSlug: string | null;
+  onSwap: (slug: string) => void;
+  onRest: () => void;
+  onRevert: () => void;
 }) {
   const dayLabel = new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
   }).format(new Date(day.dateYmd + "T12:00:00Z"));
+
+  const actions = (
+    <DayActions
+      day={day}
+      overridden={overridden}
+      availableForSwap={availableForSwap}
+      currentSlug={currentSlug}
+      onSwap={onSwap}
+      onRest={onRest}
+      onRevert={onRevert}
+    />
+  );
 
   if (day.kind === "rest") {
     return (
@@ -447,7 +540,10 @@ function DayCard({
             Day {day.dayIndex + 1}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium">Rest day</div>
+            <div className="text-sm font-medium">
+              Rest day
+              {overridden && <CustomBadge />}
+            </div>
             <div className="text-xs text-muted">{day.reason}</div>
           </div>
           <div className="text-[10px] text-muted whitespace-nowrap">
@@ -455,6 +551,7 @@ function DayCard({
           </div>
         </div>
         {coachNote && <CoachNote text={coachNote} />}
+        {actions}
       </div>
     );
   }
@@ -475,6 +572,7 @@ function DayCard({
           </div>
         </div>
         {coachNote && <CoachNote text={coachNote} />}
+        {actions}
       </div>
     );
   }
@@ -498,6 +596,7 @@ function DayCard({
             >
               {VERDICT_LABEL[day.verdict]}
             </span>
+            {overridden && <CustomBadge />}
           </div>
           <div className="text-xs text-muted mt-0.5">
             {day.preset.distanceKm} km · +
@@ -510,7 +609,140 @@ function DayCard({
         </div>
       </div>
       {coachNote && <CoachNote text={coachNote} />}
+      {actions}
     </div>
+  );
+}
+
+function DayActions({
+  day,
+  overridden,
+  availableForSwap,
+  currentSlug,
+  onSwap,
+  onRest,
+  onRevert,
+}: {
+  day: ReturnType<typeof buildItinerary>["days"][number];
+  overridden: boolean;
+  availableForSwap: ItineraryPresetInput[];
+  currentSlug: string | null;
+  onSwap: (slug: string) => void;
+  onRest: () => void;
+  onRevert: () => void;
+}) {
+  const [showSwap, setShowSwap] = useState(false);
+
+  const isHike = day.kind === "hike";
+  const isRest = day.kind === "rest";
+  const isUnfilled = day.kind === "unfilled";
+
+  // If there's nothing to pick from and no override to clear, hide actions
+  // entirely to keep the card quiet.
+  if (availableForSwap.length === 0 && !overridden) {
+    return null;
+  }
+
+  return (
+    <div className="pl-[calc(3.5rem+0.75rem)] pt-1.5">
+      {showSwap ? (
+        <div className="rounded border border-panel-border bg-background/40 p-2 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-widest text-muted">
+              {isHike ? "Swap for" : "Add hike"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowSwap(false)}
+              className="text-[10px] text-muted hover:text-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              const slug = e.target.value;
+              if (!slug) return;
+              onSwap(slug);
+              setShowSwap(false);
+            }}
+            className="w-full rounded bg-panel border border-panel-border px-2 py-1.5 text-xs"
+          >
+            <option value="" disabled>
+              Pick a trail…
+            </option>
+            {availableForSwap
+              .slice()
+              .sort((a, b) => {
+                const vp = verdictOrder(a.verdict) - verdictOrder(b.verdict);
+                return vp !== 0 ? vp : a.typicalHours - b.typicalHours;
+              })
+              .map((p) => (
+                <option
+                  key={p.slug}
+                  value={p.slug}
+                  disabled={p.slug === currentSlug}
+                >
+                  {VERDICT_LABEL[p.verdict]} · {p.name} ·{" "}
+                  {p.typicalHours}h ·{" "}
+                  {p.elevationGainFt.toLocaleString()} ft
+                  {p.slug === currentSlug ? " (current)" : ""}
+                </option>
+              ))}
+          </select>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 text-[11px]">
+          {(isHike || isRest || isUnfilled) &&
+            availableForSwap.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowSwap(true)}
+                className="text-blue-300 hover:text-blue-200 transition"
+              >
+                {isHike ? "↔ Swap" : "+ Add hike"}
+              </button>
+            )}
+          {isHike && (
+            <button
+              type="button"
+              onClick={onRest}
+              className="text-muted hover:text-foreground transition"
+            >
+              🛌 Rest instead
+            </button>
+          )}
+          {overridden && (
+            <button
+              type="button"
+              onClick={onRevert}
+              className="text-muted hover:text-foreground transition ml-auto"
+            >
+              ↺ Revert to auto
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function verdictOrder(v: Verdict): number {
+  return v === "comfortable"
+    ? 0
+    : v === "achievable"
+      ? 1
+      : v === "hard"
+        ? 2
+        : 3;
+}
+
+function CustomBadge() {
+  return (
+    <span className="text-[9px] font-mono uppercase tracking-wider text-blue-300 bg-blue-950/30 border border-blue-500/40 rounded px-1.5 py-0.5">
+      custom
+    </span>
   );
 }
 

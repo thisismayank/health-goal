@@ -102,52 +102,92 @@ function pickForSlot(
   });
 }
 
+export type DayOverride = { kind: "rest" } | { kind: "slug"; slug: string };
+export type Overrides = Record<number, DayOverride | undefined>;
+
 export function buildItinerary({
   matched,
   startDateYmd,
   days,
   includeStretch = false,
+  overrides = {},
 }: {
   matched: AssessedPreset[];
   startDateYmd: string;
   days: number; // 1-14
   includeStretch?: boolean;
+  // Per-dayIndex user overrides. 'rest' forces rest. 'slug' forces the
+  // named trail from the matched pool. Anything else is auto-picked.
+  overrides?: Overrides;
 }): Itinerary {
   const boundedDays = Math.max(1, Math.min(14, days));
 
-  // Pool: recommended (READY / ACHIEVABLE). Fall back to HARD if empty and
-  // includeStretch is enabled.
+  // Pool for AUTO picks: recommended (READY / ACHIEVABLE), plus HARD if
+  // includeStretch. Overrides can pull from ANY matched trail regardless
+  // of verdict — user knows what they're doing.
   const primary = matched.filter((m) => isRecommended(m.assessment.verdict));
   const stretch = matched.filter((m) => m.assessment.verdict === "hard");
-  const pool = includeStretch ? [...primary, ...stretch] : primary;
+  const autoPool = includeStretch ? [...primary, ...stretch] : primary;
+  const matchedBySlug = new Map(matched.map((m) => [m.preset.slug, m]));
 
+  // Pre-mark all overridden slugs as used so auto-pick doesn't duplicate.
   const used = new Set<string>();
+  for (let i = 0; i < boundedDays; i++) {
+    const ov = overrides[i];
+    if (ov?.kind === "slug") used.add(ov.slug);
+  }
+
   const dayList: ItineraryDay[] = [];
   let totalHours = 0;
   let totalVert = 0;
   let hikeCount = 0;
-  // Track consecutive hike-day fatigue for rest-day insertion.
   let prevWasHike = false;
   let prevHikeHours = 0;
 
   for (let i = 0; i < boundedDays; i++) {
     const dateYmd = ymdPlus(startDateYmd, i);
-    const role: "arrival" | "middle" | "departure" =
-      i === 0 && boundedDays > 1
-        ? "arrival"
-        : i === boundedDays - 1 && boundedDays > 1
-          ? "departure"
-          : "middle";
+    const ov = overrides[i];
 
-    // Rest-day trigger: previous day was a big hike (>8h) OR two-day rolling
-    // load > 12h. Only if we have more days coming AND pool still has trails.
+    // Override: force rest.
+    if (ov?.kind === "rest") {
+      dayList.push({
+        kind: "rest",
+        dayIndex: i,
+        dateYmd,
+        reason: "Rest day — hydrate, mobilize, eat well.",
+      });
+      prevWasHike = false;
+      prevHikeHours = 0;
+      continue;
+    }
+
+    // Override: force a specific hike.
+    if (ov?.kind === "slug") {
+      const forced = matchedBySlug.get(ov.slug);
+      if (forced) {
+        dayList.push({
+          kind: "hike",
+          dayIndex: i,
+          dateYmd,
+          preset: forced.preset,
+          verdict: forced.assessment.verdict,
+        });
+        totalHours += forced.preset.typicalHours;
+        totalVert += forced.preset.elevationGainFt;
+        hikeCount++;
+        prevWasHike = true;
+        prevHikeHours = forced.preset.typicalHours;
+        continue;
+      }
+      // Fall through to auto-pick if the override slug isn't in the pool
+      // (can happen if user changed destination while overrides persisted).
+    }
+
+    // Auto: rest-day trigger — previous day was a big hike (>8h) OR
+    // >6h. Only when more days coming.
     const needsRest =
-      prevWasHike &&
-      (prevHikeHours > 8 || prevHikeHours > 6) &&
-      i < boundedDays - 1; // never insert rest on final day
-    const remainingSlots = boundedDays - i;
-
-    if (needsRest && remainingSlots > 1) {
+      prevWasHike && prevHikeHours > 6 && i < boundedDays - 1;
+    if (needsRest) {
       dayList.push({
         kind: "rest",
         dayIndex: i,
@@ -162,10 +202,17 @@ export function buildItinerary({
       continue;
     }
 
-    const pick = pickForSlot(pool, role, used);
+    const role: "arrival" | "middle" | "departure" =
+      i === 0 && boundedDays > 1
+        ? "arrival"
+        : i === boundedDays - 1 && boundedDays > 1
+          ? "departure"
+          : "middle";
+    const pick = pickForSlot(autoPool, role, used);
     if (!pick) {
       dayList.push({ kind: "unfilled", dayIndex: i, dateYmd });
       prevWasHike = false;
+      prevHikeHours = 0;
       continue;
     }
 
