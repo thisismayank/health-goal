@@ -15,6 +15,8 @@ import {
   type CompletionDelta,
 } from "@/lib/basecamp/completion-delta";
 import type { StatKey } from "@/lib/basecamp/stats";
+import { tryFetchTripForecast } from "@/lib/weather/trip-forecast";
+import type { DailyForecast } from "@/lib/weather/open-meteo";
 
 export const dynamic = "force-dynamic";
 
@@ -48,10 +50,22 @@ export default async function HomePage() {
     delta?.stats.filter((s) => s.delta !== 0).map((s) => s.key) ?? [];
   const summitDeltaFt = delta?.summit.deltaFt ?? 0;
 
+  // Fetch trip-day forecast when we're in a trip-week state so the hero
+  // can render weather inline. Best-effort — null if the trail's region
+  // isn't in POPULAR_DESTINATIONS or date is beyond horizon.
+  const tripForecast: DailyForecast | null =
+    state.kind === "trip_week" && state.trail.targetDate
+      ? await tryFetchTripForecast({
+          trailName: state.trail.name,
+          notes: state.trail.notes,
+          targetDate: state.trail.targetDate,
+        })
+      : null;
+
   return (
     <div className="space-y-5">
       <Greeting state={state} />
-      <Hero state={state} delta={delta} />
+      <Hero state={state} delta={delta} tripForecast={tripForecast} />
       <StatsStrip userId={state.user.id} highlightStats={highlightStats} />
       <SummitHero userId={state.user.id} deltaFt={summitDeltaFt} />
       <UpcomingTrails userId={state.user.id} tz={state.user.timezone} />
@@ -107,9 +121,11 @@ function greetingFor(name: string): string {
 async function Hero({
   state,
   delta,
+  tripForecast,
 }: {
   state: Exclude<HomeState, { kind: "no_user" }>;
   delta: CompletionDelta | null;
+  tripForecast: DailyForecast | null;
 }) {
   switch (state.kind) {
     case "trip_week":
@@ -121,6 +137,7 @@ async function Hero({
           todayYmd={state.today}
           todaySession={state.todaySession}
           recentCompletion={state.recentCompletion}
+          forecast={tripForecast}
         />
       );
     case "session_pending":

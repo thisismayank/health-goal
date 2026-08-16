@@ -2,6 +2,10 @@ import Link from "next/link";
 import { LogCompletionForm } from "@/components/trails/log-completion";
 import type { TripPhase } from "@/lib/home/state";
 import type { PlannedSession, Trail, TrailCompletion } from "@/db/schema";
+import {
+  interpretWeatherCode,
+  type DailyForecast,
+} from "@/lib/weather/open-meteo";
 
 type Props = {
   trail: Trail;
@@ -10,6 +14,9 @@ type Props = {
   todayYmd: string;
   todaySession: PlannedSession | null;
   recentCompletion: TrailCompletion | null;
+  // Trip-day forecast, when we could resolve destination coords. Absent
+  // on post-trip phase and for unknown destinations.
+  forecast: DailyForecast | null;
 };
 
 const PHASE_STYLE: Record<TripPhase, string> = {
@@ -43,6 +50,7 @@ export function TripWeekHero({
   todayYmd,
   todaySession,
   recentCompletion,
+  forecast,
 }: Props) {
   const countdownLabel =
     daysUntilTrip > 1
@@ -87,6 +95,10 @@ export function TripWeekHero({
             </div>
           )}
         </div>
+
+        {forecast && phaseKind !== "post_trip" && (
+          <WeatherLine forecast={forecast} phase={phaseKind} />
+        )}
 
         <PhaseGuidance kind={phaseKind} trail={trail} />
 
@@ -306,4 +318,82 @@ function formatMinutes(m: number): string {
   const mm = m % 60;
   if (h === 0) return `${mm}m`;
   return mm === 0 ? `${h}h` : `${h}h ${mm}m`;
+}
+
+// Actionable weather one-liner — same triggers as the trip-week emails
+// (kept in sync intentionally: same logic, same thresholds, so users see
+// the same advice via email and in-app).
+function weatherAdvice(f: DailyForecast): string {
+  const bits: string[] = [];
+  if (f.weatherCode >= 95) {
+    bits.push("Thunderstorms possible — off exposed terrain by 1pm.");
+  }
+  if (f.precipProbabilityPct >= 60) {
+    bits.push("Wet day — waterproof layers, extra grip on rocks.");
+  } else if (f.precipProbabilityPct >= 40) {
+    bits.push("Chance of rain — pack a shell.");
+  }
+  if (f.windMaxMph >= 30) {
+    bits.push("High wind — helmet or hood on ridges; watch for cornices.");
+  } else if (f.windMaxMph >= 20) {
+    bits.push("Windy — layer up on exposed sections.");
+  }
+  if (f.tempMaxF <= 40) {
+    bits.push("Cold — layer up + protect extremities early.");
+  } else if (f.tempMaxF >= 85) {
+    bits.push("Hot — front-load water, start early.");
+  }
+  return bits.join(" ");
+}
+
+function WeatherLine({
+  forecast,
+  phase,
+}: {
+  forecast: DailyForecast;
+  phase: TripPhase;
+}) {
+  const { glyph, label } = interpretWeatherCode(forecast.weatherCode);
+  const advice = weatherAdvice(forecast);
+  const header =
+    phase === "trip_day" ? "Conditions today" : "Trip-day outlook";
+  const rainSignal = forecast.precipProbabilityPct >= 40;
+  const windSignal = forecast.windMaxMph >= 20;
+  return (
+    <div className="rounded-md border border-blue-500/30 bg-background/40 px-3 py-2 space-y-1">
+      <div className="text-[10px] font-mono uppercase tracking-widest text-blue-300">
+        {header} · {forecast.date}
+      </div>
+      <div className="text-sm flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <span className="text-blue-300">
+          {glyph} {label}
+        </span>
+        <span className="text-muted">·</span>
+        <span className="tabular-nums">
+          {forecast.tempMinF}–{forecast.tempMaxF}°F
+        </span>
+        <span className="text-muted">·</span>
+        <span
+          className={
+            rainSignal ? "text-warn tabular-nums" : "text-muted tabular-nums"
+          }
+        >
+          {forecast.precipProbabilityPct}% precip
+          {forecast.precipInches >= 0.1 &&
+            ` (${forecast.precipInches.toFixed(2)}″)`}
+        </span>
+        <span className="text-muted">·</span>
+        <span
+          className={
+            windSignal ? "text-warn tabular-nums" : "text-muted tabular-nums"
+          }
+        >
+          {forecast.windMaxMph} mph wind
+        </span>
+      </div>
+      {advice && (
+        <p className="text-xs text-warn leading-relaxed">{advice}</p>
+      )}
+    </div>
+  );
 }
