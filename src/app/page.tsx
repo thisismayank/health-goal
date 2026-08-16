@@ -5,6 +5,7 @@ import { QuestPendingHero } from "@/components/home/quest-pending-hero";
 import { QuestDoneHero } from "@/components/home/quest-done-hero";
 import { RecapHero } from "@/components/home/recap-hero";
 import { NoSessionHero } from "@/components/home/no-session-hero";
+import { TripWeekHero } from "@/components/home/trip-week-hero";
 import { StatsStrip } from "@/components/home/stats-strip";
 import { SummitHero } from "@/components/summit-hero";
 import { UpcomingTrails } from "@/components/upcoming-trails";
@@ -111,6 +112,17 @@ async function Hero({
   delta: CompletionDelta | null;
 }) {
   switch (state.kind) {
+    case "trip_week":
+      return (
+        <TripWeekHero
+          trail={state.trail}
+          daysUntilTrip={state.daysUntilTrip}
+          phaseKind={state.phaseKind}
+          todayYmd={state.today}
+          todaySession={state.todaySession}
+          recentCompletion={state.recentCompletion}
+        />
+      );
     case "session_pending":
       return (
         <QuestPendingHero session={state.session} userId={state.user.id} />
