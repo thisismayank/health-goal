@@ -6,8 +6,8 @@ import { usePathname } from "next/navigation";
 const tabs = [
   { href: "/", label: "Today" },
   { href: "/week", label: "Week" },
+  { href: "/trails", label: "Trails" },
   { href: "/character", label: "Character" },
-  { href: "/history", label: "History" },
   { href: "/body", label: "Body" },
 ];
 
@@ -68,8 +68,8 @@ export function Nav({ chip }: { chip?: React.ReactNode }) {
             <Link
               key={t.href}
               href={t.href}
-              className={`flex flex-col items-center justify-center py-3 text-xs ${
-                pathname === t.href ? "text-accent" : "text-muted"
+              className={`flex flex-col items-center justify-center py-3 text-[11px] ${
+                pathname === t.href || pathname.startsWith(t.href + "/") ? "text-accent" : "text-muted"
               }`}
             >
               {t.label}

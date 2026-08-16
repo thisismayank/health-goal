@@ -8,7 +8,9 @@ import {
   plannedSession,
   stravaAccount,
   strengthExercise,
+  trail,
   workout,
+  type TrailTerrainGrade,
 } from "@/db/schema";
 import { getCurrentUser } from "./data";
 import {
@@ -226,6 +228,51 @@ export async function syncStravaNow() {
   const created = results.filter((r) => r.action === "created").length;
   const updated = results.filter((r) => r.action === "updated").length;
   return { total: results.length, created, updated };
+}
+
+export type CreateTrailInput = {
+  name: string;
+  url?: string;
+  distanceKm: number;
+  elevationGainFt: number;
+  maxAltitudeFt: number;
+  typicalHours: number;
+  packWeightLb?: number;
+  terrainGrade: TrailTerrainGrade;
+  targetDate?: string;
+  notes?: string;
+};
+
+export async function createTrail(input: CreateTrailInput): Promise<{ id: number }> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const [row] = await db
+    .insert(trail)
+    .values({
+      userId: user.id,
+      name: input.name,
+      url: input.url ?? null,
+      distanceKm: input.distanceKm,
+      elevationGainFt: input.elevationGainFt,
+      maxAltitudeFt: input.maxAltitudeFt,
+      typicalHours: input.typicalHours,
+      packWeightLb: input.packWeightLb ?? 0,
+      terrainGrade: input.terrainGrade,
+      targetDate: input.targetDate ?? null,
+      notes: input.notes ?? null,
+    })
+    .returning({ id: trail.id });
+  revalidatePath("/trails");
+  return { id: row.id };
+}
+
+export async function deleteTrail(trailId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  await db
+    .delete(trail)
+    .where(and(eq(trail.id, trailId), eq(trail.userId, user.id)));
+  revalidatePath("/trails");
 }
 
 export async function syncIntervalsNow() {

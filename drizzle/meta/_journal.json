@@ -36,6 +36,13 @@
       "when": 1786835790560,
       "tag": "0004_overrated_silverclaw",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786847778376,
+      "tag": "0005_clear_power_man",
+      "breakpoints": true
     }
   ]
 }

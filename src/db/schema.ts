@@ -247,6 +247,38 @@ export const stravaWebhookSubscription = pgTable("strava_webhook_subscription", 
     .defaultNow(),
 });
 
+export const TRAIL_TERRAIN_GRADES = [
+  "easy",
+  "moderate",
+  "hard",
+  "technical",
+  "mountaineering",
+] as const;
+
+export type TrailTerrainGrade = (typeof TRAIL_TERRAIN_GRADES)[number];
+
+export const trail = pgTable("trail", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => userProfile.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  url: text("url"),
+  distanceKm: real("distance_km").notNull(),
+  elevationGainFt: integer("elevation_gain_ft").notNull(),
+  maxAltitudeFt: integer("max_altitude_ft").notNull(),
+  typicalHours: real("typical_hours").notNull(),
+  packWeightLb: real("pack_weight_lb").notNull().default(0),
+  terrainGrade: text("terrain_grade", { enum: TRAIL_TERRAIN_GRADES })
+    .notNull()
+    .default("moderate"),
+  targetDate: text("target_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const coachNarrative = pgTable(
   "coach_narrative",
   {
@@ -279,3 +311,4 @@ export type WorkoutSource = typeof workoutSource.$inferSelect;
 export type StravaAccount = typeof stravaAccount.$inferSelect;
 export type StravaWebhookSubscription = typeof stravaWebhookSubscription.$inferSelect;
 export type CoachNarrative = typeof coachNarrative.$inferSelect;
+export type Trail = typeof trail.$inferSelect;
