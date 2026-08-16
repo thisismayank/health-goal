@@ -51,10 +51,21 @@ export async function loadFitnessSnapshot(
   userId: number,
 ): Promise<FitnessSnapshot> {
   const now = new Date();
+  // Longest session: 60-day window (freshness — capabilities decay after 8 wks off).
+  // Weekly aerobic: 28-day window (4-wk rolling avg — reflects CURRENT training rate,
+  // not diluted by weeks you weren't using the app).
+  // Vertical/pack: 90-day window (slower decay).
+  const windowStart28 = new Date(now.getTime() - 28 * 86_400_000);
   const windowStart60 = new Date(now.getTime() - 60 * 86_400_000);
   const windowStart90 = new Date(now.getTime() - 90 * 86_400_000);
 
-  const [workouts60, workouts90] = await Promise.all([
+  const [workouts28, workouts60, workouts90] = await Promise.all([
+    db
+      .select()
+      .from(workout)
+      .where(
+        and(eq(workout.userId, userId), gte(workout.startTime, windowStart28)),
+      ),
     db
       .select()
       .from(workout)
@@ -76,10 +87,10 @@ export async function loadFitnessSnapshot(
     ),
   );
 
-  const aerobicMin60 = workouts60
+  const aerobicMin28 = workouts28
     .filter((w) => AEROBIC_CATS.includes(w.type))
     .reduce((s, w) => s + (w.durationSeconds ?? 0) / 60, 0);
-  const weeklyAerobic = Math.round(aerobicMin60 / (60 / 7));
+  const weeklyAerobic = Math.round(aerobicMin28 / 4);
 
   const perWorkoutVertFt = workouts90.map((w) =>
     metersToFeet(estimatedVerticalMeters(w).meters),
@@ -183,6 +194,37 @@ function projectedCapacity(
   return current * (1 + weeklyGrowthPct * w);
 }
 
+// Classify the endurance profile of a trail. typicalHours in the library
+// represents the LONGEST single day for multi-day objectives (Kilimanjaro
+// summit day, Aconcagua summit push, etc.), so we don't need multi-day math
+// — but the athlete's prep target differs: single-day peak effort vs.
+// sustained weekly volume for back-to-back trek days.
+type TrailKind = "day_hike" | "long_day" | "summit_push" | "multi_day";
+
+function classifyTrail(trail: Trail): TrailKind {
+  const notesLower = (trail.notes ?? "").toLowerCase();
+  const isMultiDay =
+    /\b(day trek|day expedition|thru-?hike|circumnavigation|expedition)\b/.test(
+      notesLower,
+    ) || /(6|7|8|9|10|11|12|13|14|15|18|20|21|24)[- ]day/.test(notesLower);
+  if (isMultiDay) return "multi_day";
+  if (trail.typicalHours >= 10) return "summit_push";
+  if (trail.typicalHours >= 5) return "long_day";
+  return "day_hike";
+}
+
+// Per-kind readiness targets (before terrain strictness):
+// - longestPct: your longest recent session should reach this % of trail's
+//   typicalHours
+// - weeklyMult: weekly aerobic base should reach this multiple of trail
+//   duration (in minutes)
+const ENDURANCE_RULE: Record<TrailKind, { longestPct: number; weeklyMult: number; label: string }> = {
+  day_hike:    { longestPct: 0.40, weeklyMult: 0.75, label: "day hike" },
+  long_day:    { longestPct: 0.35, weeklyMult: 1.00, label: "long day" },
+  summit_push: { longestPct: 0.30, weeklyMult: 1.20, label: "summit push" },
+  multi_day:   { longestPct: 0.30, weeklyMult: 1.50, label: "multi-day trek" },
+};
+
 function analyzeEndurance(
   trail: Trail,
   snap: FitnessSnapshot,
@@ -193,12 +235,11 @@ function analyzeEndurance(
   const longest = snap.longestRecentSessionMin;
   const weekly = snap.weeklyAerobicMinutes;
 
-  // Multi-signal endurance readiness. Steve House / Uphill Athlete guidance:
-  // - You do NOT need to pre-record a session equal to the trail duration.
-  // - Longest recent session ~50% of trail + weekly aerobic base ≥ trail
-  //   duration ≈ ready to extend on the day.
-  // - Terrain grade adjusts thresholds (technical/mountaineering strict,
-  //   easy relaxed).
+  const kind = classifyTrail(trail);
+  const rule = ENDURANCE_RULE[kind];
+
+  // Terrain strictness layers on top: technical/mountaineering demands
+  // more, easy terrain forgives.
   const strictness =
     trail.terrainGrade === "mountaineering"
       ? 1.15
@@ -208,11 +249,11 @@ function analyzeEndurance(
           ? 0.85
           : 1.0;
 
-  const longestReadyMin = neededMin * 0.5 * strictness; // e.g. 105 min for a 210-min trail
-  const longestSoloReadyMin = neededMin * 0.65 * strictness; // strong solo signal
-  const weeklyReadyMin = neededMin * 1.0 * strictness; // e.g. 210 min/wk for 210-min trail
-  const longestClosableMin = neededMin * 0.3 * strictness;
-  const weeklyClosableMin = neededMin * 0.7 * strictness;
+  const longestReadyMin = neededMin * rule.longestPct * strictness;
+  const longestSoloReadyMin = longestReadyMin * 1.3; // ~30% higher solo bar
+  const weeklyReadyMin = neededMin * rule.weeklyMult * strictness;
+  const longestClosableMin = longestReadyMin * 0.6;
+  const weeklyClosableMin = weeklyReadyMin * 0.7;
 
   // Projected fitness given time to build (used only when hasDate is true
   // and there's meaningful time — otherwise projections should not carry
@@ -248,28 +289,40 @@ function analyzeEndurance(
   const weeklyRatio = weekly / Math.max(1, weeklyReadyMin);
   const combinedRatio = Math.min(1, (longestRatio + weeklyRatio) / 2);
 
+  const kindContext =
+    kind === "multi_day"
+      ? "This is a multi-day objective — sustained weekly volume matters more than any single long session; typicalHours here is the longest single day."
+      : kind === "summit_push"
+        ? "This is a summit push — a big single-day effort with alpine start. Aerobic base + mental resilience carry you through."
+        : kind === "long_day"
+          ? "This is a long single-day effort — break-friendly, base fitness carries you."
+          : "This is a shorter day hike — continuous effort but manageable duration.";
+
   const noteReady =
-    `Your longest recent session (${longest} min) is ~${Math.round((longest / neededMin) * 100)}% of trail duration; ` +
-    `weekly aerobic base is ${weekly} min/wk. Base fitness supports extending to the trail duration on the day.`;
+    `Longest recent session (${longest} min) covers ~${Math.round((longest / neededMin) * 100)}% of trail duration; weekly aerobic base is ${weekly} min/week (4-wk avg). Base fitness supports the ${rule.label} profile.`;
   const noteClosable =
-    `Longest recent session ${longest} min · weekly aerobic ${weekly} min/wk. Target: longest ~${Math.round(longestReadyMin)} min + weekly ~${Math.round(weeklyReadyMin)} min. ` +
-    (hasDate ? `Buildable in ${weeksAvail.toFixed(1)} weeks.` : "Buildable with a focused block.");
+    `Current: longest ${longest} min, weekly aerobic ${weekly} min/week (4-wk avg). Target for a ${rule.label}: longest ~${Math.round(longestReadyMin)} min + weekly ~${Math.round(weeklyReadyMin)} min. ` +
+    (hasDate
+      ? `Buildable in ${weeksAvail.toFixed(1)} weeks.`
+      : "Buildable with a focused block.");
   const noteStretch =
-    `Longest ${longest} min + weekly ${weekly} min/wk are both below target (need ~${Math.round(longestReadyMin)} min longest, ~${Math.round(weeklyReadyMin)} min/wk). ` +
+    `Longest ${longest} min + weekly ${weekly} min/week (4-wk avg) are both below the ${rule.label} target (~${Math.round(longestReadyMin)} min longest, ~${Math.round(weeklyReadyMin)} min/week). ` +
     (hasDate
       ? `${weeksAvail.toFixed(1)} weeks is tight — expect real fatigue.`
-      : "Expect fatigue late in the day without a proper build.");
+      : "Expect fatigue without a proper build.");
   const noteGap =
-    `Aerobic gap is large: longest ${longest} min and weekly ${weekly} min/wk are well below the ~${Math.round(longestReadyMin)} min / ~${Math.round(weeklyReadyMin)} min-per-week base needed.` +
-    (hasDate ? " Time available not enough to close it." : " Requires a substantial training block.");
+    `Aerobic gap is large for a ${rule.label}: longest ${longest} min and weekly ${weekly} min/week are well below the ~${Math.round(longestReadyMin)} min / ~${Math.round(weeklyReadyMin)} min-per-week base needed.` +
+    (hasDate
+      ? " Time available not enough to close it."
+      : " Requires a substantial training block.");
 
   const notes: Record<DimensionStatus, string> = {
-    ready: noteReady,
-    closable: noteClosable,
-    stretch: noteStretch,
-    not_in_timeframe: noteGap,
-    concern: noteReady,
-    not_applicable: noteReady,
+    ready: `${kindContext} ${noteReady}`,
+    closable: `${kindContext} ${noteClosable}`,
+    stretch: `${kindContext} ${noteStretch}`,
+    not_in_timeframe: `${kindContext} ${noteGap}`,
+    concern: `${kindContext} ${noteReady}`,
+    not_applicable: `${kindContext} ${noteReady}`,
   };
 
   return {
@@ -277,8 +330,8 @@ function analyzeEndurance(
     label: "Endurance",
     status,
     ratio: combinedRatio,
-    current: `${longest} min longest · ${weekly} min/wk`,
-    required: `~${Math.round(longestReadyMin)} min longest · ~${Math.round(weeklyReadyMin)} min/wk`,
+    current: `${longest} min longest · ${weekly} min/week (4-wk avg)`,
+    required: `~${Math.round(longestReadyMin)} min longest · ~${Math.round(weeklyReadyMin)} min/week`,
     note: notes[status],
   };
 }
