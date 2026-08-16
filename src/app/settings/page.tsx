@@ -51,6 +51,8 @@ export default async function SettingsPage({
     .where(eq(notificationPreference.userId, user.id));
   const tripWeekEnabled =
     prefRows.find((p) => p.kind === "trip_week")?.emailEnabled ?? true;
+  const weekendNudgeEnabled =
+    prefRows.find((p) => p.kind === "weekend_nudge")?.emailEnabled ?? true;
 
   return (
     <div className="space-y-6">
@@ -207,6 +209,12 @@ export default async function SettingsPage({
             label="Trip-week countdown"
             description="1-week, 3-day, 1-day, day-of, and post-trip emails for saved trails with a target date."
             initialEnabled={tripWeekEnabled}
+          />
+          <NotificationToggle
+            kind="weekend_nudge"
+            label="Weekend nudge"
+            description="Thursday email with 3 hikes ready for your fitness — even when nothing's planned. Weekly."
+            initialEnabled={weekendNudgeEnabled}
           />
         </div>
       </section>

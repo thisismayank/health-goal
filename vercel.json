@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/trip-notifications",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/weekend-nudges",
+      "schedule": "0 15 * * 4"
     }
   ]
 }
