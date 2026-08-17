@@ -9,9 +9,15 @@
  * adjustments) that the LLM can then narrate.
  */
 
-import { and, desc, eq, gte, notInArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, notInArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { dailyMetric, workout, type Trail } from "@/db/schema";
+import {
+  dailyMetric,
+  strengthExercise,
+  userProfile,
+  workout,
+  type Trail,
+} from "@/db/schema";
 import {
   hrvBaseline,
   rhrBaseline,
@@ -28,12 +34,27 @@ export type FitnessSnapshot = {
   weeklyAerobicMinutes: number;
   maxSingleSessionVertFt: number;
   cumulative90dVertFt: number;
+  // Kept for display / coach context / prep-plan copy. NOT used for
+  // pack readiness scoring anymore — see squatEst1RmKg + loadedHikes8w
+  // for the derived pack signals.
   maxPackLb: number;
   maxAltitudeReachedFt: number | null; // from prior assessed trails; null if unknown
   rhr: Baseline;
   hrv: Baseline;
   sleepAvgHours: number | null;
   vo2Max: number | null;
+  // Derived pack-readiness signals. Replaces the old
+  // "user's max pack in the window" input, which required manual
+  // pack-weight entry on every hike and produced garbage numbers.
+  //   - Capacity: best est. squat 1RM (kg) in the 90d window. Proxy
+  //     for load-bearing lower-body strength.
+  //   - Adaptation: count of completed LOADED_HIKE sessions in the
+  //     last 8 weeks. Whether the user's actually training with a
+  //     pack on their back, regardless of what number they typed.
+  //   - Bodyweight: to normalize squat vs BW ratio.
+  squatEst1RmKg: number | null;
+  loadedHikes8w: number;
+  bodyweightKg: number | null;
 };
 
 const AEROBIC_CATS = [
@@ -120,6 +141,50 @@ export async function loadFitnessSnapshot(
   );
   const maxPackLb = +(maxPackKg * 2.205).toFixed(1);
 
+  // Derived pack signals — see analyzePack for how they combine.
+  // Bodyweight comes from the profile row; used to normalize the
+  // squat-1RM capacity signal. Nullable when the user hasn't set it.
+  const windowStart56 = new Date(now.getTime() - 56 * 86_400_000);
+  const loadedHikes8w = workouts28
+    .concat(
+      workouts60.filter(
+        (w) =>
+          w.startTime >= windowStart56 &&
+          w.startTime < new Date(now.getTime() - 28 * 86_400_000),
+      ),
+    )
+    .filter((w) => w.type === "LOADED_HIKE").length;
+
+  // Estimated squat 1RM from all logged squat sets in the 90d window,
+  // using the Epley formula (weight × (1 + reps/30)) and taking the
+  // best. Match on any exercise name containing "squat" so we catch
+  // "Barbell squat", "Back squat", "Front squat" etc.
+  const workoutIds90 = workouts90.map((w) => w.id);
+  let squatEst1RmKg: number | null = null;
+  if (workoutIds90.length > 0) {
+    const sets = await db
+      .select({
+        exerciseName: strengthExercise.exerciseName,
+        reps: strengthExercise.reps,
+        weightKg: strengthExercise.weightKg,
+      })
+      .from(strengthExercise)
+      .where(inArray(strengthExercise.workoutId, workoutIds90));
+    for (const s of sets) {
+      if (!/squat/i.test(s.exerciseName)) continue;
+      if (s.reps == null || s.weightKg == null || s.weightKg <= 0) continue;
+      const est = s.weightKg * (1 + s.reps / 30);
+      if (squatEst1RmKg == null || est > squatEst1RmKg) squatEst1RmKg = est;
+    }
+  }
+
+  const [profile] = await db
+    .select({ currentWeightKg: userProfile.currentWeightKg })
+    .from(userProfile)
+    .where(eq(userProfile.id, userId))
+    .limit(1);
+  const bodyweightKg = profile?.currentWeightKg ?? null;
+
   const today = ymd(now);
   const [rhr, hrv, sleep] = await Promise.all([
     rhrBaseline(userId, today),
@@ -146,8 +211,12 @@ export async function loadFitnessSnapshot(
     hrv,
     sleepAvgHours: sleep.baseline != null ? +(sleep.baseline / 60).toFixed(1) : null,
     vo2Max,
+    squatEst1RmKg,
+    loadedHikes8w,
+    bodyweightKg,
   };
 }
+
 
 // -------- Assessment --------
 
@@ -193,7 +262,10 @@ export type TrailAssessment = {
 
 const WEEKLY_ENDURANCE_GROWTH = 0.1;
 const WEEKLY_VERTICAL_GROWTH = 0.15;
-const PACK_GROWTH_LB_PER_WEEK = 2;
+// PACK_GROWTH_LB_PER_WEEK was used by the pre-2026-08 pack analyzer
+// that projected linear pack-weight growth off manually-entered
+// numbers. Replaced by the strength+adaptation model in analyzePack;
+// see comments there.
 
 function daysBetween(fromYmd: string, toYmd: string): number {
   const [fy, fm, fd] = fromYmd.split("-").map(Number);
@@ -430,7 +502,6 @@ function analyzePack(
   kind: TrailKind,
 ): DimensionAnalysis {
   const needed = trail.packWeightLb;
-  const cur = snap.maxPackLb;
 
   if (needed <= 0) {
     return {
@@ -444,104 +515,134 @@ function analyzePack(
     };
   }
 
-  // For day hikes, pack is a light day pack — full match matters.
-  // Day-hike short-circuit: a light day pack (≤10 lb — water bottle,
-  // snacks, a jacket) requires no benchmark training. Anyone reasonably
-  // mobile can carry that. Skip the ratio math and mark ready so we
-  // don't wrongly flag people who've never logged a "pack workout".
+  // Day-hike short-circuit: a light day pack (≤10 lb — water, snacks,
+  // a layer) is trivial. No benchmark required.
   if (kind === "day_hike" && needed <= 10) {
     return {
       key: "pack",
       label: "Pack",
       status: "ready",
       ratio: 1,
-      current: cur > 0 ? `${cur} lb (recent max)` : "no pack logged",
+      current: "day pack",
       required: `${needed} lb`,
-      note: "Day pack — water, snacks, a light layer. Trivial load for most people, no prep required.",
+      note: "Trivial load for most people. No prep required.",
     };
   }
 
-  // Zero-baseline guard: if the user has literally never logged a
-  // pack AND the trail wants a meaningful load (>15 lb), we can't
-  // just let the projection curve fake it — Wonderland used to show
-  // pack=closable at ratio 0 because the projection assumed
-  // progressive loading that hadn't started.
+  // For anything heavier we derive pack readiness from two signals:
+  //   1. Capacity: est. squat 1RM as fraction of bodyweight.
+  //   2. Adaptation: count of prescribed LOADED_HIKE sessions
+  //      completed in the last 8 weeks.
   //
-  // But: the original guard was time-blind. It forced 'postpone' for
-  // any 30lb+ trail even when the user has 10 months to build up. A
-  // conservative loading progression (2 lb/wk) covers 0 → 35 lb in
-  // ~18 weeks, so any weeksAvail comfortably above that should let
-  // the projection speak. We only force the categorical when there
-  // isn't enough runway for real loading.
-  //
-  // Threshold: 20 weeks. Below that, the guard stands (short-notice
-  // 30lb+ objective with no loading history IS disqualifying — you
-  // won't safely close it in 3 months of ramp). Above that, fall
-  // through to the projection.
-  const ZERO_BASELINE_MIN_WEEKS = 20;
-  const shortNotice = weeksAvail < ZERO_BASELINE_MIN_WEEKS;
-  if (cur === 0 && needed > 15 && shortNotice) {
-    const status: DimensionStatus =
-      needed >= 30 ? "not_in_timeframe" : "stretch";
+  // Rationale: pack-weight-typed-into-a-form (the old signal) required
+  // manual entry on every completion, wasn't captured on Strava
+  // imports, and conflated "biggest weight ever carried once" with
+  // "can carry it for 10 hours." Squat strength maps to real
+  // load-bearing capacity; loaded-hike frequency maps to whether the
+  // user's actually adapting to weight on the trail. Both are things
+  // we already know from data we're collecting anyway.
+  const { squatEst1RmKg, bodyweightKg, loadedHikes8w } = snap;
+
+  const capacityRatio = capacityFromSquat(squatEst1RmKg, bodyweightKg);
+  const adaptationRatio = Math.min(1, loadedHikes8w / 4);
+  const capacityKnown = capacityRatio != null;
+  const adaptationKnown = loadedHikes8w > 0 || squatEst1RmKg != null;
+
+  // Nothing to score against: neither strength nor loaded-hike data.
+  // Surface UNKNOWN so the coach can prompt the user to log squats
+  // or start prescribed loaded hikes rather than pretending we have
+  // a real read.
+  if (!capacityKnown && !adaptationKnown) {
     return {
       key: "pack",
       label: "Pack",
-      status,
+      status: "unknown",
       ratio: 0,
-      current: "no pack logged",
+      current: "no strength or loaded-hike data",
       required: `${needed} lb`,
-      note:
-        status === "not_in_timeframe"
-          ? `${needed} lb pack with zero loading history and only ${Math.round(weeksAvail)} weeks — you'd need progressive loading you don't have time for. Start now, or reduce pack weight.`
-          : `${needed} lb pack is a real load. You've never logged carrying weight — expect the pack to be the limiting factor, not the trail.`,
+      note: `${needed} lb pack — log squats or complete a few prescribed loaded hikes so we can tell you if you're ready. Manual "pack weight" entries are ignored (they were the metric before; too noisy).`,
     };
   }
 
-  // For multi-day treks, pack weight is often smaller (porters carry the
-  // bulk on Kili/EBC) or spread across days. Slightly relaxed.
-  // For summit pushes / expeditions, the number IS what you carry.
-  const readyPct =
-    kind === "day_hike"
-      ? 0.8
-      : kind === "long_day"
-        ? 0.8
-        : kind === "summit_push"
-          ? 0.7
-          : /* multi_day */ 0.65;
+  // Weight the two signals. Capacity 60%, adaptation 40% — a strong
+  // squatter who hasn't done loaded hikes is more ready than a
+  // weekend-warrior who's done 4 loaded hikes but can't squat their
+  // bodyweight. When one is missing, the other carries the score.
+  let combined: number;
+  if (capacityKnown && adaptationKnown) {
+    combined = 0.6 * (capacityRatio ?? 0) + 0.4 * adaptationRatio;
+  } else if (capacityKnown) {
+    combined = capacityRatio ?? 0;
+  } else {
+    combined = adaptationRatio;
+  }
 
-  const projected = cur + PACK_GROWTH_LB_PER_WEEK * Math.max(0, weeksAvail);
-  const ratio = cur / Math.max(0.01, needed);
-  const projRatio = projected / needed;
+  // Bar rises with pack size. A 15 lb day pack for a long day is
+  // easy to be ready for; a 40 lb Denali kit isn't.
+  const barByNeed =
+    needed <= 20 ? 0.4 : needed <= 30 ? 0.65 : /* 30+ */ 0.85;
+
+  // Time-aware upgrade path: even if combined score is short of the
+  // bar, if the user has plenty of weeks to build (both capacity via
+  // strength and adaptation via loaded hikes), classify as closable
+  // rather than a hard gap.
+  const closableWithRunway = weeksAvail >= 20 && combined >= barByNeed * 0.5;
 
   let status: DimensionStatus;
-  if (ratio >= readyPct) status = "ready";
-  else if (projRatio >= readyPct) status = "closable";
-  else if (projRatio >= readyPct * 0.6) status = "stretch";
+  if (combined >= barByNeed) status = "ready";
+  else if (closableWithRunway) status = "closable";
+  else if (combined >= barByNeed * 0.5) status = "stretch";
   else status = "not_in_timeframe";
+
+  const capacityLabel =
+    squatEst1RmKg != null && bodyweightKg != null
+      ? `squat ≈${Math.round(squatEst1RmKg)}kg (${(squatEst1RmKg / bodyweightKg).toFixed(2)}× BW)`
+      : squatEst1RmKg != null
+        ? `squat ≈${Math.round(squatEst1RmKg)}kg (bodyweight not set)`
+        : "no squat data";
+  const adaptationLabel = `${loadedHikes8w} loaded hike${loadedHikes8w === 1 ? "" : "s"} in 8wk`;
+  const current = `${capacityLabel} · ${adaptationLabel}`;
 
   const kindNote =
     kind === "multi_day"
       ? "Multi-day: pack matters for sustained carry, though many treks (Kili/EBC) use porters."
       : kind === "summit_push"
         ? "Summit push: this is what you carry on the day, no porters."
-        : "Day pack — water, layers, food.";
+        : "Loaded carry.";
 
   return {
     key: "pack",
     label: "Pack",
     status,
-    ratio: Math.min(1, ratio),
-    current: cur > 0 ? `${cur} lb (recent max)` : "no pack logged",
+    ratio: Math.min(1, combined),
+    current,
     required: `${needed} lb`,
     note:
       status === "ready"
-        ? `${kindNote} You've handled this recently.`
+        ? `${kindNote} Strength + loaded-hike adaptation look sufficient.`
         : status === "closable"
-          ? `${kindNote} Progressive loaded hikes: +${PACK_GROWTH_LB_PER_WEEK} lb/wk to reach ${needed} lb.`
+          ? `${kindNote} You have ${Math.round(weeksAvail)}wk. Get to 2× bodyweight on squat if you're under it; add a weekly loaded hike ramping to ${needed} lb.`
           : status === "stretch"
-            ? `${kindNote} Pack tolerance thin — consider going lighter on the day.`
-            : `${kindNote} Pack weight ambitious given your recent loading. Reduce or postpone.`,
+            ? `${kindNote} Below the bar for ${needed} lb. Expect the pack to be your limiter — go lighter on the day or accept slower pace.`
+            : `${kindNote} Pack demand outpaces current strength + loaded-hike volume. Reduce weight or extend timeline.`,
   };
+}
+
+/**
+ * Capacity ratio from squat 1RM. Full credit at 1.5× bodyweight
+ * (a solid recreational lifter's back-squat, comfortably able to
+ * carry expedition loads). No bodyweight → assume 80 kg reference
+ * (western adult male-ish average) rather than refuse to compute.
+ * Returns null when squat data itself is missing.
+ */
+function capacityFromSquat(
+  squat1RmKg: number | null,
+  bodyweightKg: number | null,
+): number | null {
+  if (squat1RmKg == null || squat1RmKg <= 0) return null;
+  const bw = bodyweightKg && bodyweightKg > 0 ? bodyweightKg : 80;
+  const ratio = squat1RmKg / bw / 1.5;
+  return Math.max(0, Math.min(1, ratio));
 }
 
 function analyzeAltitude(
