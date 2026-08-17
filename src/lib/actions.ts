@@ -269,7 +269,10 @@ export async function createTrailFromPreset(slug: string, targetDate?: string): 
   const user = await getCurrentUser();
   if (!user) throw new Error("No user found");
   const { findTrailBySlug } = await import("./basecamp/trail-library");
-  const preset = findTrailBySlug(slug);
+  const { getFullTrailLibrary } = await import("./basecamp/trail-coords");
+  const preset =
+    findTrailBySlug(slug) ??
+    getFullTrailLibrary().find((t) => t.slug === slug);
   if (!preset) throw new Error(`Preset not found: ${slug}`);
 
   // Idempotent: if the user already saved this preset, return that
@@ -920,13 +923,17 @@ export async function saveItineraryTrails(input: {
   if (!user) throw new Error("No user found");
   if (!input.entries.length) return { savedIds: [] };
   const { findTrailBySlug } = await import("./basecamp/trail-library");
+  const { getFullTrailLibrary } = await import("./basecamp/trail-coords");
+  const fullLibrary = getFullTrailLibrary();
 
   const savedIds: number[] = [];
   for (const entry of input.entries) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.targetDate)) {
       throw new Error(`Invalid date: ${entry.targetDate}`);
     }
-    const preset = findTrailBySlug(entry.presetSlug);
+    const preset =
+      findTrailBySlug(entry.presetSlug) ??
+      fullLibrary.find((t) => t.slug === entry.presetSlug);
     if (!preset) continue;
 
     const [existing] = await db

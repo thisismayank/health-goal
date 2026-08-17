@@ -6,6 +6,7 @@ import { trail, trailCompletion } from "@/db/schema";
 import { requireOnboardedUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
 import { findTrailBySlug } from "@/lib/basecamp/trail-library";
+import { getFullTrailLibrary } from "@/lib/basecamp/trail-coords";
 import { presetToVirtualTrail } from "@/lib/basecamp/preset-trail";
 import {
   assessTrail,
@@ -51,7 +52,12 @@ export default async function PresetDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const preset = findTrailBySlug(slug);
+  // findTrailBySlug reads only the deduped TRAIL_LIBRARY. Extra
+  // presets defined in trail-coords.ts (Northeast day-trip trailheads,
+  // etc.) only surface via getFullTrailLibrary(), so fall back there.
+  const preset =
+    findTrailBySlug(slug) ??
+    getFullTrailLibrary().find((t) => t.slug === slug);
   if (!preset) notFound();
 
   const user = await requireOnboardedUser();
