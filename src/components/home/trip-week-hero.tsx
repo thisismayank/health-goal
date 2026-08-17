@@ -6,6 +6,12 @@ import {
   interpretWeatherCode,
   type DailyForecast,
 } from "@/lib/weather/open-meteo";
+import {
+  formatFt,
+  formatKm,
+  formatPackLb,
+  type Units,
+} from "@/lib/units";
 
 type Props = {
   trail: Trail;
@@ -17,6 +23,7 @@ type Props = {
   // Trip-day forecast, when we could resolve destination coords. Absent
   // on post-trip phase and for unknown destinations.
   forecast: DailyForecast | null;
+  units: Units;
 };
 
 const PHASE_STYLE: Record<TripPhase, string> = {
@@ -51,6 +58,7 @@ export function TripWeekHero({
   todaySession,
   recentCompletion,
   forecast,
+  units,
 }: Props) {
   const countdownLabel =
     daysUntilTrip > 1
@@ -79,9 +87,9 @@ export function TripWeekHero({
               {trail.name}
             </h2>
             <div className="text-xs text-muted mt-0.5">
-              {trail.distanceKm} km · +{trail.elevationGainFt.toLocaleString()} ft
-              · max {trail.maxAltitudeFt.toLocaleString()} ft · ~
-              {trail.typicalHours}h
+              {formatKm(trail.distanceKm, units)} · +
+              {formatFt(trail.elevationGainFt, units)} · max{" "}
+              {formatFt(trail.maxAltitudeFt, units)} · ~{trail.typicalHours}h
             </div>
           </div>
           {daysUntilTrip > 0 && (
@@ -100,7 +108,7 @@ export function TripWeekHero({
           <WeatherLine forecast={forecast} phase={phaseKind} />
         )}
 
-        <PhaseGuidance kind={phaseKind} trail={trail} />
+        <PhaseGuidance kind={phaseKind} trail={trail} units={units} />
 
         {phaseKind === "trip_day" && recentCompletion == null && (
           <div className="pt-3 border-t border-accent/30">
@@ -205,9 +213,11 @@ export function TripWeekHero({
 function PhaseGuidance({
   kind,
   trail,
+  units,
 }: {
   kind: TripPhase;
   trail: Trail;
+  units: Units;
 }) {
   if (kind === "final_prep") {
     return (
@@ -234,8 +244,9 @@ function PhaseGuidance({
             <li className="flex gap-2">
               <span className="text-blue-400">▸</span>
               <span>
-                Test your pack at target weight (~{trail.packWeightLb} lb) on
-                one of the sessions.
+                Test your pack at target weight (~
+                {formatPackLb(trail.packWeightLb, units)}) on one of the
+                sessions.
               </span>
             </li>
           )}
@@ -270,7 +281,7 @@ function PhaseGuidance({
             <li className="flex gap-2">
               <span className="text-warn">▸</span>
               <span>
-                Altitude {trail.maxAltitudeFt.toLocaleString()} ft — sleep as
+                Altitude {formatFt(trail.maxAltitudeFt, units)} — sleep as
                 high as you can the night before if possible.
               </span>
             </li>

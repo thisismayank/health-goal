@@ -8,13 +8,16 @@ import {
   VERDICT_LABEL,
 } from "@/lib/basecamp/trail-assessment";
 import { parseYmd, todayInTimeZone, ymd } from "@/lib/date";
+import { formatFt, formatKm, type Units } from "@/lib/units";
 
 export async function UpcomingTrails({
   userId,
   tz,
+  units,
 }: {
   userId: number;
   tz: string;
+  units: Units;
 }) {
   const today = todayInTimeZone(tz);
   const horizon = ymd(new Date(new Date(today).getTime() + 60 * 86_400_000));
@@ -99,8 +102,8 @@ export async function UpcomingTrails({
               </div>
               <div className="flex items-baseline justify-between gap-3 mt-1">
                 <div className="text-xs text-muted">
-                  {t.distanceKm} km · {t.elevationGainFt.toLocaleString()} ft ·{" "}
-                  ~{t.typicalHours}h
+                  {formatKm(t.distanceKm, units)} · +
+                  {formatFt(t.elevationGainFt, units)} · ~{t.typicalHours}h
                 </div>
                 <div
                   className={`text-[10px] font-mono uppercase tracking-wider whitespace-nowrap ${VERDICT_COLOR[assessment.verdict]}`}

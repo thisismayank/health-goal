@@ -26,6 +26,7 @@ import { detectClassChangeAndUpdate } from "@/lib/basecamp/class-tracker";
 import { ClassUpOverlay } from "@/components/home/class-up-overlay";
 import { getActiveGoal } from "@/lib/basecamp/summit";
 import { whyThisWorkout } from "@/lib/home/framing";
+import { pickUnits } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -239,6 +240,7 @@ async function TodaySection({
         todaySession={state.todaySession}
         recentCompletion={state.recentCompletion}
         forecast={tripForecast}
+        units={pickUnits(state.user)}
       />
     );
   }

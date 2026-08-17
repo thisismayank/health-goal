@@ -34,6 +34,7 @@ import {
   estimatePersonalHours,
   formatHoursCasual,
 } from "@/lib/basecamp/personal-time";
+import { formatFt, formatKm, formatPackLb, pickUnits } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,7 @@ export default async function TrailDetailPage({
   const prepPlan = generatePrepPlan(assessment, t);
   const rank = computeRank(await computeCharacterSheet(user.id));
   const personalHours = estimatePersonalHours(t.typicalHours, rank.current);
+  const units = pickUnits(user);
 
   const completions = await db
     .select()
@@ -86,9 +88,11 @@ export default async function TrailDetailPage({
           <TrailEditForm trail={t} />
         </div>
         <div className="text-sm text-muted mt-1">
-          {t.distanceKm} km · {t.elevationGainFt.toLocaleString()} ft gain ·
-          max {t.maxAltitudeFt.toLocaleString()} ft · ~{t.typicalHours}h
-          {t.packWeightLb > 0 && ` · ${t.packWeightLb} lb pack`} · {t.terrainGrade}
+          {formatKm(t.distanceKm, units)} · +{formatFt(t.elevationGainFt, units)}{" "}
+          gain · max {formatFt(t.maxAltitudeFt, units)} · ~{t.typicalHours}h
+          {t.packWeightLb > 0 &&
+            ` · ${formatPackLb(t.packWeightLb, units)} pack`}{" "}
+          · {t.terrainGrade}
         </div>
         <div className="text-sm mt-1">
           <span className="text-[10px] font-mono uppercase tracking-widest text-blue-400 mr-1">
