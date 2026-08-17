@@ -72,6 +72,12 @@ export default async function SettingsPage({
         <p className="text-sm text-muted mt-1">
           Integrations and account preferences.
         </p>
+        <Link
+          href="/settings/integrations"
+          className="inline-block mt-3 text-sm text-blue-300 hover:underline"
+        >
+          See all integrations →
+        </Link>
       </section>
 
       {connected && (
