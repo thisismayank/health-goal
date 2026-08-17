@@ -1,20 +1,25 @@
+/**
+ * intervals.icu API client — now per-user credential aware.
+ *
+ * Callers pass a { athleteId, apiKey } object explicitly instead of
+ * reading from env vars. The DB-side loader lives in ./credentials.ts
+ * so we can encrypt-at-rest without callers ever seeing plaintext.
+ *
+ * The legacy env-var path (INTERVALS_API_KEY + INTERVALS_ATHLETE_ID)
+ * is deliberately gone — one credential source, no ambiguity.
+ */
+
 const API_BASE = "https://intervals.icu/api/v1";
 
-function requireEnv(key: string): string {
-  const v = process.env[key];
-  if (!v) throw new Error(`${key} not set`);
-  return v;
-}
+export type IntervalsCreds = {
+  athleteId: string;
+  apiKey: string;
+};
 
-function authHeader(): string {
-  const key = requireEnv("INTERVALS_API_KEY");
-  // intervals.icu convention: literal "API_KEY" as username, actual key as password
-  const encoded = Buffer.from(`API_KEY:${key}`).toString("base64");
+function authHeader(apiKey: string): string {
+  // intervals.icu convention: literal "API_KEY" as username, actual key as password.
+  const encoded = Buffer.from(`API_KEY:${apiKey}`).toString("base64");
   return `Basic ${encoded}`;
-}
-
-export function isConfigured(): boolean {
-  return Boolean(process.env.INTERVALS_ATHLETE_ID && process.env.INTERVALS_API_KEY);
 }
 
 // Raw wellness entry — we only reach into a subset in the sync layer.
@@ -43,14 +48,18 @@ export type IntervalsWellness = {
 };
 
 export async function getWellnessRange(
+  creds: IntervalsCreds,
   oldestYmd: string,
   newestYmd: string,
 ): Promise<IntervalsWellness[]> {
-  const athleteId = requireEnv("INTERVALS_ATHLETE_ID");
-  const url = `${API_BASE}/athlete/${athleteId}/wellness?oldest=${oldestYmd}&newest=${newestYmd}`;
-  const res = await fetch(url, { headers: { Authorization: authHeader() } });
+  const url = `${API_BASE}/athlete/${creds.athleteId}/wellness?oldest=${oldestYmd}&newest=${newestYmd}`;
+  const res = await fetch(url, {
+    headers: { Authorization: authHeader(creds.apiKey) },
+  });
   if (!res.ok) {
-    throw new Error(`intervals.icu wellness ${res.status}: ${await res.text()}`);
+    throw new Error(
+      `intervals.icu wellness ${res.status}: ${await res.text()}`,
+    );
   }
   return res.json();
 }
@@ -62,12 +71,42 @@ export type IntervalsAthlete = {
   timezone?: string | null;
 };
 
-export async function getAthlete(): Promise<IntervalsAthlete> {
-  const athleteId = requireEnv("INTERVALS_ATHLETE_ID");
-  const url = `${API_BASE}/athlete/${athleteId}/profile`;
-  const res = await fetch(url, { headers: { Authorization: authHeader() } });
+export async function getAthlete(
+  creds: IntervalsCreds,
+): Promise<IntervalsAthlete> {
+  const url = `${API_BASE}/athlete/${creds.athleteId}/profile`;
+  const res = await fetch(url, {
+    headers: { Authorization: authHeader(creds.apiKey) },
+  });
   if (!res.ok) {
-    throw new Error(`intervals.icu profile ${res.status}: ${await res.text()}`);
+    throw new Error(
+      `intervals.icu profile ${res.status}: ${await res.text()}`,
+    );
+  }
+  const body = (await res.json()) as { athlete: IntervalsAthlete };
+  return body.athlete;
+}
+
+/**
+ * Fast credential validation — one round trip to /profile. Throws
+ * with a friendly message on 401/403 so the UI can surface "invalid
+ * key" instead of a generic error.
+ */
+export async function validateCredentials(
+  creds: IntervalsCreds,
+): Promise<IntervalsAthlete> {
+  const url = `${API_BASE}/athlete/${creds.athleteId}/profile`;
+  const res = await fetch(url, {
+    headers: { Authorization: authHeader(creds.apiKey) },
+  });
+  if (res.status === 401 || res.status === 403) {
+    throw new Error("Invalid athlete ID or API key");
+  }
+  if (res.status === 404) {
+    throw new Error(`Athlete ${creds.athleteId} not found`);
+  }
+  if (!res.ok) {
+    throw new Error(`intervals.icu returned ${res.status}`);
   }
   const body = (await res.json()) as { athlete: IntervalsAthlete };
   return body.athlete;

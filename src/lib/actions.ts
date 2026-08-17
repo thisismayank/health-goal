@@ -403,6 +403,67 @@ export async function syncIntervalsNow() {
   return result;
 }
 
+/**
+ * Validate + persist intervals.icu credentials for the current user.
+ * The API key is encrypted before storage (AES-256-GCM) and NEVER
+ * returned back through any read path. If validation fails we don't
+ * persist — user sees the error and can retry.
+ */
+export async function saveIntervalsCredentials(input: {
+  athleteId: string;
+  apiKey: string;
+}): Promise<{ ok: true; upserted: number } | { ok: false; error: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in" };
+
+  const athleteId = input.athleteId.trim();
+  const apiKey = input.apiKey.trim();
+  // Sanity guard — reject obviously bogus input so we don't waste an
+  // API round-trip. intervals.icu athlete IDs look like "i123456" or
+  // digits-only, and API keys are ~32+ chars.
+  if (!/^[a-zA-Z0-9]{3,32}$/.test(athleteId)) {
+    return { ok: false, error: "Athlete ID looks malformed" };
+  }
+  if (apiKey.length < 16 || apiKey.length > 128) {
+    return { ok: false, error: "API key looks malformed" };
+  }
+
+  try {
+    const { validateCredentials } = await import("./intervals/client");
+    await validateCredentials({ athleteId, apiKey });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Validation failed" };
+  }
+
+  const { saveCredentials } = await import("./intervals/credentials");
+  await saveCredentials(user.id, athleteId, apiKey);
+
+  // Kick off an initial 30d sync so the user sees data immediately.
+  let upserted = 0;
+  try {
+    const { syncRecent } = await import("./intervals/sync");
+    const r = await syncRecent(user.id, 30);
+    upserted = r.upserted;
+  } catch (e) {
+    console.error("[saveIntervalsCredentials] initial sync failed:", e);
+  }
+
+  revalidatePath("/");
+  revalidatePath("/settings/integrations");
+  revalidatePath("/body");
+  return { ok: true, upserted };
+}
+
+export async function disconnectIntervals(): Promise<{ ok: true }> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const { deleteCredentials } = await import("./intervals/credentials");
+  await deleteCredentials(user.id);
+  revalidatePath("/settings/integrations");
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
 // App base URL for links in outbound emails. Prefers explicit env,
 // falls back to Vercel URL, else the request's own origin.
 async function resolveAppUrl(): Promise<string> {

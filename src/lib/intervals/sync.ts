@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { dailyMetric } from "@/db/schema";
 import { ymd } from "@/lib/date";
 import { getWellnessRange, type IntervalsWellness } from "./client";
+import { getCredsForSync, markSynced } from "./credentials";
 
 export type IntervalsSyncResult = {
   fetched: number;
@@ -84,12 +85,26 @@ export async function syncRecent(
   userId: number,
   daysBack = 30,
 ): Promise<IntervalsSyncResult> {
+  const creds = await getCredsForSync(userId);
+  if (!creds) {
+    // User hasn't connected intervals.icu — return an empty result
+    // instead of throwing so callers can no-op cleanly.
+    const today = ymd(new Date());
+    return {
+      fetched: 0,
+      upserted: 0,
+      skippedEmpty: 0,
+      oldest: today,
+      newest: today,
+    };
+  }
+
   const newest = new Date();
   const oldest = addDays(newest, -daysBack);
   const oldestYmd = ymd(oldest);
   const newestYmd = ymd(newest);
 
-  const rows = await getWellnessRange(oldestYmd, newestYmd);
+  const rows = await getWellnessRange(creds, oldestYmd, newestYmd);
 
   let upserted = 0;
   let skippedEmpty = 0;
@@ -135,6 +150,8 @@ export async function syncRecent(
       });
     upserted += 1;
   }
+
+  await markSynced(userId);
 
   return {
     fetched: rows.length,

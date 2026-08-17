@@ -9,7 +9,7 @@ import {
 import { requireCurrentUser } from "@/lib/data";
 import { NotificationToggle } from "@/components/settings/notification-toggle";
 import { PushToggle } from "@/components/settings/push-toggle";
-import { isConfigured as intervalsConfigured } from "@/lib/intervals/client";
+import { getAccountView as getIntervalsView } from "@/lib/intervals/credentials";
 import {
   StravaDisconnectButton,
   StravaSyncButton,
@@ -50,7 +50,8 @@ export default async function SettingsPage({
       .limit(1)
   )[0];
   const lastAutoSync = lastAutoRow?.lastAutoSyncAt ?? null;
-  const intervalsOn = intervalsConfigured();
+  const intervalsView = await getIntervalsView(user.id);
+  const intervalsOn = !!intervalsView;
 
   const prefRows = await db
     .select()
@@ -176,8 +177,17 @@ export default async function SettingsPage({
             <dl className="text-sm text-muted space-y-1">
               <div>
                 Athlete ID:{" "}
-                <span className="text-foreground">
-                  {process.env.INTERVALS_ATHLETE_ID}
+                <span className="text-foreground font-mono">
+                  {intervalsView?.athleteId}
+                </span>
+              </div>
+              <div>
+                API key:{" "}
+                <span className="text-foreground font-mono">
+                  ••••{intervalsView?.apiKeyLast4}
+                </span>{" "}
+                <span className="text-[10px] opacity-60">
+                  (encrypted at rest)
                 </span>
               </div>
               <div>
@@ -191,15 +201,26 @@ export default async function SettingsPage({
             </dl>
             <p className="text-xs text-muted">
               Pulls the last 30 days of wellness (HRV, resting HR, sleep,
-              steps, weight) from intervals.icu, which mirrors Garmin. Sync is
-              on-demand for now.
+              steps, weight). Manage this connection on{" "}
+              <Link
+                href="/settings/integrations"
+                className="text-blue-300 hover:underline"
+              >
+                the integrations page
+              </Link>
+              .
             </p>
             <IntervalsSyncButton />
           </>
         ) : (
           <p className="text-sm text-muted">
-            Not configured. Set <code>INTERVALS_ATHLETE_ID</code> and{" "}
-            <code>INTERVALS_API_KEY</code> in Vercel env to enable.
+            Not connected.{" "}
+            <Link
+              href="/settings/integrations"
+              className="text-blue-300 hover:underline"
+            >
+              Add your intervals.icu API key →
+            </Link>
           </p>
         )}
       </section>

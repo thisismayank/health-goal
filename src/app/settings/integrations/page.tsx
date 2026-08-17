@@ -3,8 +3,9 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { ouraAccount, stravaAccount } from "@/db/schema";
 import { requireCurrentUser } from "@/lib/data";
-import { isConfigured as intervalsConfigured } from "@/lib/intervals/client";
+import { getAccountView as getIntervalsView } from "@/lib/intervals/credentials";
 import { isConfigured as ouraConfigured } from "@/lib/oura/client";
+import { IntervalsConnect } from "@/components/integrations/intervals-connect";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,8 @@ export default async function IntegrationsPage({
     .where(eq(stravaAccount.userId, user.id))
     .limit(1);
   const stravaConnected = !!strava;
-  const intervalsOn = intervalsConfigured();
+  const intervalsView = await getIntervalsView(user.id);
+  const intervalsOn = !!intervalsView;
 
   const [oura] = await db
     .select({ id: ouraAccount.id })
@@ -66,14 +68,6 @@ export default async function IntegrationsPage({
       status: "available",
       connectHref: "/settings#apple-health",
       glyph: "❤︎",
-    },
-    {
-      name: "Intervals.icu",
-      blurb:
-        "Recovery & readiness scores from Garmin/Wahoo/Zwift (via Intervals).",
-      status: intervalsOn ? "connected" : "available",
-      connectHref: "/settings#intervals",
-      glyph: "▲",
     },
     ...(ouraAvailable
       ? [
@@ -194,6 +188,22 @@ export default async function IntegrationsPage({
             <IntegrationCard key={i.name} integration={i} />
           ))}
         </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
+          [BRING YOUR OWN KEY]
+        </div>
+        <IntervalsConnect
+          connected={intervalsOn}
+          athleteId={intervalsView?.athleteId}
+          apiKeyLast4={intervalsView?.apiKeyLast4}
+          lastSyncAt={
+            intervalsView?.lastSyncAt
+              ? intervalsView.lastSyncAt.toISOString()
+              : null
+          }
+        />
       </section>
 
       <section className="space-y-3">

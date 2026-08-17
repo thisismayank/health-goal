@@ -127,6 +127,13 @@
       "when": 1786941618511,
       "tag": "0017_strong_toad_men",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786942568285,
+      "tag": "0018_striped_cammi",
+      "breakpoints": true
     }
   ]
 }

@@ -304,6 +304,31 @@ export const stravaAccount = pgTable(
   ],
 );
 
+export const intervalsAccount = pgTable(
+  "intervals_account",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userProfile.id, { onDelete: "cascade" }),
+    athleteId: text("athlete_id").notNull(),
+    // API key is AES-256-GCM encrypted before storage. Stored as
+    // base64(iv || authTag || ciphertext). See @/lib/crypto.
+    apiKeyEncrypted: text("api_key_encrypted").notNull(),
+    // Displayed to the user as verification ("••••1234") — safe to
+    // store in plaintext since only the last 4 chars.
+    apiKeyLast4: text("api_key_last4").notNull(),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [uniqueIndex("intervals_account_user_idx").on(table.userId)],
+);
+
 export const ouraAccount = pgTable(
   "oura_account",
   {
