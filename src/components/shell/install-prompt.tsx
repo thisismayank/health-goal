@@ -126,7 +126,9 @@ export function InstallPrompt() {
     );
   }
 
-  // iOS: manual add-to-home-screen only. Show a brief hint the first time.
+  // iOS: manual add-to-home-screen. All iOS browsers (Chrome, Firefox,
+  // Edge) share the same WebKit + share-sheet path, so one message
+  // covers all of them.
   if (platform === "ios") {
     return (
       <Shell onDismiss={dismiss}>
@@ -136,7 +138,40 @@ export function InstallPrompt() {
           <span className="inline-block text-blue-300">
             {shareGlyph()}
           </span>{" "}
-          in Safari, then <span className="text-blue-300">Add to Home Screen</span>.
+          → <span className="text-blue-300">Add to Home Screen</span>.
+          <span className="text-muted"> (Safari, Chrome, or any browser.)</span>
+        </div>
+      </Shell>
+    );
+  }
+
+  // Android Chrome without a beforeinstallprompt event (user visited
+  // before + dismissed, or Chromium variant that doesn't fire it):
+  // give explicit menu instructions.
+  if (platform === "android_chrome") {
+    return (
+      <Shell onDismiss={dismiss}>
+        <div className="text-xs leading-relaxed">
+          <span className="font-medium">Install Basecamp:</span> tap{" "}
+          <span className="text-blue-300">⋮</span> (top-right) →{" "}
+          <span className="text-blue-300">Install app</span> or{" "}
+          <span className="text-blue-300">Add to Home Screen</span>.
+        </div>
+      </Shell>
+    );
+  }
+
+  // Desktop Chrome/Edge without beforeinstallprompt: point at the
+  // address-bar install icon or the three-dot menu.
+  if (platform === "desktop") {
+    return (
+      <Shell onDismiss={dismiss}>
+        <div className="text-xs leading-relaxed">
+          <span className="font-medium">Install Basecamp:</span> click the
+          install icon{" "}
+          <span className="text-blue-300">⊕</span> in the address bar, or{" "}
+          <span className="text-blue-300">⋮</span> →{" "}
+          <span className="text-blue-300">Install Basecamp</span> (Chrome / Edge).
         </div>
       </Shell>
     );
