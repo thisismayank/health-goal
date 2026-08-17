@@ -97,6 +97,14 @@ export async function upsertActivity(
     maxHr: a.max_heartrate != null ? Math.round(a.max_heartrate) : null,
     notes: a.description?.trim() || null,
     sourceName: a.name?.trim() || null,
+    startLat:
+      Array.isArray(a.start_latlng) && a.start_latlng.length === 2
+        ? a.start_latlng[0]
+        : null,
+    startLng:
+      Array.isArray(a.start_latlng) && a.start_latlng.length === 2
+        ? a.start_latlng[1]
+        : null,
     canonicalSource: "strava",
   };
 
@@ -201,7 +209,14 @@ export async function syncRecent(
   const tokens = await getValidTokens(userId);
   if (!tokens) throw new Error("No Strava account for user");
   const after = Math.floor(Date.now() / 1000) - sinceDaysAgo * 86400;
-  const activities = await listActivitiesSince(tokens.accessToken, after);
+  // For anything > 60d use the paginated variant so we don't cap at
+  // the first 50 activities. Short windows keep the fast path.
+  const activities =
+    sinceDaysAgo > 60
+      ? await (
+          await import("./client")
+        ).listAllActivitiesSince(tokens.accessToken, after)
+      : await listActivitiesSince(tokens.accessToken, after);
 
   const results: SyncResult[] = [];
   for (const a of activities) {

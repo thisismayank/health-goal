@@ -79,6 +79,10 @@ export type StravaActivity = {
   max_heartrate?: number | null;
   average_speed?: number | null;
   description?: string | null;
+  // Strava returns [lat, lng] tuples; empty array when GPS wasn't
+  // recorded (indoor / manual).
+  start_latlng?: [number, number] | null;
+  end_latlng?: [number, number] | null;
 };
 
 async function apiGet<T>(accessToken: string, path: string): Promise<T> {
@@ -105,6 +109,30 @@ export function listActivitiesSince(
     accessToken,
     `/athlete/activities?after=${afterEpochSeconds}&per_page=${perPage}`,
   );
+}
+
+/**
+ * Paginated variant — walks pages until we get a short response or
+ * hit the safety cap. Strava enforces per_page ≤ 200. Used for big
+ * historical backfills where a single 50-item page isn't enough.
+ */
+export async function listAllActivitiesSince(
+  accessToken: string,
+  afterEpochSeconds: number,
+  opts?: { perPage?: number; maxPages?: number },
+): Promise<StravaActivity[]> {
+  const perPage = opts?.perPage ?? 200;
+  const maxPages = opts?.maxPages ?? 20; // 20 * 200 = 4000 activity ceiling
+  const all: StravaActivity[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const batch = await apiGet<StravaActivity[]>(
+      accessToken,
+      `/athlete/activities?after=${afterEpochSeconds}&per_page=${perPage}&page=${page}`,
+    );
+    all.push(...batch);
+    if (batch.length < perPage) break; // last page
+  }
+  return all;
 }
 
 export async function deauthorize(accessToken: string): Promise<void> {
