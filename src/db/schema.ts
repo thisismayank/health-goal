@@ -343,6 +343,60 @@ export const stravaAccount = pgTable(
   ],
 );
 
+export const LLM_PROVIDERS = ["anthropic", "openai"] as const;
+export type LlmProvider = (typeof LLM_PROVIDERS)[number];
+
+export const llmCredentials = pgTable(
+  "llm_credentials",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userProfile.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: LLM_PROVIDERS }).notNull(),
+    // AES-256-GCM encrypted (see @/lib/crypto). Never returned to
+    // client — only decrypted server-side inside the coach request.
+    apiKeyEncrypted: text("api_key_encrypted").notNull(),
+    apiKeyLast4: text("api_key_last4").notNull(),
+    // Model id — provider-specific string. Null = pick a sensible
+    // default at request time.
+    modelId: text("model_id"),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [uniqueIndex("llm_credentials_user_idx").on(table.userId)],
+);
+
+export const coachMessage = pgTable(
+  "coach_message",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userProfile.id, { onDelete: "cascade" }),
+    // Which role emitted this turn. 'system' rows are ephemeral —
+    // we never persist system prompts (they're regenerated with fresh
+    // plan/activity context on each send).
+    role: text("role", { enum: ["user", "assistant"] }).notNull(),
+    content: text("content").notNull(),
+    // Model + provider used for the assistant reply. Nullable on user
+    // turns.
+    provider: text("provider"),
+    modelId: text("model_id"),
+    // Rough token accounting so users can see what they're spending.
+    tokensIn: integer("tokens_in"),
+    tokensOut: integer("tokens_out"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+);
+
 export const intervalsAccount = pgTable(
   "intervals_account",
   {

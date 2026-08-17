@@ -7,7 +7,7 @@ import {
   Home,
   CalendarDays,
   Mountain,
-  Settings as SettingsIcon,
+  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
 
@@ -53,12 +53,16 @@ const TABS: Tab[] = [
     matches: (p) => p === "/trails" || p.startsWith("/trails/"),
   },
   {
-    href: "/settings",
-    label: "Settings",
-    Icon: SettingsIcon,
-    matches: (p) => p === "/settings" || p.startsWith("/settings/"),
+    href: "/coach",
+    label: "Coach",
+    Icon: MessageSquare,
+    matches: (p) => p === "/coach" || p.startsWith("/coach/"),
   },
 ];
+
+// Settings kept off the bottom nav intentionally — it's reachable via
+// the north-star bar's gear icon, and the coach warrants the fifth
+// slot more (daily-use vs occasional).
 
 export function BottomNav() {
   const pathname = usePathname();

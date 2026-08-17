@@ -16,6 +16,8 @@ import {
 } from "@/components/strava-actions";
 import { IntervalsSyncButton } from "@/components/intervals-actions";
 import { UnitsToggle } from "@/components/settings/units-toggle";
+import { CoachConnectForm } from "@/components/coach/connect-form";
+import { getAccountView as getLlmView } from "@/lib/llm/credentials";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +55,7 @@ export default async function SettingsPage({
   const lastAutoSync = lastAutoRow?.lastAutoSyncAt ?? null;
   const intervalsView = await getIntervalsView(user.id);
   const intervalsOn = !!intervalsView;
+  const llmView = await getLlmView(user.id);
 
   const prefRows = await db
     .select()
@@ -80,6 +83,13 @@ export default async function SettingsPage({
         >
           See all integrations →
         </Link>
+      </section>
+
+      <section className="space-y-2">
+        <div className="text-[10px] font-mono uppercase tracking-widest text-muted">
+          [COACH]
+        </div>
+        <CoachConnectForm existing={llmView} />
       </section>
 
       <section className="rounded-lg border border-panel-border bg-panel p-4 space-y-2">

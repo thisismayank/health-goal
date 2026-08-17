@@ -1359,6 +1359,49 @@ export async function linkWorkoutToPlannedSession(input: {
 }
 
 /**
+ * Save (or update) the user's LLM provider credentials for the coach
+ * chat. Validated against a lightweight sanity pattern before storage
+ * — real auth happens the first time the chat actually calls the
+ * provider. AES-256-GCM encrypted at rest via APP_ENCRYPTION_KEY.
+ */
+export async function saveLlmCredentials(input: {
+  provider: "anthropic" | "openai";
+  apiKey: string;
+  modelId?: string | null;
+}) {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false as const, error: "Not signed in" };
+  const apiKey = input.apiKey.trim();
+  const modelId = input.modelId?.trim() || null;
+  if (apiKey.length < 20 || apiKey.length > 200) {
+    return { ok: false as const, error: "API key looks malformed" };
+  }
+  const { getAdapter } = await import("./llm/providers");
+  const adapter = getAdapter(input.provider);
+  if (!adapter.keyPattern.test(apiKey)) {
+    return {
+      ok: false as const,
+      error: `Doesn't look like an ${adapter.displayName} key (expected pattern ${adapter.keyPattern.source})`,
+    };
+  }
+  const { saveCredentials } = await import("./llm/credentials");
+  await saveCredentials(user.id, input.provider, apiKey, modelId);
+  revalidatePath("/coach");
+  revalidatePath("/settings");
+  return { ok: true as const };
+}
+
+export async function disconnectLlm() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not signed in");
+  const { deleteCredentials } = await import("./llm/credentials");
+  await deleteCredentials(user.id);
+  revalidatePath("/coach");
+  revalidatePath("/settings");
+  return { ok: true as const };
+}
+
+/**
  * Toggle unit display preference. Storage stays SI; this only
  * affects rendering.
  */
