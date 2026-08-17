@@ -73,3 +73,23 @@ export const weeksUntil = (targetYmd: string): number => {
 };
 
 export const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/**
+ * ISO-week tag ('2026-W33') — used as a dedupe key for weekly emails and
+ * as a rotation seed for the featured trail. Same input → same tag.
+ */
+export function isoWeekTag(now: Date): string {
+  const target = new Date(now.valueOf());
+  const dayNr = (target.getUTCDay() + 6) % 7; // Mon = 0
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThu = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const weekNo =
+    1 +
+    Math.round(
+      ((target.getTime() - firstThu.getTime()) / 86_400_000 -
+        3 +
+        ((firstThu.getUTCDay() + 6) % 7)) /
+        7,
+    );
+  return `${target.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+}

@@ -20,29 +20,14 @@ import {
   isEmailEnabled,
   sendNotificationEmail,
 } from "@/lib/notifications/send";
+import { isoWeekTag } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const KIND = "weekend_nudge";
 
-function isoWeekTag(now: Date): string {
-  // Rough ISO-week fingerprint: yyyy + week-of-year based on Thursday
-  // heuristic. Sufficient for a one-per-week dedupe key.
-  const target = new Date(now.valueOf());
-  const dayNr = (target.getUTCDay() + 6) % 7; // Mon = 0
-  target.setUTCDate(target.getUTCDate() - dayNr + 3); // move to Thu of the week
-  const firstThu = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
-  const weekNo =
-    1 +
-    Math.round(
-      ((target.getTime() - firstThu.getTime()) / 86_400_000 -
-        3 +
-        ((firstThu.getUTCDay() + 6) % 7)) /
-        7,
-    );
-  return `${target.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
-}
+
 
 type ProcessResult = {
   userId: number;
