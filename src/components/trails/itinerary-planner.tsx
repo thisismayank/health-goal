@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { generateItineraryAdvice, saveItineraryTrails } from "@/lib/actions";
 import {
@@ -73,6 +73,44 @@ function todayLocalYmd(): string {
   return `${y}-${m}-${d}`;
 }
 
+// URL param keys for planner persistence. Prefixed with p_ to avoid
+// collision with parent-page params (like q= on /trails/discover).
+const P_KEYS = {
+  days: "p_days",
+  start: "p_start",
+  stretch: "p_stretch",
+  overrides: "p_ov",
+  open: "p_open",
+} as const;
+
+// Encode Overrides as 'dayIndex:slugOrRest,dayIndex:slugOrRest' — compact
+// enough for a URL bar and human-readable when shared.
+function encodeOverrides(ov: Overrides): string {
+  const entries = Object.entries(ov)
+    .filter(([, v]) => v != null)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([day, v]) => {
+      if (!v) return null;
+      if (v.kind === "rest") return `${day}:rest`;
+      return `${day}:${v.slug}`;
+    })
+    .filter((s): s is string => s !== null);
+  return entries.join(",");
+}
+
+function decodeOverrides(raw: string | null): Overrides {
+  if (!raw) return {};
+  const out: Overrides = {};
+  for (const part of raw.split(",")) {
+    const [dayStr, val] = part.split(":");
+    const day = Number(dayStr);
+    if (!Number.isFinite(day) || day < 0 || day > 13) continue;
+    if (val === "rest") out[day] = { kind: "rest" };
+    else if (val) out[day] = { kind: "slug", slug: val };
+  }
+  return out;
+}
+
 export function ItineraryPlanner({
   presets,
   destinationLabel,
@@ -86,10 +124,27 @@ export function ItineraryPlanner({
   coords: { lat: number; lng: number; label: string } | null;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [days, setDays] = useState(3);
-  const [startDate, setStartDate] = useState(todayLocalYmd());
-  const [includeStretch, setIncludeStretch] = useState(false);
+  const searchParams = useSearchParams();
+
+  // Hydrate initial state from URL — supports refresh + share.
+  const initialDays = Number(searchParams.get(P_KEYS.days));
+  const initialStart = searchParams.get(P_KEYS.start);
+  const initialStretch = searchParams.get(P_KEYS.stretch) === "1";
+  const initialOverrides = decodeOverrides(searchParams.get(P_KEYS.overrides));
+  const initialOpen = searchParams.get(P_KEYS.open) === "1";
+
+  const [open, setOpen] = useState(initialOpen);
+  const [days, setDays] = useState(
+    Number.isFinite(initialDays) && initialDays >= 1 && initialDays <= 14
+      ? initialDays
+      : 3,
+  );
+  const [startDate, setStartDate] = useState(
+    initialStart && /^\d{4}-\d{2}-\d{2}$/.test(initialStart)
+      ? initialStart
+      : todayLocalYmd(),
+  );
+  const [includeStretch, setIncludeStretch] = useState(initialStretch);
   const [pending, startTransition] = useTransition();
   const [savedCount, setSavedCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +153,8 @@ export function ItineraryPlanner({
   const [narrativePending, startNarrativeTransition] = useTransition();
   const [narrativeError, setNarrativeError] = useState<string | null>(null);
   // Per-dayIndex user overrides. Trims to current day range when `days` changes.
-  const [overrides, setOverrides] = useState<Overrides>({});
+  const [overrides, setOverrides] = useState<Overrides>(initialOverrides);
+  const isHydrated = useRef(false);
   const [forecast, setForecast] = useState<Map<string, DailyForecast> | null>(null);
   const [forecastState, setForecastState] = useState<
     "idle" | "loading" | "loaded" | "error"
@@ -147,6 +203,30 @@ export function ItineraryPlanner({
       });
     return () => ctrl.abort();
   }, [open, coords, forecastState]);
+
+  // Sync state → URL query params. Uses history.replaceState so Next
+  // doesn't re-run the server component on every keystroke, but the URL
+  // still updates for refresh + share.
+  useEffect(() => {
+    // Skip the very first run — hydration already used the URL, no need
+    // to write it back (avoids extra history entries).
+    if (!isHydrated.current) {
+      isHydrated.current = true;
+      return;
+    }
+    const url = new URL(window.location.href);
+    const set = (k: string, v: string | null) => {
+      if (v == null || v === "") url.searchParams.delete(k);
+      else url.searchParams.set(k, v);
+    };
+    set(P_KEYS.days, days !== 3 ? String(days) : null);
+    set(P_KEYS.start, startDate !== todayLocalYmd() ? startDate : null);
+    set(P_KEYS.stretch, includeStretch ? "1" : null);
+    set(P_KEYS.open, open ? "1" : null);
+    const ovStr = encodeOverrides(overrides);
+    set(P_KEYS.overrides, ovStr || null);
+    window.history.replaceState({}, "", url.toString());
+  }, [open, days, startDate, includeStretch, overrides]);
 
   // Trim overrides for day indices beyond current `days` when user
   // shrinks the trip. Prevents stale keys from lingering.
