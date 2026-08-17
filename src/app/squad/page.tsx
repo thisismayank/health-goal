@@ -23,7 +23,7 @@ export default async function SquadIndexPage() {
         </p>
       </section>
 
-      {squads.length > 0 && (
+      {squads.length > 0 ? (
         <div className="space-y-2">
           {squads.map((s) => (
             <Link
@@ -45,9 +45,28 @@ export default async function SquadIndexPage() {
             </Link>
           ))}
         </div>
+      ) : (
+        <div className="rounded-md border border-panel-border bg-panel/40 p-4 text-sm text-muted space-y-2">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
+            [NOT YET]
+          </div>
+          <p className="leading-relaxed">
+            Squads are for when a couple of your friends are also using
+            Basecamp. No point creating one solo — you&apos;d just be
+            comparing yourself to yourself. Come back once you have people
+            to share trails with.
+          </p>
+        </div>
       )}
 
-      <CreateSquadForm />
+      <details className="text-xs">
+        <summary className="cursor-pointer text-blue-300 hover:underline">
+          Ready to start one anyway?
+        </summary>
+        <div className="mt-3">
+          <CreateSquadForm />
+        </div>
+      </details>
     </div>
   );
 }

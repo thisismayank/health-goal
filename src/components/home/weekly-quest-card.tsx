@@ -103,13 +103,10 @@ export async function WeeklyQuestCard({
                 #{cohort.yourRank} / {cohort.cohortSize}
               </div>
             </div>
-          ) : (
-            <div className="text-[11px] text-muted italic">
-              Cohort forming — {cohort.cohortSize} Class {cohort.cohortClass}
-              {cohort.cohortSize === 1 ? " hiker" : " hikers"} so far.
-              Weekly rankings appear at 5+.
-            </div>
-          )}
+          ) : null /* Hide 'cohort forming' — an empty leaderboard reads
+                     as a failure signal, not aspirational. Auto-reveals
+                     once the cohort hits 5+ hikers via the ranked branch
+                     above. */}
         </div>
       )}
     </section>

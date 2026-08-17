@@ -3,9 +3,7 @@ import { requireOnboardedUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
 import { allTrails, type TrailPreset } from "@/lib/basecamp/trail-library";
 import { POPULAR_DESTINATIONS, coordsForQuery } from "@/lib/basecamp/destinations";
-import { computeCharacterSheet } from "@/lib/basecamp/stats";
-import { computeRank } from "@/lib/basecamp/rank";
-import { isLocked, minClassForPreset } from "@/lib/basecamp/class-fit";
+import { minClassForPreset } from "@/lib/basecamp/class-fit";
 import { presetToVirtualTrail } from "@/lib/basecamp/preset-trail";
 import {
   assessTrail,
@@ -69,10 +67,6 @@ export default async function DiscoverPage({
   // One fitness snapshot for all matches. assessTrail's optional
   // `snapshot` opt lets us skip N-1 duplicate queries.
   const snapshot = matches.length > 0 ? await loadFitnessSnapshot(user.id) : null;
-
-  // User's current Hiker Class — used for LOCKED chips on results.
-  const sheet = await computeCharacterSheet(user.id);
-  const userClass = computeRank(sheet).current;
 
   const assessed = snapshot
     ? await Promise.all(
@@ -198,7 +192,6 @@ export default async function DiscoverPage({
                 <div className="space-y-2">
                   {bucket.map(({ preset, assessment }) => {
                     const requiredClass = minClassForPreset(preset);
-                    const locked = isLocked(userClass, requiredClass);
                     return (
                       <Link
                         key={preset.slug}
@@ -217,17 +210,14 @@ export default async function DiscoverPage({
                           <div className="font-medium truncate">
                             {preset.name}
                           </div>
-                          <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-                            {locked ? (
-                              <span className="text-[10px] font-mono uppercase tracking-wider text-warn">
-                                🔒 Class {requiredClass}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-mono uppercase tracking-wider text-muted">
-                                Class {requiredClass}
-                              </span>
-                            )}
-                          </div>
+                          {/* Class label is descriptive — 'this trail
+                              typically suits a Class X hiker'. Never
+                              gated with a padlock: public trails aren't
+                              locked, and the readiness verdict already
+                              says whether it's a fit. */}
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-muted whitespace-nowrap">
+                            typ. Class {requiredClass}
+                          </span>
                         </div>
                         <div className="text-xs text-muted mt-1">
                           {preset.region}

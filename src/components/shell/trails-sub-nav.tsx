@@ -19,6 +19,7 @@ export function TrailsSubNav() {
               "/trails/discover",
               "/trails/backfill",
               "/trails/link",
+              "/trails/library",
             ],
           },
         },
@@ -26,6 +27,11 @@ export function TrailsSubNav() {
           href: "/trails/discover",
           label: "Discover",
           match: { prefix: ["/trails/discover"] },
+        },
+        {
+          href: "/trails/library",
+          label: "Library",
+          match: { prefix: ["/trails/library", "/trails/preset"] },
         },
         {
           href: "/trails/backfill",

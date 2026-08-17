@@ -195,8 +195,21 @@ export default async function TrailDetailPage({
         </div>
         {assessment.weeksAvailable != null && (
           <div className="text-xs text-muted">
-            Based on your current fitness with {assessment.weeksAvailable} weeks
+            Based on your current fitness with{" "}
+            {assessment.daysUntilTrail != null && assessment.daysUntilTrail < 14
+              ? `${assessment.daysUntilTrail} day${assessment.daysUntilTrail === 1 ? "" : "s"}`
+              : `${assessment.weeksAvailable} weeks`}{" "}
             to prepare.
+          </div>
+        )}
+        {assessment.weeksToReady != null && (
+          <div className="text-xs text-blue-300/90">
+            Closing the biggest gap: about{" "}
+            <span className="font-mono tabular-nums">
+              {assessment.weeksToReady} week
+              {assessment.weeksToReady === 1 ? "" : "s"}
+            </span>{" "}
+            at your current trajectory.
           </div>
         )}
         {assessment.weeksAvailable == null && (
@@ -239,7 +252,16 @@ export default async function TrailDetailPage({
         />
       </Suspense>
 
-      {prepPlan.kind === "generated" && <PrepPlanCard plan={prepPlan} />}
+      {/* Trail prep plan removed — its 'display-only' nature confused
+          users about which plan was actually driving today's session.
+          The coach card above already narrates prep focus; the training
+          plan on /train is the single source of truth. Non-generated
+          alternative suggestions still surface below. */}
+      {prepPlan.kind === "generated" && prepPlan.alternativeSuggestion && (
+        <section className="rounded-md border border-warn/30 bg-warn/5 p-3 text-sm text-warn">
+          {prepPlan.alternativeSuggestion}
+        </section>
+      )}
 
       {t.notes && (
         <section className="rounded-md border border-panel-border bg-panel/60 p-4">
@@ -344,56 +366,6 @@ async function TrailCoachCard({
   );
 }
 
-function PrepPlanCard({ plan }: { plan: Extract<PrepPlan, { kind: "generated" }> }) {
-  return (
-    <section className="rounded-md border border-panel-border bg-panel p-5 space-y-3">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-xs uppercase tracking-widest text-muted">
-          Prep plan · {plan.daysAvailable} days
-        </h2>
-        <span className="text-xs text-blue-300 uppercase tracking-wider">
-          Focus: {plan.focus}
-        </span>
-      </div>
-
-      <div className="text-xs text-muted">
-        Weekly shape: {plan.weekly.longSessions} long · {plan.weekly.aerobicSessions} aerobic ·{" "}
-        {plan.weekly.strengthSessions} strength · {plan.weekly.restDays} rest
-      </div>
-
-      <div className="space-y-2">
-        {plan.progressions.map((p, i) => (
-          <div
-            key={i}
-            className="rounded-md border border-panel-border bg-background/40 p-3 space-y-1"
-          >
-            <div className="flex items-baseline justify-between gap-3">
-              <div className="text-sm font-medium">{p.weekLabel}</div>
-              <div className="text-xs text-muted tabular-nums">
-                {p.longSessionMin} min long
-                {p.packLb > 0 && ` · ${p.packLb} lb pack`}
-                {p.verticalTargetFt > 0 && ` · ~${p.verticalTargetFt.toLocaleString()} ft`}
-              </div>
-            </div>
-            <div className="text-xs text-muted">{p.note}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="text-xs text-muted italic border-t border-panel-border pt-3">
-        Then {plan.taperDays}-day taper: reduce volume by 40-50%, keep intensity
-        light. This plan is display-only — it doesn't modify your active
-        training plan.
-      </div>
-
-      {plan.alternativeSuggestion && (
-        <div className="rounded-md border border-warn/30 bg-warn/5 p-3 text-sm text-warn">
-          {plan.alternativeSuggestion}
-        </div>
-      )}
-    </section>
-  );
-}
 
 function DimensionCard({ d }: { d: DimensionAnalysis }) {
   return (
