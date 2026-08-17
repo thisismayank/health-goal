@@ -228,10 +228,19 @@ export async function syncStravaNow() {
   if (!user) throw new Error("No user found");
   const { syncRecent } = await import("./strava/sync");
   const results = await syncRecent(user.id, 30);
+  // If the plan hasn't been started yet, use fresh data to reclassify
+  // fitness and regenerate. No-op if user has completed anything.
+  try {
+    const { refreshPlanIfEligible } = await import("./plan/generator");
+    await refreshPlanIfEligible(user.id);
+  } catch (e) {
+    console.error("[syncStravaNow] refresh failed:", e);
+  }
   revalidatePath("/");
   revalidatePath("/week");
   revalidatePath("/history");
   revalidatePath("/settings");
+  revalidatePath("/train");
   const created = results.filter((r) => r.action === "created").length;
   const updated = results.filter((r) => r.action === "updated").length;
   return { total: results.length, created, updated };

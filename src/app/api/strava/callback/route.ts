@@ -52,6 +52,19 @@ export async function GET(request: Request) {
     } else {
       await db.insert(stravaAccount).values(values);
     }
+
+    // Pull the last 30 days of activities inline so the onboarding plan
+    // step has real data to suggest a starting fitness from. Best-effort
+    // — failure here shouldn't block the OAuth flow, so we swallow.
+    try {
+      const { syncRecent } = await import("@/lib/strava/sync");
+      await syncRecent(user.id, 30);
+      const { refreshPlanIfEligible } = await import("@/lib/plan/generator");
+      await refreshPlanIfEligible(user.id);
+    } catch (e) {
+      console.error("[strava callback] post-connect sync/refresh failed:", e);
+    }
+
     // Bounce back into the onboarding wizard if they connected from there;
     // otherwise the settings screen (default post-OAuth landing).
     const dest = user.onboardedAt ? "/settings?connected=1" : "/welcome?step=2";

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { stravaAccount } from "@/db/schema";
 import { requireCurrentUser } from "@/lib/data";
+import { suggestStartingFitness } from "@/lib/plan/fitness-suggest";
 import { PlanStep } from "./plan-step";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,10 @@ export default async function WelcomePage({
     .where(eq(stravaAccount.userId, user.id))
     .limit(1);
   const stravaConnected = !!strava;
+  // Only pull the suggestion when we're actually going to render the
+  // plan step — saves a query on the earlier steps.
+  const suggestedFitness =
+    step === "3" ? await suggestStartingFitness(user.id) : null;
 
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center py-8">
@@ -36,7 +41,12 @@ export default async function WelcomePage({
         <StepIndicator current={step} />
         {step === "1" ? <WelcomeStep firstName={firstName(user.name)} /> : null}
         {step === "2" ? <ConnectStep stravaConnected={stravaConnected} /> : null}
-        {step === "3" ? <PlanStep stravaConnected={stravaConnected} /> : null}
+        {step === "3" ? (
+          <PlanStep
+            stravaConnected={stravaConnected}
+            suggestedFitness={suggestedFitness}
+          />
+        ) : null}
       </div>
     </div>
   );

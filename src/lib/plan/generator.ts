@@ -9,14 +9,17 @@
  */
 
 import { addDays, startOfWeek } from "date-fns";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   plannedSession,
   trainingPlan,
+  userProfile,
+  workout,
   type SessionCategory,
 } from "@/db/schema";
 import { ymd } from "@/lib/date";
+import { suggestStartingFitness } from "./fitness-suggest";
 
 export type WeeklyHours = 3 | 5 | 7 | 10;
 export type StartingFitness = "new" | "occasional" | "regular" | "active";
@@ -364,4 +367,95 @@ export async function generateUserPlan(
 
   await db.insert(plannedSession).values(inserts);
   return { planId: plan.id, created: true, sessions: inserts.length };
+}
+
+export type RefreshResult =
+  | { refreshed: true; from: StartingFitness | null; to: StartingFitness }
+  | {
+      refreshed: false;
+      reason:
+        | "no_constraints"
+        | "no_plan"
+        | "has_completions"
+        | "no_suggestion"
+        | "no_change";
+    };
+
+/**
+ * Refresh a user's plan if their newly-observed fitness (from imported
+ * activity data) contradicts the class they picked at onboarding.
+ *
+ * Safety guards — all must pass or we no-op:
+ *   1. User has weeklyTrainingHours (was onboarded with a plan)
+ *   2. Active plan exists
+ *   3. Zero workouts are linked to any of the plan's sessions — once the
+ *      user has started their plan, we don't rewrite it out from under them
+ *   4. Suggestion is available AND differs from stored fitness
+ *
+ * Called from Strava OAuth callback + settings "Sync now" so a user who
+ * skipped Strava during onboarding still gets a data-informed plan the
+ * moment their history arrives.
+ */
+export async function refreshPlanIfEligible(
+  userId: number,
+): Promise<RefreshResult> {
+  const [profile] = await db
+    .select({
+      weeklyHours: userProfile.weeklyTrainingHours,
+      fitness: userProfile.startingFitness,
+    })
+    .from(userProfile)
+    .where(eq(userProfile.id, userId))
+    .limit(1);
+  if (!profile?.weeklyHours) {
+    return { refreshed: false, reason: "no_constraints" };
+  }
+
+  const [plan] = await db
+    .select({ id: trainingPlan.id })
+    .from(trainingPlan)
+    .where(
+      and(
+        eq(trainingPlan.userId, userId),
+        eq(trainingPlan.status, "active"),
+      ),
+    )
+    .limit(1);
+  if (!plan) return { refreshed: false, reason: "no_plan" };
+
+  const [firstLinked] = await db
+    .select({ id: workout.id })
+    .from(workout)
+    .innerJoin(plannedSession, eq(workout.plannedSessionId, plannedSession.id))
+    .where(
+      and(
+        eq(workout.userId, userId),
+        eq(plannedSession.planId, plan.id),
+        isNotNull(workout.plannedSessionId),
+      ),
+    )
+    .limit(1);
+  if (firstLinked) return { refreshed: false, reason: "has_completions" };
+
+  const suggested = await suggestStartingFitness(userId);
+  if (!suggested) return { refreshed: false, reason: "no_suggestion" };
+  const current = profile.fitness as StartingFitness | null;
+  if (current === suggested) return { refreshed: false, reason: "no_change" };
+
+  // Wipe the old plan + regenerate with the new fitness class. Ordered
+  // so we never orphan sessions if the plan delete succeeds but the
+  // regenerate fails: sessions first, then plan, then regenerate.
+  await db.delete(plannedSession).where(eq(plannedSession.planId, plan.id));
+  await db.delete(trainingPlan).where(eq(trainingPlan.id, plan.id));
+  await db
+    .update(userProfile)
+    .set({ startingFitness: suggested, updatedAt: new Date() })
+    .where(eq(userProfile.id, userId));
+  await generateUserPlan({
+    userId,
+    weeklyHours: profile.weeklyHours as WeeklyHours,
+    startingFitness: suggested,
+  });
+
+  return { refreshed: true, from: current, to: suggested };
 }

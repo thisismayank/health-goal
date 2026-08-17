@@ -21,10 +21,16 @@ const FITNESS_OPTIONS: { value: Fitness; label: string; sub: string }[] = [
   { value: "active", label: "Active athlete", sub: "Consistently training hard for a goal" },
 ];
 
-export function PlanStep({ stravaConnected }: { stravaConnected: boolean }) {
+export function PlanStep({
+  stravaConnected,
+  suggestedFitness,
+}: {
+  stravaConnected: boolean;
+  suggestedFitness: Fitness | null;
+}) {
   const router = useRouter();
   const [hours, setHours] = useState<Hours | null>(null);
-  const [fitness, setFitness] = useState<Fitness | null>(null);
+  const [fitness, setFitness] = useState<Fitness | null>(suggestedFitness);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -86,11 +92,15 @@ export function PlanStep({ stravaConnected }: { stravaConnected: boolean }) {
         <legend className="text-[10px] font-mono uppercase tracking-widest text-muted mb-1">
           Where are you starting?
         </legend>
-        {stravaConnected && (
+        {suggestedFitness ? (
           <p className="text-[11px] text-blue-300/90">
-            We'll refine this from your Strava history as it syncs in.
+            Pre-selected from your recent activity — change if it feels off.
           </p>
-        )}
+        ) : stravaConnected ? (
+          <p className="text-[11px] text-blue-300/90">
+            We'll refine this as your Strava history syncs in.
+          </p>
+        ) : null}
         <div className="space-y-2">
           {FITNESS_OPTIONS.map((o) => (
             <button
