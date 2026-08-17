@@ -6,6 +6,13 @@ import {
 } from "@/lib/data";
 import type { StrengthExercise } from "@/db/schema";
 import { PlanSubNav } from "@/components/shell/plan-sub-nav";
+import {
+  formatDistance,
+  formatElevation,
+  formatBodyWeightKg,
+  pickUnits,
+  type Units,
+} from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +20,7 @@ const LIMIT = 30;
 
 export default async function HistoryPage() {
   const user = await requireOnboardedUser();
+  const units = pickUnits(user);
 
   const rows = await getRecentWorkouts(user.id, LIMIT);
   const sets = await getStrengthSetsForWorkouts(rows.map((r) => r.workout.id));
@@ -49,6 +57,7 @@ export default async function HistoryPage() {
               workout={w}
               planned={planned}
               sets={setsByWorkoutId.get(w.id) ?? []}
+              units={units}
             />
           ))}
         </div>
@@ -61,6 +70,7 @@ function WorkoutCard({
   workout,
   planned,
   sets,
+  units,
 }: {
   workout: {
     id: number;
@@ -76,6 +86,7 @@ function WorkoutCard({
   };
   planned: { title: string; sessionCategory: string } | null;
   sets: StrengthExercise[];
+  units: Units;
 }) {
   const durationMin =
     workout.durationSeconds != null
@@ -110,14 +121,14 @@ function WorkoutCard({
         workout.elevationGainMeters != null ||
         workout.averageHr != null) && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-          {workout.packWeightKg != null && (
-            <span>Pack {workout.packWeightKg} kg</span>
+          {workout.packWeightKg != null && workout.packWeightKg > 0 && (
+            <span>Pack {formatBodyWeightKg(workout.packWeightKg, units)}</span>
           )}
           {workout.distanceMeters != null && (
-            <span>{(workout.distanceMeters / 1000).toFixed(2)} km</span>
+            <span>{formatDistance(workout.distanceMeters, units)}</span>
           )}
           {workout.elevationGainMeters != null && (
-            <span>+{Math.round(workout.elevationGainMeters)} m</span>
+            <span>+{formatElevation(workout.elevationGainMeters, units)}</span>
           )}
           {workout.averageHr != null && (
             <span>avg HR {workout.averageHr}</span>

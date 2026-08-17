@@ -1338,6 +1338,24 @@ export async function linkWorkoutToPlannedSession(input: {
 }
 
 /**
+ * Toggle unit display preference. Storage stays SI; this only
+ * affects rendering.
+ */
+export async function setUnitsPreference(units: "imperial" | "metric") {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  if (units !== "imperial" && units !== "metric") {
+    throw new Error("Invalid units");
+  }
+  await db
+    .update(userProfile)
+    .set({ units, updatedAt: new Date() })
+    .where(eq(userProfile.id, user.id));
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
  * Trigger a plan-wide relink pass. Called from Settings 'Sync now' and
  * from any plan-mutating action so newly-widened categories or new
  * planned sessions pick up orphan workouts.

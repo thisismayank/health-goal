@@ -46,6 +46,13 @@ export const userProfile = pgTable(
     // generator at signup, kept on profile for later regeneration.
     weeklyTrainingHours: integer("weekly_training_hours"),
     startingFitness: text("starting_fitness"),
+    // Display preference: 'imperial' shows ft/mi/lb, 'metric' shows
+    // m/km/kg. Storage stays canonical (SI internally); this only
+    // affects rendering. Defaults to imperial since the mountaineering
+    // world in the US is imperial and metric users are the minority.
+    units: text("units", { enum: ["imperial", "metric"] })
+      .notNull()
+      .default("imperial"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

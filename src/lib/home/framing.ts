@@ -102,11 +102,18 @@ export function whyThisWorkout(
 // -------- Recovery narrative --------
 
 export function recoveryLine(sheet: CharacterSheet): string {
-  const rec = sheet.stats.REC.value;
-  if (rec >= 85) return `You're fresh today. Recovery is high — push the sets.`;
-  if (rec >= 65) return `Solid recovery. Hit the plan as prescribed.`;
-  if (rec >= 45) return `Moderate recovery. Aim for form + consistency, not PRs.`;
-  if (rec >= 25) return `Recovery is low. Take a warm-up rep to feel it out — pull back if it's off.`;
+  const rec = sheet.stats.REC;
+  // Don't push based on a partial signal. If sleep/HRV/RHR aren't
+  // both present today, say so instead of confidently telling the
+  // user to push.
+  if (!rec.hasEnoughData) {
+    return `Recovery signal is thin today — listen to how you feel in the warm-up rep and let that be the read.`;
+  }
+  const value = rec.value;
+  if (value >= 85) return `You're fresh today. Recovery is high — push the sets.`;
+  if (value >= 65) return `Solid recovery. Hit the plan as prescribed.`;
+  if (value >= 45) return `Moderate recovery. Aim for form + consistency, not PRs.`;
+  if (value >= 25) return `Recovery is low. Take a warm-up rep to feel it out — pull back if it's off.`;
   return `Recovery is red. Consider an easy day or a full rest — the plan doesn't care about one moved day.`;
 }
 

@@ -148,6 +148,13 @@
       "when": 1786947826878,
       "tag": "0020_common_gabe_jones",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1786952974379,
+      "tag": "0021_thin_iron_lad",
+      "breakpoints": true
     }
   ]
 }

@@ -217,6 +217,16 @@ export default async function PresetDetailPage({
           <p className="text-sm text-foreground/80 mt-1 leading-relaxed">
             {VERDICT_SUBHEAD[assessment.verdict]}
           </p>
+          {assessment.weeksToReady != null && (
+            <p className="text-sm text-blue-300/90 mt-2 leading-relaxed">
+              At your current trajectory, closing the biggest gap takes about{" "}
+              <span className="font-mono font-medium text-blue-200 tabular-nums">
+                {assessment.weeksToReady} week
+                {assessment.weeksToReady === 1 ? "" : "s"}
+              </span>
+              .
+            </p>
+          )}
         </div>
 
         {assessment.suggestedAdjustments.length > 0 && (

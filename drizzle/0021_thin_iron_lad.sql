@@ -1,0 +1,1 @@
+ALTER TABLE "user_profile" ADD COLUMN "units" text DEFAULT 'imperial' NOT NULL;

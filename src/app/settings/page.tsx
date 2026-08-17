@@ -15,6 +15,7 @@ import {
   StravaSyncButton,
 } from "@/components/strava-actions";
 import { IntervalsSyncButton } from "@/components/intervals-actions";
+import { UnitsToggle } from "@/components/settings/units-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,19 @@ export default async function SettingsPage({
         >
           See all integrations →
         </Link>
+      </section>
+
+      <section className="rounded-lg border border-panel-border bg-panel p-4 space-y-2">
+        <div className="text-[10px] font-mono uppercase tracking-widest text-muted">
+          [DISPLAY]
+        </div>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-sm">Units</div>
+          <UnitsToggle initial={(user.units as "imperial" | "metric") ?? "imperial"} />
+        </div>
+        <p className="text-[11px] text-muted">
+          Affects rendering only — the underlying data stays in SI.
+        </p>
       </section>
 
       {connected && (

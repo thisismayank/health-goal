@@ -179,6 +179,12 @@ export type TrailAssessment = {
   verdict: Verdict;
   daysUntilTrail: number | null;
   weeksAvailable: number | null; // null if no target date
+  // Rough number of weeks at current growth rate to close the largest
+  // remaining gap. null when already ready OR when the gap is
+  // effectively uncloseable (would need >52 weeks). Used as the
+  // headline output on trail detail so users get a specific horizon
+  // instead of a binary reassurance.
+  weeksToReady: number | null;
   dimensions: DimensionAnalysis[];
   suggestedAdjustments: string[];
   fitnessSnapshot: FitnessSnapshot;
@@ -453,6 +459,30 @@ function analyzePack(
     };
   }
 
+  // Zero-baseline guard: if the user has literally never logged a pack
+  // AND the trail wants a meaningful load (>15 lb), don't project a
+  // fake growth curve. Zero → 24 lb "closable" over 12 weeks is a lie
+  // — the projection assumes progressive loading that hasn't started.
+  // Force this into 'stretch' at minimum, 'not_in_timeframe' if the
+  // gap is large. This is what caught Wonderland showing pack=closable
+  // at ratio=0.00.
+  if (cur === 0 && needed > 15) {
+    const status: DimensionStatus =
+      needed >= 30 ? "not_in_timeframe" : "stretch";
+    return {
+      key: "pack",
+      label: "Pack",
+      status,
+      ratio: 0,
+      current: "no pack logged",
+      required: `${needed} lb`,
+      note:
+        status === "not_in_timeframe"
+          ? `${needed} lb pack with zero loading history — you'd need weeks of progressive loaded hikes before you're ready. Start now, or reduce pack weight.`
+          : `${needed} lb pack is a real load. You've never logged carrying weight — expect the pack to be the limiting factor, not the trail.`,
+    };
+  }
+
   // For multi-day treks, pack weight is often smaller (porters carry the
   // bulk on Kili/EBC) or spread across days. Slightly relaxed.
   // For summit pushes / expeditions, the number IS what you carry.
@@ -639,7 +669,26 @@ function verdictFromDimensions(
     return "comfortable";
   }
 
+  // Worst-dimension gating for real objectives. Averaging dimensions
+  // is how we let Wonderland slip through as 'achievable' with a
+  // ratio-0.00 pack. Instead: any single not_in_timeframe kills the
+  // verdict; any single stretch drops it at least to 'hard' for
+  // summit_push and multi_day (where a weak dimension can bail you
+  // out — turn around, no shame — but also lose you); long_day is
+  // the same idea but slightly more forgiving.
   if (has("not_in_timeframe")) return "do_not_attempt";
+  if (kind === "summit_push" || kind === "multi_day") {
+    if (has("stretch") || has("concern")) return "hard";
+    if (has("closable")) return "achievable";
+    return "comfortable";
+  }
+  if (kind === "long_day") {
+    if (count("stretch") >= 2 || has("concern")) return "hard";
+    if (has("stretch")) return "hard"; // long_day tolerates one stretch less than the old rule
+    if (has("closable")) return "achievable";
+    return "comfortable";
+  }
+  // Fallback (never day_hike — that path returned above).
   if (count("stretch") >= 2 || has("concern")) return "hard";
   if (has("stretch") || has("closable")) return "achievable";
   return "comfortable";
@@ -760,15 +809,53 @@ export async function assessTrail(
 
   const verdict = verdictFromDimensions(dimensions, kind);
   const suggestedAdjustments = suggestAdjustments(trail, dimensions, kind, verdict);
+  const weeksToReady = estimateWeeksToReady(dimensions, verdict);
 
   return {
     verdict,
     daysUntilTrail,
     weeksAvailable: hasDate ? +weeksAvailable.toFixed(1) : null,
+    weeksToReady,
     dimensions,
     suggestedAdjustments,
     fitnessSnapshot: snap,
   };
+}
+
+/**
+ * Rough estimate of how many weeks the user needs at typical growth
+ * rates (10-15%/week endurance, 2 lb/week pack) to close their
+ * largest remaining gap. Used as a headline number ("~14 weeks at
+ * your current trajectory") on trail detail, so users get a specific
+ * horizon instead of a vague verdict.
+ *
+ * Returns null when already ready (nothing to close) OR when the gap
+ * would need >52 weeks (a year+ horizon isn't a useful number,
+ * "postpone" is the honest answer).
+ */
+function estimateWeeksToReady(
+  dims: DimensionAnalysis[],
+  verdict: Verdict,
+): number | null {
+  if (verdict === "comfortable") return null;
+  // Find the least-ready dimension by ratio. Concern/altitude/recovery
+  // aren't buildable on a training timescale — skip them for this
+  // estimate (their fix is rest, acclimatization, or route change).
+  const buildable = dims.filter(
+    (d) =>
+      d.key === "endurance" || d.key === "vertical" || d.key === "pack",
+  );
+  let worstRatio = 1;
+  for (const d of buildable) {
+    if (d.ratio < worstRatio) worstRatio = d.ratio;
+  }
+  if (worstRatio >= 1) return null;
+  // Weekly compounding at ~12%/week average growth: weeks = ln(1/r)/ln(1.12)
+  const weeks = Math.log(1 / Math.max(0.01, worstRatio)) / Math.log(1.12);
+  const rounded = Math.round(weeks);
+  if (rounded < 1) return 1;
+  if (rounded > 52) return null;
+  return rounded;
 }
 
 export const VERDICT_LABEL: Record<Verdict, string> = {

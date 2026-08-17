@@ -27,6 +27,11 @@ export type Stat = {
   metric: string; // one-line human-readable "what actually drove this"
   windowDays: number; // freshness window used
   evidence: Record<string, number | string | null>; // machine-readable breakdown
+  // False when the underlying signals are missing or so partial that
+  // the value shouldn't be treated as trustworthy. UI should show '—'
+  // instead of the number, and coach copy should say 'not enough
+  // data' rather than push based on it.
+  hasEnoughData: boolean;
 };
 
 export type CharacterSheet = {
@@ -133,6 +138,10 @@ async function computeStr(userId: number, now: Date, opts?: ComputeOpts): Promis
     key: "STR",
     label: "Strength",
     value,
+    // STR is signal-rich when the user has logged any strength sets.
+    // A zero doesn't mean 'not enough data', it means 'you haven't
+    // strength trained' — which IS the honest signal.
+    hasEnoughData: true,
     metric,
     windowDays: WINDOW_DAYS.STR,
     evidence: {
@@ -176,6 +185,7 @@ async function computeEnd(userId: number, now: Date, opts?: ComputeOpts): Promis
     key: "END",
     label: "Endurance",
     value,
+    hasEnoughData: true, // aerobic volume is present-or-absent, always honest
     metric: `${Math.round(weeklyAerobic)} min/wk aerobic · longest ${Math.round(longestMin)} min`,
     windowDays: WINDOW_DAYS.END,
     evidence: {
@@ -220,6 +230,7 @@ async function computePow(userId: number, now: Date, opts?: ComputeOpts): Promis
     key: "POW",
     label: "Power",
     value,
+    hasEnoughData: true, // vertical/pack signals are present-or-absent
     metric:
       packLb > 0
         ? `${Math.round(weeklyFeet)} ft/wk vertical · max pack ${Math.round(packLb)} lb`
@@ -276,22 +287,28 @@ async function computeRec(userId: number, now: Date): Promise<Stat> {
     components.length === 0
       ? 60 // neutral when no recovery data yet
       : Math.round(components.reduce((s, v) => s + v, 0) / components.length);
+  // Require at least 2 of 3 signals before we call it a trustworthy
+  // recovery reading. A single high sleep-average today doesn't mean
+  // 'ready to push' if HRV and RHR are missing — that's the bug that
+  // was surfacing REC=100 with '—' visible on /body.
+  const hasEnoughData = components.length >= 2;
 
   const bits: string[] = [];
   if (avgSleepH != null) bits.push(`sleep ${avgSleepH.toFixed(1)}h avg`);
-  if (rhr.baseline != null && rhr.current != null)
+  if (rhr.baseline != null && rhr.current != null && rhr.deltaAbs != null)
     bits.push(
-      `RHR ${rhr.current} (Δ${rhr.deltaAbs! > 0 ? "+" : ""}${rhr.deltaAbs})`,
+      `RHR ${rhr.current} (Δ${rhr.deltaAbs > 0 ? "+" : ""}${rhr.deltaAbs})`,
     );
-  if (hrv.baseline != null && hrv.current != null)
+  if (hrv.baseline != null && hrv.current != null && hrv.deltaPct != null)
     bits.push(
-      `HRV ${hrv.current} (Δ${hrv.deltaPct! > 0 ? "+" : ""}${hrv.deltaPct}%)`,
+      `HRV ${hrv.current} (Δ${hrv.deltaPct > 0 ? "+" : ""}${hrv.deltaPct}%)`,
     );
 
   return {
     key: "REC",
     label: "Recovery",
     value,
+    hasEnoughData,
     metric: bits.length > 0 ? bits.join(" · ") : "no recovery data yet",
     windowDays: WINDOW_DAYS.REC,
     evidence: {
@@ -377,6 +394,7 @@ async function computeWill(userId: number, now: Date, opts?: ComputeOpts): Promi
     key: "WILL",
     label: "Discipline",
     value,
+    hasEnoughData: true, // compliance + streak are honest signals
     metric: `${Math.round(compliancePct)}% 4-wk compliance · ${streak}-day streak`,
     windowDays: WINDOW_DAYS.WILL,
     evidence: {

@@ -58,15 +58,24 @@ export async function StatsStrip({
                   {k}
                 </span>
                 <span
-                  className={`text-xs font-mono font-semibold tabular-nums ${tone}`}
+                  className={`text-xs font-mono font-semibold tabular-nums ${s.hasEnoughData ? tone : "text-muted"}`}
+                  title={
+                    s.hasEnoughData
+                      ? undefined
+                      : "Not enough data yet — connect a source or log more."
+                  }
                 >
-                  {s.value}
+                  {s.hasEnoughData ? s.value : "—"}
                 </span>
               </div>
               <div className="h-1 bg-panel-border rounded overflow-hidden">
                 <div
                   className={`h-full transition-all ${bar} ${highlighted ? "cascade-fill" : ""}`}
-                  style={{ width: `${Math.max(2, s.value)}%` }}
+                  style={{
+                    width: s.hasEnoughData
+                      ? `${Math.max(2, s.value)}%`
+                      : "0%",
+                  }}
                 />
               </div>
             </div>
