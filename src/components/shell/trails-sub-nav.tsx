@@ -6,6 +6,10 @@ import { SubNav } from "./sub-nav";
  * sub-nav.tsx) so they can safely cross the RSC boundary.
  */
 export function TrailsSubNav() {
+  // Backfill was previously a top-level tab. Devin r3 IA read: it's a
+  // one-time setup task occupying permanent navigation. Moved to a
+  // link on the /trails landing page instead — still discoverable,
+  // no longer taking a slot that repeat visitors don't need.
   return (
     <SubNav
       items={[
@@ -32,11 +36,6 @@ export function TrailsSubNav() {
           href: "/trails/library",
           label: "Library",
           match: { prefix: ["/trails/library", "/trails/preset"] },
-        },
-        {
-          href: "/trails/backfill",
-          label: "Backfill",
-          match: { prefix: ["/trails/backfill"] },
         },
       ]}
     />

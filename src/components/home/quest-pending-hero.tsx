@@ -3,6 +3,7 @@ import { LogSessionForm } from "@/components/log-session-form";
 import { ReopenButton } from "@/components/session-actions";
 import { LogPanel } from "@/components/home/log-panel";
 import { PlannedDetails } from "@/components/plan/planned-details";
+import { InlineSessionActions } from "@/components/plan/inline-actions";
 import { SessionIcon } from "@/components/ui/icons";
 import type { PlannedSession } from "@/db/schema";
 
@@ -90,16 +91,37 @@ export async function QuestPendingHero({
           <ReopenButton plannedSessionId={session.id} />
         </div>
       ) : (
-        <LogPanel plannedSessionId={session.id}>
-          <PlannedFormWrap
-            plannedSessionId={session.id}
-            durationMinutes={session.targetDurationMinutes}
-            rpeMin={session.targetRpeMin}
-            rpeMax={session.targetRpeMax}
-            prescription={prescription}
-            userId={userId}
-          />
-        </LogPanel>
+        <>
+          {/* Primary action rail. Devin r3 UX #1: "Put Today on Home
+              with Done/Log/Skip — one tap, no navigation." Same
+              InlineSessionActions used on /train so the affordance
+              feels the same wherever the user sees a session. */}
+          <div className="rounded-lg border border-blue-500/30 bg-blue-950/10 p-3 flex items-center justify-between gap-3">
+            <div className="text-xs text-muted">
+              Done it? Mark it here.
+            </div>
+            <InlineSessionActions
+              plannedSessionId={session.id}
+              targetDurationMinutes={session.targetDurationMinutes}
+              status={session.status}
+              isFuture={false}
+              hasImportedWorkout={false}
+            />
+          </div>
+          {/* Rich manual log stays as an expandable secondary path —
+              useful when the user wants to record sets, HR notes, etc.
+              Skip still lives inside the panel header. */}
+          <LogPanel plannedSessionId={session.id}>
+            <PlannedFormWrap
+              plannedSessionId={session.id}
+              durationMinutes={session.targetDurationMinutes}
+              rpeMin={session.targetRpeMin}
+              rpeMax={session.targetRpeMax}
+              prescription={prescription}
+              userId={userId}
+            />
+          </LogPanel>
+        </>
       )}
     </div>
   );

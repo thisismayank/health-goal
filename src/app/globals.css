@@ -4,7 +4,11 @@
   color-scheme: dark;
   --background: #0a0b0d;
   --foreground: #e8eaed;
-  --muted: #9aa0a6;
+  /* Bumped for outdoor phone visibility. Old #9aa0a6 gave WCAG ~5.4:1
+     on #0a0b0d — passable for large text but marginal for the
+     secondary-metadata density this UI uses. #b8bec5 lands at ~8.5:1
+     which reads cleanly under sunlight on OLED. */
+  --muted: #b8bec5;
   --panel: #14161a;
   --panel-border: #23262c;
   --accent: #78c47a;
