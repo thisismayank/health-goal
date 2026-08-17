@@ -64,6 +64,48 @@ export async function getWellnessRange(
   return res.json();
 }
 
+/**
+ * Activity row from intervals.icu — subset of fields we care about.
+ * Intervals aggregates activities from Garmin, Wahoo, Zwift, Strava,
+ * etc. — so this endpoint gives us the user's full training history
+ * regardless of underlying device.
+ */
+export type IntervalsActivity = {
+  id: string;
+  start_date_local: string; // ISO local time
+  name?: string | null;
+  type?: string | null; // "Hike", "Run", "Ride", "VirtualRide", etc.
+  moving_time?: number | null; // seconds
+  elapsed_time?: number | null;
+  distance?: number | null; // meters
+  total_elevation_gain?: number | null; // meters
+  average_heartrate?: number | null;
+  max_heartrate?: number | null;
+  // Intervals returns these as separate lat/lng numbers, not arrays.
+  start_lat?: number | null;
+  start_lng?: number | null;
+  timezone?: string | null;
+  [k: string]: unknown;
+};
+
+export async function getActivitiesRange(
+  creds: IntervalsCreds,
+  oldestYmd: string,
+  newestYmd: string,
+): Promise<IntervalsActivity[]> {
+  // intervals.icu uses `oldest`/`newest` in YYYY-MM-DD.
+  const url = `${API_BASE}/athlete/${creds.athleteId}/activities?oldest=${oldestYmd}&newest=${newestYmd}`;
+  const res = await fetch(url, {
+    headers: { Authorization: authHeader(creds.apiKey) },
+  });
+  if (!res.ok) {
+    throw new Error(
+      `intervals.icu activities ${res.status}: ${await res.text()}`,
+    );
+  }
+  return res.json();
+}
+
 export type IntervalsAthlete = {
   id: string;
   name?: string | null;

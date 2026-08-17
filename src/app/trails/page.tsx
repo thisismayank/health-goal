@@ -101,19 +101,25 @@ export default async function TrailsPage() {
       )}
 
       <Link
-        href="/trails/link"
+        href="/trails/backfill"
         className="block rounded-lg border border-panel-border bg-panel/60 p-4 hover:border-blue-500/40 transition"
       >
         <div className="text-xs font-mono uppercase tracking-widest text-blue-400">
-          [BACKFILL]
+          [BACKFILL FROM HISTORY]
         </div>
         <div className="text-sm font-medium mt-1">
-          Match your existing hikes to trails →
+          Match your Garmin/Strava hikes to trails →
         </div>
         <div className="text-xs text-muted mt-0.5">
-          Scan your synced Strava activities and one-tap stamp each into your
-          Trail Passport.
+          We suggest candidates using GPS + activity name. You confirm each match.
         </div>
+      </Link>
+
+      <Link
+        href="/trails/link"
+        className="block rounded-lg border border-panel-border bg-panel/60 p-3 hover:border-blue-500/40 transition text-xs text-muted"
+      >
+        Manual link (single workout at a time) →
       </Link>
 
       <details className="rounded-lg border border-panel-border bg-panel p-4 group">

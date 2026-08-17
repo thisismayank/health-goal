@@ -27,6 +27,12 @@ export type TrailPreset = {
   terrainGrade: TrailTerrainGrade;
   notes: string;
   sources: string[];
+  // Approximate trailhead coordinates (WGS84). Used by the historical
+  // hike matcher to find candidate presets within ~5 km of a GPS
+  // activity start point. Optional — trails without coords just aren't
+  // eligible for GPS-based matching (name fallback still works).
+  startLat?: number;
+  startLng?: number;
 };
 
 export const TRAIL_LIBRARY: TrailPreset[] = [

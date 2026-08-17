@@ -134,6 +134,13 @@
       "when": 1786942568285,
       "tag": "0018_striped_cammi",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786944395413,
+      "tag": "0019_bizarre_inertia",
+      "breakpoints": true
     }
   ]
 }

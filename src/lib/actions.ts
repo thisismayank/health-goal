@@ -454,6 +454,22 @@ export async function saveIntervalsCredentials(input: {
   return { ok: true, upserted };
 }
 
+/**
+ * Backfill historical activities from intervals.icu into the workout
+ * table. Pulls last N days (default 365). Idempotent via workoutSource
+ * unique (provider, providerActivityId) — safe to re-run.
+ */
+export async function backfillIntervalsActivities(daysBack = 365) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const { syncActivitiesRecent } = await import("./intervals/activities");
+  const result = await syncActivitiesRecent(user.id, daysBack);
+  revalidatePath("/trails/backfill");
+  revalidatePath("/history");
+  revalidatePath("/");
+  return result;
+}
+
 export async function disconnectIntervals(): Promise<{ ok: true }> {
   const user = await getCurrentUser();
   if (!user) throw new Error("No user found");

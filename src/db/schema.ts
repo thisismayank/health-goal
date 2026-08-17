@@ -186,6 +186,12 @@ export const workout = pgTable("workout", {
   // "Morning at Angel's Landing"). Used by auto-completion linking to
   // fuzzy-match workouts against the trail library.
   sourceName: text("source_name"),
+  // GPS start point (WGS84) if the source provides it. Nullable — many
+  // indoor / manual workouts have no location. Used by the trail
+  // matcher to find preset trails within ~5 km of where the activity
+  // began.
+  startLat: real("start_lat"),
+  startLng: real("start_lng"),
   canonicalSource: text("canonical_source").notNull().default("manual"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -249,6 +255,7 @@ export const WORKOUT_SOURCE_PROVIDERS = [
   "strava",
   "healthkit",
   "garmin",
+  "intervals",
   "fit",
   "gpx",
   "tcx",
