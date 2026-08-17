@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { stravaAccount } from "@/db/schema";
+import { ouraAccount, stravaAccount } from "@/db/schema";
 import { requireCurrentUser } from "@/lib/data";
 import { isConfigured as intervalsConfigured } from "@/lib/intervals/client";
+import { isConfigured as ouraConfigured } from "@/lib/oura/client";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,20 @@ type Integration = {
   glyph: string;
 };
 
-export default async function IntegrationsPage() {
+export default async function IntegrationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const connected =
+    typeof params.connected === "string" ? params.connected : null;
+  const importedCount =
+    typeof params.imported === "string" && /^\d+$/.test(params.imported)
+      ? Number(params.imported)
+      : null;
+  const err = typeof params.error === "string" ? params.error : null;
+
   const user = await requireCurrentUser();
 
   const [strava] = await db
@@ -28,6 +42,14 @@ export default async function IntegrationsPage() {
     .limit(1);
   const stravaConnected = !!strava;
   const intervalsOn = intervalsConfigured();
+
+  const [oura] = await db
+    .select({ id: ouraAccount.id })
+    .from(ouraAccount)
+    .where(eq(ouraAccount.userId, user.id))
+    .limit(1);
+  const ouraConnected = !!oura;
+  const ouraAvailable = ouraConfigured();
 
   const live: Integration[] = [
     {
@@ -53,6 +75,17 @@ export default async function IntegrationsPage() {
       connectHref: "/settings#intervals",
       glyph: "▲",
     },
+    ...(ouraAvailable
+      ? [
+          {
+            name: "Oura Ring",
+            blurb: "Sleep score, readiness, HRV, resting HR.",
+            status: (ouraConnected ? "connected" : "available") as Status,
+            connectHref: "/api/oura/connect",
+            glyph: "◯",
+          },
+        ]
+      : []),
   ];
 
   const comingSoon: Integration[] = [
@@ -63,13 +96,18 @@ export default async function IntegrationsPage() {
       reason: "Waiting on Garmin Health API developer-program approval.",
       glyph: "▽",
     },
-    {
-      name: "Oura Ring",
-      blurb: "Sleep score, HRV, readiness, temperature trend.",
-      status: "approval",
-      reason: "On the roadmap — planned as next integration.",
-      glyph: "◯",
-    },
+    ...(ouraAvailable
+      ? []
+      : [
+          {
+            name: "Oura Ring",
+            blurb: "Sleep score, readiness, HRV, resting HR.",
+            status: "approval" as Status,
+            reason:
+              "Integration code shipped — waiting on OAuth app credentials to be provisioned.",
+            glyph: "◯",
+          },
+        ]),
     {
       name: "Whoop",
       blurb: "Strain, recovery, sleep coach data.",
@@ -123,6 +161,29 @@ export default async function IntegrationsPage() {
           + tune your plan.
         </p>
       </section>
+
+      {connected && (
+        <div className="rounded-md border border-accent-strong/40 bg-accent-strong/10 text-accent px-4 py-2 text-sm">
+          <span className="font-mono">✓</span>{" "}
+          {sourceLabel(connected)} connected
+          {importedCount != null && importedCount > 0 ? (
+            <>
+              {" — "}
+              <span className="font-mono">{importedCount}</span> recent day
+              {importedCount === 1 ? "" : "s"} of data imported.
+            </>
+          ) : (
+            "."
+          )}
+        </div>
+      )}
+      {err && (
+        <div className="rounded-md border border-danger/40 bg-danger/10 text-danger px-4 py-2 text-sm">
+          Connection error: {err === "oura_not_configured"
+            ? "Oura credentials haven't been provisioned on the server yet."
+            : err}
+        </div>
+      )}
 
       <section className="space-y-3">
         <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
@@ -198,6 +259,12 @@ function IntegrationCard({ integration }: { integration: Integration }) {
       </div>
     </div>
   );
+}
+
+function sourceLabel(key: string): string {
+  if (key === "strava") return "Strava";
+  if (key === "oura") return "Oura Ring";
+  return "Source";
 }
 
 function StatusChip({

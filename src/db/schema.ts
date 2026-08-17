@@ -304,6 +304,32 @@ export const stravaAccount = pgTable(
   ],
 );
 
+export const ouraAccount = pgTable(
+  "oura_account",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userProfile.id, { onDelete: "cascade" }),
+    // Oura returns an internal user identifier we can use to dedupe
+    // repeat connects; nullable because their `/personal_info` endpoint
+    // is optional to call.
+    ouraUserId: text("oura_user_id"),
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    scope: text("scope"),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [uniqueIndex("oura_account_user_idx").on(table.userId)],
+);
+
 export const stravaWebhookSubscription = pgTable("strava_webhook_subscription", {
   id: serial("id").primaryKey(),
   subscriptionId: integer("subscription_id").notNull(),

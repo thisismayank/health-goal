@@ -120,6 +120,13 @@
       "when": 1786929985048,
       "tag": "0016_broken_spot",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786941618511,
+      "tag": "0017_strong_toad_men",
+      "breakpoints": true
     }
   ]
 }
