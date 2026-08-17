@@ -5,20 +5,27 @@ import { useRouter } from "next/navigation";
 import { linkWorkoutToPreset } from "@/lib/actions";
 import type { Workout } from "@/db/schema";
 import type { TrailMatchCandidate } from "@/lib/basecamp/trail-matcher";
+import { formatDistance, formatElevation, type Units } from "@/lib/units";
 
 type Item = { workout: Workout; matches: TrailMatchCandidate[] };
 
-export function BackfillList({ items }: { items: Item[] }) {
+export function BackfillList({
+  items,
+  units,
+}: {
+  items: Item[];
+  units: Units;
+}) {
   return (
     <div className="space-y-3">
       {items.map((item) => (
-        <BackfillRow key={item.workout.id} item={item} />
+        <BackfillRow key={item.workout.id} item={item} units={units} />
       ))}
     </div>
   );
 }
 
-function BackfillRow({ item }: { item: Item }) {
+function BackfillRow({ item, units }: { item: Item; units: Units }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<
@@ -73,7 +80,7 @@ function BackfillRow({ item }: { item: Item }) {
               <>
                 {" · "}
                 <span className="tabular-nums">
-                  {(w.distanceMeters / 1000).toFixed(1)} km
+                  {formatDistance(w.distanceMeters, units)}
                 </span>
               </>
             )}
@@ -81,9 +88,8 @@ function BackfillRow({ item }: { item: Item }) {
               <>
                 {" · +"}
                 <span className="tabular-nums">
-                  {Math.round(w.elevationGainMeters * 3.28084)}
-                </span>{" "}
-                ft
+                  {formatElevation(w.elevationGainMeters, units)}
+                </span>
               </>
             )}
             {w.durationSeconds != null && (
@@ -127,8 +133,17 @@ function BackfillRow({ item }: { item: Item }) {
                   </>
                 )}
                 {" · "}
-                <span className="opacity-70">
-                  score {Math.round(m.totalScore * 100)}
+                <span
+                  className={
+                    m.totalScore >= 0.7
+                      ? "text-accent"
+                      : m.totalScore >= 0.45
+                        ? "text-blue-300/80"
+                        : "text-muted"
+                  }
+                  title={`Overall ${Math.round(m.totalScore * 100)}/100 · name ${Math.round(m.nameScore * 100)} · profile ${Math.round(m.profileScore * 100)}`}
+                >
+                  {confidenceLabel(m.totalScore)}
                 </span>
               </div>
             </div>
@@ -177,4 +192,13 @@ function formatDuration(seconds: number): string {
   const m = Math.floor((seconds % 3600) / 60);
   if (h === 0) return `${m}m`;
   return `${h}h ${m.toString().padStart(2, "0")}m`;
+}
+
+// Devin r2: "score 26" vs "score 69" was opaque — is 69 good? What's
+// the threshold to trust the top match? Convert to a plain label with
+// the numeric breakdown hidden in the tooltip for anyone curious.
+function confidenceLabel(score: number): string {
+  if (score >= 0.7) return "strong match";
+  if (score >= 0.45) return "likely match";
+  return "possible match";
 }

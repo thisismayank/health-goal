@@ -7,6 +7,7 @@ import { matchWorkoutToTrails } from "@/lib/basecamp/trail-matcher";
 import { BackfillList } from "./backfill-list";
 import { RunBackfillButton } from "./run-backfill-button";
 import { TrailsSubNav } from "@/components/shell/trails-sub-nav";
+import { pickUnits } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ const HIKEY_TYPES = ["OUTDOOR_HIKE", "LOADED_HIKE", "ZONE2_CARDIO"];
 
 export default async function BackfillPage() {
   const user = await requireOnboardedUser();
+  const units = pickUnits(user);
 
   // Workouts already linked to a trail completion — exclude from
   // suggestions so we don't ask twice.
@@ -85,7 +87,7 @@ export default async function BackfillPage() {
           <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
             [POSSIBLE MATCHES · {withMatches.length}]
           </div>
-          <BackfillList items={withMatches} />
+          <BackfillList items={withMatches} units={units} />
         </section>
       )}
 
