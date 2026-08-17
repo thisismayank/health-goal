@@ -8,6 +8,7 @@ import {
 } from "@/db/schema";
 import { requireCurrentUser } from "@/lib/data";
 import { NotificationToggle } from "@/components/settings/notification-toggle";
+import { PushToggle } from "@/components/settings/push-toggle";
 import { isConfigured as intervalsConfigured } from "@/lib/intervals/client";
 import {
   StravaDisconnectButton,
@@ -231,6 +232,14 @@ export default async function SettingsPage({
             label="Featured trail of the week"
             description="Monday morning email with one hand-picked trail matched to your Hiker Class. New each week."
             initialEnabled={featuredTrailEnabled}
+          />
+        </div>
+        <div className="pt-4 border-t border-panel-border space-y-2">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
+            [PUSH NOTIFICATIONS]
+          </div>
+          <PushToggle
+            vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
           />
         </div>
       </section>

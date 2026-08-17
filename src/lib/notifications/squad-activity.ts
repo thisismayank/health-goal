@@ -17,6 +17,7 @@ import {
   userProfile,
 } from "@/db/schema";
 import { isEmailEnabled, sendNotificationEmail } from "./send";
+import { sendNotificationPush } from "./push";
 
 const KIND = "squad_activity";
 
@@ -92,23 +93,48 @@ export async function notifySquadOfCompletion({
     appUrl,
   });
 
+  const actorFirst = row.actorName.split(" ")[0];
+  const timeChunk =
+    row.timeMinutes != null
+      ? ` in ${formatMinutes(row.timeMinutes)}`
+      : "";
+
   // Fire per-recipient. Sequential — small squads (≤8) mean at most 7
   // per completion. If squads ever get bigger, switch to Promise.all.
   for (const r of others) {
     if (!r.email) continue;
+    const dedupeKey = `squad_activity_${completionId}_${r.userId}`;
     const enabled = await isEmailEnabled(r.userId, KIND);
-    if (!enabled) continue;
-    await sendNotificationEmail({
+    if (enabled) {
+      await sendNotificationEmail({
+        userId: r.userId,
+        to: r.email,
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+        kind: KIND,
+        dedupeKey,
+      });
+    }
+    // Push in parallel — silent no-op when VAPID unset / no subs /
+    // opted-out. Even if the user opted out of email, they can be
+    // opted into push independently.
+    await sendNotificationPush({
       userId: r.userId,
-      to: r.email,
-      subject: email.subject,
-      text: email.text,
-      html: email.html,
       kind: KIND,
-      dedupeKey: `squad_activity_${completionId}_${r.userId}`,
-    });
+      dedupeKey,
+      payload: {
+        title: `${actorFirst} did ${row.trailName}${timeChunk}`,
+        body: row.notes
+          ? `"${row.notes}"`
+          : `${row.distanceKm} km · +${row.elevationGainFt.toLocaleString()} ft`,
+        url: `${appUrl}/trails/${row.trailId}`,
+        tag: `squad_${completionId}`,
+      },
+    }).catch(() => {});
   }
 }
+
 
 type EmailArgs = {
   actorName: string;

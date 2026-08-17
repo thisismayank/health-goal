@@ -20,6 +20,7 @@ import {
   isEmailEnabled,
   sendNotificationEmail,
 } from "@/lib/notifications/send";
+import { sendNotificationPush } from "@/lib/notifications/push";
 import { isoWeekTag } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,21 @@ async function processUser(
     kind: KIND,
     dedupeKey,
   });
+  const total = payload.ready.length + payload.achievable.length;
+  await sendNotificationPush({
+    userId: user.id,
+    kind: KIND,
+    dedupeKey,
+    payload: {
+      title: `${total} hike${total === 1 ? "" : "s"} ready for you this weekend`,
+      body:
+        payload.ready[0]?.preset.name ??
+        payload.achievable[0]?.preset.name ??
+        "See what's ready →",
+      url: `${appUrl}/trails/discover`,
+      tag: "weekend_nudge",
+    },
+  }).catch(() => {});
 
   if (send.ok && send.skipped === "deduped") {
     return { userId: user.id, email: user.email, result: "deduped" };

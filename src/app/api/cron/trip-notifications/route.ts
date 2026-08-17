@@ -19,6 +19,7 @@ import { trail, userProfile, type Trail, type UserProfile } from "@/db/schema";
 import { parseYmd, todayInTimeZone, ymd } from "@/lib/date";
 import { buildTripEmail } from "@/lib/notifications/trip-emails";
 import { isEmailEnabled, sendNotificationEmail } from "@/lib/notifications/send";
+import { sendNotificationPush } from "@/lib/notifications/push";
 import type { TripPhase } from "@/lib/home/state";
 import { tryFetchTripForecast } from "@/lib/weather/trip-forecast";
 
@@ -150,6 +151,18 @@ async function processUser(user: UserProfile, appUrl: string): Promise<ProcessRe
     kind: KIND,
     dedupeKey,
   });
+  // Push in parallel — silent when VAPID isn't set / no subs / opted out.
+  await sendNotificationPush({
+    userId: user.id,
+    kind: KIND,
+    dedupeKey,
+    payload: {
+      title: email.subject,
+      body: tripPushBody(phase, trip.name, Math.max(0, days)),
+      url: `${appUrl}/`,
+      tag: `trip_${trip.id}`,
+    },
+  }).catch(() => {});
   if (send.ok && send.skipped === "deduped") {
     return { userId: user.id, email: user.email, result: "deduped" };
   }
@@ -167,6 +180,18 @@ async function processUser(user: UserProfile, appUrl: string): Promise<ProcessRe
     result: "sent",
     detail: dedupeKey,
   };
+}
+
+function tripPushBody(
+  phase: TripPhase,
+  trailName: string,
+  days: number,
+): string {
+  if (phase === "final_prep") return `1 week until ${trailName} — final prep window`;
+  if (phase === "taper")
+    return `${days} day${days === 1 ? "" : "s"} to ${trailName} — taper mode`;
+  if (phase === "trip_day") return `Today's the day. Have an amazing hike.`;
+  return `How did ${trailName} go? Log it when you're back.`;
 }
 
 function authorized(req: Request): boolean {

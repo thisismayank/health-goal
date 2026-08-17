@@ -36,6 +36,7 @@ export async function sendNotificationEmail(
   input: SendEmailInput,
 ): Promise<SendResult> {
   // Fast-path dedupe check (avoids the API call when we know we've sent).
+  // Scoped to the 'email' channel so push can send independently.
   const existing = await db
     .select({ id: notificationDelivery.id })
     .from(notificationDelivery)
@@ -43,6 +44,7 @@ export async function sendNotificationEmail(
       and(
         eq(notificationDelivery.userId, input.userId),
         eq(notificationDelivery.dedupeKey, input.dedupeKey),
+        eq(notificationDelivery.channel, "email"),
       ),
     )
     .limit(1);
@@ -141,7 +143,11 @@ async function logDelivery(v: {
     .insert(notificationDelivery)
     .values(v)
     .onConflictDoNothing({
-      target: [notificationDelivery.userId, notificationDelivery.dedupeKey],
+      target: [
+        notificationDelivery.userId,
+        notificationDelivery.dedupeKey,
+        notificationDelivery.channel,
+      ],
     });
 }
 

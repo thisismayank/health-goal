@@ -20,6 +20,7 @@ import {
   isEmailEnabled,
   sendNotificationEmail,
 } from "@/lib/notifications/send";
+import { sendNotificationPush } from "@/lib/notifications/push";
 import { isoWeekTag } from "@/lib/date";
 import { generateFeaturedNarrative } from "@/lib/coach/featured-narrative";
 
@@ -82,6 +83,17 @@ async function processUser(
     kind: KIND,
     dedupeKey,
   });
+  await sendNotificationPush({
+    userId: user.id,
+    kind: KIND,
+    dedupeKey,
+    payload: {
+      title: `Featured this week: ${payload.preset.name}`,
+      body: narrative?.hook ?? payload.preset.region,
+      url: `${appUrl}/trails/preset/${payload.preset.slug}`,
+      tag: `featured_${weekTag}`,
+    },
+  }).catch(() => {});
 
   if (send.ok && send.skipped === "deduped") {
     return { userId: user.id, email: user.email, result: "deduped" };

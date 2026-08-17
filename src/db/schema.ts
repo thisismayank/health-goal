@@ -429,6 +429,7 @@ export const notificationPreference = pgTable(
     //   'weekly_summary' — future: Sunday recap
     kind: text("kind").notNull(),
     emailEnabled: boolean("email_enabled").notNull().default(true),
+    pushEnabled: boolean("push_enabled").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -438,10 +439,10 @@ export const notificationPreference = pgTable(
   }),
 );
 
-// One row per notification sent. dedupeKey is a per-user unique key
-// used to prevent double-sends when the cron reruns (e.g. trip_45_t-3
-// = at most one send per trail per phase). channel is 'email' today,
-// 'push' once we ship web push.
+// One row per notification sent. dedupeKey is a per-user unique key used
+// to prevent double-sends when the cron reruns (e.g. trip_45_t-3 = at
+// most one send per trail per phase per channel). Unique includes
+// channel so email + push can both fire for the same event.
 export const notificationDelivery = pgTable(
   "notification_delivery",
   {
@@ -463,9 +464,31 @@ export const notificationDelivery = pgTable(
     uniqDelivery: uniqueIndex("notification_delivery_uniq").on(
       t.userId,
       t.dedupeKey,
+      t.channel,
     ),
   }),
 );
+
+// Web push subscription — one per (user, browser/device). Endpoint is
+// the Push service URL (browser-specific). p256dh + auth are the
+// subscription's encryption keys. On 410 Gone from Push service we
+// delete the row.
+export const pushSubscription = pgTable("push_subscription", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => userProfile.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 // One row per attempt/completion of a trail. A single trail can accumulate
 // many completions over time (Mount Si → 10x). workoutId links to the
@@ -508,3 +531,4 @@ export type Squad = typeof squad.$inferSelect;
 export type SquadMember = typeof squadMember.$inferSelect;
 export type NotificationPreference = typeof notificationPreference.$inferSelect;
 export type NotificationDelivery = typeof notificationDelivery.$inferSelect;
+export type PushSubscription = typeof pushSubscription.$inferSelect;
