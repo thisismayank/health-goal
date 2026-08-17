@@ -649,41 +649,82 @@ function analyzeAltitude(
   trail: Trail,
   snap: FitnessSnapshot,
   kind: TrailKind,
+  weeksAvail: number,
 ): DimensionAnalysis {
   const alt = trail.maxAltitudeFt;
   const known = snap.maxAltitudeReachedFt;
 
-  // Multi-day treks bake acclimatization into the itinerary (climb high,
-  // sleep low over N days). A day hike or summit push to the same altitude
-  // hits you much harder — thin air with no time to adapt.
-  const acclimatizationBuffer = kind === "multi_day" ? 3000 : 0;
+  // Multi-day treks bake acclimatization into the itinerary (climb
+  // high, sleep low over N days). Guided summit pushes (Rainier DC,
+  // Baker, most 14ers on the standard route) similarly include a
+  // 1-2 night approach at intermediate altitude — a smaller but real
+  // buffer. A day hike straight from sea level to the same summit
+  // hits hardest.
+  //
+  // For summit_push, only apply the buffer when the user has enough
+  // runway to do one prior high-altitude trip (~8 weeks). Otherwise
+  // it's just a big single push with no adaptation.
+  const acclimatizationBuffer =
+    kind === "multi_day"
+      ? 3000
+      : kind === "summit_push" && weeksAvail >= 8
+        ? 1500
+        : 0;
   const effectiveAlt = alt - acclimatizationBuffer;
+
+  // Prior recent exposure reduces effective altitude further. Not
+  // 1:1 — going to 12k once doesn't make you Nepal-ready — but if
+  // your recent high is close to the target, the shock is smaller.
+  const priorExposureBuffer =
+    known != null ? Math.max(0, Math.min(2000, known - 6000) / 2) : 0;
+  const netEffectiveAlt = effectiveAlt - priorExposureBuffer;
 
   let status: DimensionStatus;
   let note: string;
   const modeNote =
     kind === "multi_day"
-      ? "Multi-day acclimatization built into the trek (climb high, sleep low over days) — altitude tolerance is dramatically better than a single-day push to the same height. "
-      : "";
+      ? "Multi-day acclimatization built into the trek — tolerance is dramatically better than a single-day push. "
+      : kind === "summit_push" && weeksAvail >= 8
+        ? "Guided summit itineraries include a 1-2 night approach at intermediate altitude; use that plus one prior high-altitude trip in the training block. "
+        : "";
 
-  if (effectiveAlt < 6000) {
+  if (netEffectiveAlt < 6000) {
     status = "ready";
     note = `${modeNote}Sub-alpine altitude — no acclimatization concern.`;
-  } else if (effectiveAlt < 8000) {
+  } else if (netEffectiveAlt < 8000) {
     status = "ready";
     note = `${modeNote}Mild elevation — most sea-level residents handle this fine.`;
-  } else if (effectiveAlt < 10000) {
+  } else if (netEffectiveAlt < 10000) {
     status = "stretch";
     note = `${modeNote}Effective ~8–10k ft — sea-level residents may feel it (headache, shortness of breath). Pace conservatively.`;
-  } else if (effectiveAlt < 12000) {
-    status = "concern";
-    note = `${modeNote}Effective ~10–12k ft — real altitude. Prior acclimatization within the last 60 days helps; going direct from sea level is uncomfortable.`;
-  } else if (effectiveAlt < 14000) {
-    status = "concern";
-    note = `${modeNote}Effective ~12–14k ft — significant thin air. Sleep the night before at moderate altitude if possible.`;
+  } else if (netEffectiveAlt < 12000) {
+    status = weeksAvail >= 12 ? "closable" : "concern";
+    note =
+      status === "closable"
+        ? `${modeNote}Effective ~10–12k ft. Closable with a graded exposure block: one hike to 8-9k in the 2 months before the trip.`
+        : `${modeNote}Effective ~10–12k ft — real altitude. Prior acclimatization within the last 60 days helps; going direct from sea level is uncomfortable.`;
+  } else if (netEffectiveAlt < 14000) {
+    status = weeksAvail >= 12 ? "closable" : "concern";
+    note =
+      status === "closable"
+        ? `${modeNote}Effective ~12–14k ft. Closable with real acclimatization: a night at 8-10k a few weeks out, then the guided approach at altitude the day before.`
+        : `${modeNote}Effective ~12–14k ft — significant thin air. Sleep the night before at moderate altitude if possible.`;
   } else {
-    status = "not_in_timeframe";
-    note = `${modeNote}Effective above 14k ft — needs proper acclimatization protocol (multiple days at intermediate altitudes) before attempting.`;
+    // 14k+ effective. This is the hard bar. Only categorically
+    // disqualify when the trip is imminent AND no prior high-altitude
+    // exposure. With runway, this is closable — real 8000m expeditions
+    // are ~2-month acclimatization protocols; sub-15k summit pushes are
+    // closable in half that.
+    if (weeksAvail >= 12) {
+      status = "closable";
+      note = `${modeNote}Above 14k ft. Real altitude — needs a formal acclimatization plan (progressive exposure days + a night at intermediate altitude before the summit push). You have ${Math.round(weeksAvail)}wk to build it in.`;
+    } else if (weeksAvail >= 4) {
+      status = "stretch";
+      note = `${modeNote}Above 14k ft with limited runway. Book at least one high day (8-10k+) before your trip and lean hard on the guided acclimatization protocol.`;
+    } else {
+      status = "not_in_timeframe";
+      note = `${modeNote}Above 14k ft with under 4 weeks and no prior high-altitude exposure. Not safe to attempt without a proper acclimatization block. Postpone.`;
+    }
   }
 
   return {
@@ -691,18 +732,20 @@ function analyzeAltitude(
     label: "Altitude",
     status,
     ratio:
-      effectiveAlt < 8000
+      netEffectiveAlt < 8000
         ? 1
-        : effectiveAlt < 10000
+        : netEffectiveAlt < 10000
           ? 0.7
-          : effectiveAlt < 12000
+          : netEffectiveAlt < 12000
             ? 0.5
-            : 0.3,
+            : netEffectiveAlt < 14000
+              ? 0.4
+              : 0.3,
     current:
       known != null
         ? `last high point: ${known.toLocaleString()} ft`
         : "no altitude history",
-    required: `${alt.toLocaleString()} ft${kind === "multi_day" ? ` (effective ~${effectiveAlt.toLocaleString()} ft with acclimatization)` : ""}`,
+    required: `${alt.toLocaleString()} ft${acclimatizationBuffer > 0 ? ` (effective ~${effectiveAlt.toLocaleString()} ft with itinerary acclimatization)` : ""}`,
     note,
   };
 }
@@ -939,7 +982,7 @@ export async function assessTrail(
     analyzeEndurance(trail, snap, weeksAvailable, hasDate),
     analyzeVertical(trail, snap, weeksAvailable, hasDate, kind),
     analyzePack(trail, snap, weeksAvailable, hasDate, kind),
-    analyzeAltitude(trail, snap, kind),
+    analyzeAltitude(trail, snap, kind, weeksAvailable),
     analyzeRecovery(snap, kind),
   ];
 
