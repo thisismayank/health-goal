@@ -169,6 +169,13 @@
       "when": 1786984521724,
       "tag": "0023_coach_summary_and_tee_up",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786985074733,
+      "tag": "0024_home_coords",
+      "breakpoints": true
     }
   ]
 }

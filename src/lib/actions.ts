@@ -1473,3 +1473,38 @@ export async function relinkCurrentPlan() {
   if (result.planId > 0) revalidatePath(`/plan/${result.planId}`);
   return result;
 }
+
+/**
+ * Set (or clear) the user's home base. Powers the "Near me" trail
+ * ranking on /trails. Accepts a free-form location string OR a
+ * literal "lat, lng" paste; geocoding via OSM/Nominatim.
+ */
+export async function setHomeBase(input: {
+  query: string;
+}): Promise<{ ok: true; label: string } | { ok: false; error: string }> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const q = input.query.trim();
+  if (!q) {
+    // Empty input clears the home base entirely.
+    await db
+      .update(userProfile)
+      .set({ homeLocation: null, homeLat: null, homeLng: null })
+      .where(eq(userProfile.id, user.id));
+    revalidatePath("/settings");
+    revalidatePath("/trails");
+    return { ok: true, label: "cleared" };
+  }
+  const { geocode } = await import("./geocode");
+  const hit = await geocode(q);
+  if (!hit) {
+    return { ok: false, error: "Couldn't find that location. Try a city name or paste 'lat, lng'." };
+  }
+  await db
+    .update(userProfile)
+    .set({ homeLocation: hit.label, homeLat: hit.lat, homeLng: hit.lng })
+    .where(eq(userProfile.id, user.id));
+  revalidatePath("/settings");
+  revalidatePath("/trails");
+  return { ok: true, label: hit.label };
+}

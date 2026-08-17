@@ -26,7 +26,15 @@ export const userProfile = pgTable(
     heightCm: real("height_cm"),
     currentWeightKg: real("current_weight_kg"),
     timezone: text("timezone").notNull().default("America/New_York"),
+    // Freeform label like "Manhattan, NY". Kept for display + so we
+    // can re-geocode if the user asks. Nullable — many users won't
+    // set it and everything below degrades gracefully.
     homeLocation: text("home_location"),
+    // Resolved coords for the home base, used by /trails "near me"
+    // ranking. Nullable together with homeLocation; either both are
+    // set (via the settings form) or both are null.
+    homeLat: real("home_lat"),
+    homeLng: real("home_lng"),
     summitGoal: text("summit_goal"),
     summitDate: text("summit_date"),
     dietaryPreference: text("dietary_preference"),

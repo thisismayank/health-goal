@@ -16,6 +16,7 @@ import {
 } from "@/components/strava-actions";
 import { IntervalsSyncButton } from "@/components/intervals-actions";
 import { UnitsToggle } from "@/components/settings/units-toggle";
+import { HomeBaseForm } from "@/components/settings/home-base-form";
 import { CoachConnectForm } from "@/components/coach/connect-form";
 import { getAccountView as getLlmView } from "@/lib/llm/credentials";
 
@@ -103,6 +104,21 @@ export default async function SettingsPage({
         <p className="text-[11px] text-muted">
           Affects rendering only — the underlying data stays in SI.
         </p>
+      </section>
+
+      <section className="rounded-lg border border-panel-border bg-panel p-4 space-y-2">
+        <div className="text-[10px] font-mono uppercase tracking-widest text-muted">
+          [HOME BASE]
+        </div>
+        <p className="text-[11px] text-muted">
+          Powers the &quot;Ready near you&quot; section on the Trails tab.
+          Optional — leave blank to hide the section.
+        </p>
+        <HomeBaseForm
+          initialLabel={user.homeLocation}
+          initialLat={user.homeLat}
+          initialLng={user.homeLng}
+        />
       </section>
 
       {connected && (
