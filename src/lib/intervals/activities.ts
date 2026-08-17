@@ -126,6 +126,25 @@ async function upsertOne(
     return "updated";
   }
 
+  // Cross-provider dedupe: if a Strava import (or any other provider)
+  // already wrote this activity, attach our intervals metadata to
+  // that row instead of creating a second workout. Otherwise volume
+  // + vertical + compliance-window all double-count.
+  const { findExistingDuplicate } = await import("@/lib/workouts/dedupe");
+  const dupe = await findExistingDuplicate({
+    userId,
+    startTime,
+    distanceMeters: values.distanceMeters,
+  });
+  if (dupe) {
+    await db.insert(workoutSource).values({
+      workoutId: dupe.id,
+      provider: "intervals",
+      providerActivityId: String(a.id),
+    });
+    return "skipped"; // recorded provider metadata, didn't add a workout row
+  }
+
   const [inserted] = await db.insert(workout).values(values).returning();
   await db.insert(workoutSource).values({
     workoutId: inserted.id,

@@ -83,6 +83,7 @@ function WorkoutCard({
     distanceMeters: number | null;
     elevationGainMeters: number | null;
     averageHr: number | null;
+    canonicalSource: string;
   };
   planned: { title: string; sessionCategory: string } | null;
   sets: StrengthExercise[];
@@ -101,8 +102,9 @@ function WorkoutCard({
     <article className="rounded-lg border border-panel-border bg-panel p-4 space-y-3">
       <header className="flex items-baseline justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-widest text-muted">
-            {format(workout.startTime, "EEE MMM d · h:mm a")}
+          <div className="text-xs uppercase tracking-widest text-muted flex items-center gap-2">
+            <span>{format(workout.startTime, "EEE MMM d · h:mm a")}</span>
+            <SourceBadge source={workout.canonicalSource} />
           </div>
           <h2 className="text-base font-medium mt-0.5">{title}</h2>
         </div>
@@ -116,20 +118,28 @@ function WorkoutCard({
         </div>
       </header>
 
-      {(workout.packWeightKg != null ||
-        workout.distanceMeters != null ||
-        workout.elevationGainMeters != null ||
+      {/* Metric row — only render if there's real data. Manual
+          completions have no distance / elevation / HR and previously
+          rendered '0.00 mi +0 ft' next to real GPS activities, which
+          made the feed unreadable. */}
+      {((workout.packWeightKg != null && workout.packWeightKg > 0) ||
+        (workout.distanceMeters != null && workout.distanceMeters > 0) ||
+        (workout.elevationGainMeters != null &&
+          workout.elevationGainMeters > 0) ||
         workout.averageHr != null) && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
           {workout.packWeightKg != null && workout.packWeightKg > 0 && (
             <span>Pack {formatBodyWeightKg(workout.packWeightKg, units)}</span>
           )}
-          {workout.distanceMeters != null && (
+          {workout.distanceMeters != null && workout.distanceMeters > 0 && (
             <span>{formatDistance(workout.distanceMeters, units)}</span>
           )}
-          {workout.elevationGainMeters != null && (
-            <span>+{formatElevation(workout.elevationGainMeters, units)}</span>
-          )}
+          {workout.elevationGainMeters != null &&
+            workout.elevationGainMeters > 0 && (
+              <span>
+                +{formatElevation(workout.elevationGainMeters, units)}
+              </span>
+            )}
           {workout.averageHr != null && (
             <span>avg HR {workout.averageHr}</span>
           )}
@@ -161,6 +171,31 @@ function WorkoutCard({
         </p>
       )}
     </article>
+  );
+}
+
+function SourceBadge({ source }: { source: string }) {
+  // Distinguish manually-marked completions from real device imports.
+  // Devin round 2: "plan sessions currently show 0.00 mi +0 ft next
+  // to real GPS activities" — the missing visual cue was the biggest
+  // cause of feed unreadability.
+  const meta: Record<string, { label: string; tone: string }> = {
+    manual: { label: "logged", tone: "text-blue-300/80 border-blue-500/30" },
+    strava: { label: "strava", tone: "text-muted border-panel-border" },
+    intervals: {
+      label: "intervals",
+      tone: "text-muted border-panel-border",
+    },
+    healthkit: { label: "health", tone: "text-muted border-panel-border" },
+    garmin: { label: "garmin", tone: "text-muted border-panel-border" },
+  };
+  const m = meta[source] ?? { label: source, tone: "text-muted border-panel-border" };
+  return (
+    <span
+      className={`text-[9px] font-mono uppercase tracking-wider border rounded px-1 py-0.5 ${m.tone}`}
+    >
+      {m.label}
+    </span>
   );
 }
 

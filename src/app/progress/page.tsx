@@ -125,7 +125,7 @@ export default async function ProgressPage() {
                 <ul className="space-y-0.5 text-xs">
                   {rank.nextUnlocks.map((u, i) => (
                     <li key={i} className="flex gap-2">
-                      <span className="text-muted">🔒</span>
+                      <span className="text-muted">▸</span>
                       <span className="text-muted">{u}</span>
                     </li>
                   ))}

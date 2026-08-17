@@ -85,17 +85,22 @@ export async function upsertActivity(
     .limit(1);
 
   // Strava's total_elevation_gain is barometric-summed and often
-  // wildly wrong for tree-covered / building-shaded activities —
-  // we've seen 5,000 ft gain on a 3-mile city walk. Trust nothing
-  // above 300 m/km (about a 30% average grade, steeper than most
-  // hiking trails). Drop suspicious values so the readiness engine
-  // and summit meter don't build on lies.
+  // wildly wrong for tree-covered / building-shaded activities. Devin
+  // round 2 caught 14,000 ft over 11 miles that slipped my 300 m/km
+  // filter (234 m/km — still an implausible 23% sustained grade).
+  //
+  // Rule: drop anything above 150 m/km (15% average — even the
+  // Wonderland Trail averages under 100). Also drop when the raw
+  // gain is >2000 m and the activity name looks like a routine walk
+  // (Strava mislabels tall-building elevator rides as gain).
   const rawGainM = a.total_elevation_gain ?? null;
   const gainPerKm =
     rawGainM != null && a.distance && a.distance > 0
       ? (rawGainM * 1000) / a.distance
       : 0;
-  const sanitizedGainM = gainPerKm > 300 ? null : rawGainM;
+  const routineName = /walk|commute|errand/i.test(a.name ?? "");
+  const impossibleTotal = rawGainM != null && rawGainM > 2000 && routineName;
+  const sanitizedGainM = gainPerKm > 150 || impossibleTotal ? null : rawGainM;
 
   const workoutValues = {
     userId,
@@ -139,18 +144,43 @@ export async function upsertActivity(
       .where(eq(workoutSource.id, existing[0].id));
     action = "updated";
   } else {
-    const [inserted] = await db
-      .insert(workout)
-      .values(workoutValues)
-      .returning({ id: workout.id });
-    workoutId = inserted.id;
-    await db.insert(workoutSource).values({
-      workoutId,
-      provider: "strava",
-      providerActivityId: String(a.id),
-      metadataJson: JSON.stringify(a),
+    // Cross-provider dedupe: same activity via intervals or elsewhere
+    // shouldn't produce a second workout row.
+    const { findExistingDuplicate } = await import("@/lib/workouts/dedupe");
+    const dupe = await findExistingDuplicate({
+      userId,
+      startTime,
+      distanceMeters: workoutValues.distanceMeters,
     });
-    action = "created";
+    if (dupe) {
+      workoutId = dupe.id;
+      // Prefer Strava as the canonical source when it arrives (richer
+      // GPS + name than intervals mirror).
+      await db
+        .update(workout)
+        .set({ ...workoutValues, canonicalSource: "strava" })
+        .where(eq(workout.id, workoutId));
+      await db.insert(workoutSource).values({
+        workoutId,
+        provider: "strava",
+        providerActivityId: String(a.id),
+        metadataJson: JSON.stringify(a),
+      });
+      action = "updated"; // record for the sync summary
+    } else {
+      const [inserted] = await db
+        .insert(workout)
+        .values(workoutValues)
+        .returning({ id: workout.id });
+      workoutId = inserted.id;
+      await db.insert(workoutSource).values({
+        workoutId,
+        provider: "strava",
+        providerActivityId: String(a.id),
+        metadataJson: JSON.stringify(a),
+      });
+      action = "created";
+    }
   }
 
   // Auto-mark the planned session complete whenever the AGGREGATE of

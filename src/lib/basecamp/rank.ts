@@ -96,6 +96,23 @@ function req(
   return { label, target, currentValue, met };
 }
 
+// Gate helper for stats that carry a hasEnoughData flag (REC currently).
+// Without this, an unmet-but-defaulted score (REC=60 when we have zero
+// recovery signals) silently passed the '≥ 55' A-class check — Devin
+// caught the leak: "REC=100 with a padlock on /body but somehow qualifies
+// for Mountain Athlete." Treat "no data" as "not met" and surface the
+// em-dash on the requirements list so it's obvious why they're blocked.
+function gate(
+  label: string,
+  target: string,
+  stat: { value: number; hasEnoughData: boolean },
+  threshold: number,
+): Requirement {
+  const currentValue = stat.hasEnoughData ? stat.value : "—";
+  const met = stat.hasEnoughData && stat.value >= threshold;
+  return { label, target, currentValue, met };
+}
+
 const GATES: RankGate[] = [
   {
     rank: "D",
@@ -149,12 +166,7 @@ const GATES: RankGate[] = [
       req("Strength score", "≥ 70", s.stats.STR.value, s.stats.STR.value >= 70),
       req("Endurance score", "≥ 70", s.stats.END.value, s.stats.END.value >= 70),
       req("Power score", "≥ 65", s.stats.POW.value, s.stats.POW.value >= 65),
-      req(
-        "Recovery score",
-        "≥ 55",
-        s.stats.REC.value,
-        s.stats.REC.value >= 55,
-      ),
+      gate("Recovery score", "≥ 55", s.stats.REC, 55),
       req(
         "Discipline score",
         "≥ 65",
@@ -169,12 +181,7 @@ const GATES: RankGate[] = [
       req("Strength score", "≥ 85", s.stats.STR.value, s.stats.STR.value >= 85),
       req("Endurance score", "≥ 85", s.stats.END.value, s.stats.END.value >= 85),
       req("Power score", "≥ 80", s.stats.POW.value, s.stats.POW.value >= 80),
-      req(
-        "Recovery score",
-        "≥ 65",
-        s.stats.REC.value,
-        s.stats.REC.value >= 65,
-      ),
+      gate("Recovery score", "≥ 65", s.stats.REC, 65),
       req(
         "Discipline score",
         "≥ 75",

@@ -1461,18 +1461,40 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
   },
 ];
 
-// Dedupe on read — the seed data has a few accidental duplicate slugs
-// (grays-torreys, katahdin-knife-edge, inca-trail appear twice with
-// slightly different metadata). Keep the first occurrence so we have
-// one entry per slug across the app. Merging the underlying array
-// entries is a manual editorial pass; this ensures the UI never
-// double-lists the same trail in the meantime.
+// Normalize a trail identity for dedupe. Strips region punctuation
+// variants ('White Mtns' vs 'White Mts'), drops the ' Trek' /
+// ' Circumnavigation' suffixes, and collapses whitespace so the same
+// trail with a slightly-different name/region gets one entry.
+function trailKey(t: TrailPreset): string {
+  const region = t.region
+    .toLowerCase()
+    .replace(/\bmtns?\b|\bmountains\b/g, "mt")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const name = t.name
+    .toLowerCase()
+    .replace(/\b(trek|circumnavigation|thru-?hike|loop|trail)\b/g, "")
+    .replace(/mt\.?\s*/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  return `${region}|${name}`;
+}
+
+// Dedupe on read — seed data has accidental duplicates from multiple
+// authoring passes: same slug repeated (grays-torreys), near-duplicate
+// slugs for the same trail (annapurna-abc vs annapurna-base-camp,
+// mt-washington-tuckerman vs washington-tuckerman), and region string
+// drift (White Mtns / White Mts). We keep the first occurrence.
 const DEDUPED_LIBRARY: TrailPreset[] = (() => {
-  const seen = new Set<string>();
+  const seenSlug = new Set<string>();
+  const seenKey = new Set<string>();
   const out: TrailPreset[] = [];
   for (const t of TRAIL_LIBRARY) {
-    if (seen.has(t.slug)) continue;
-    seen.add(t.slug);
+    if (seenSlug.has(t.slug)) continue;
+    const key = trailKey(t);
+    if (seenKey.has(key)) continue;
+    seenSlug.add(t.slug);
+    seenKey.add(key);
     out.push(t);
   }
   return out;

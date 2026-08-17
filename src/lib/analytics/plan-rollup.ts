@@ -117,6 +117,19 @@ export async function getPlanRollup(
   });
   const currentWeek = weeksElapsedRaw + 1;
   const phase = phaseForWeek(currentWeek);
+  // Derive plan length from the plan's own start/end dates. The old
+  // hardcoded TOTAL_SEEDED_WEEKS (16) is left as a fallback for
+  // legacy plans lacking eventDate, but the truth for uploaded plans
+  // (Mayank's 41-week Rainier) is what the plan says.
+  const planTotalWeeks =
+    plan.eventDate && plan.startDate
+      ? Math.max(
+          1,
+          differenceInCalendarWeeks(parseYmd(plan.eventDate), startDate, {
+            weekStartsOn: 1,
+          }) + 1,
+        )
+      : TOTAL_SEEDED_WEEKS;
   const daysToSummit = summitDateYmd
     ? Math.max(
         0,
@@ -291,7 +304,7 @@ export async function getPlanRollup(
   return {
     planStartDate: plan.startDate,
     currentWeek,
-    totalWeeks: TOTAL_SEEDED_WEEKS,
+    totalWeeks: planTotalWeeks,
     phase: { number: phase.number, name: phase.name },
     daysToSummit,
     cumulative: {
