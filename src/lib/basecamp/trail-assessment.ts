@@ -157,6 +157,7 @@ export type DimensionStatus =
   | "stretch" // gap is reachable but tight — expect struggle
   | "not_in_timeframe" // gap can't reasonably be closed
   | "concern" // recovery/altitude flags
+  | "unknown" // signal missing — don't declare this dim ready OR blocking
   | "not_applicable";
 
 export type DimensionAnalysis = {
@@ -341,6 +342,7 @@ function analyzeEndurance(
     stretch: `${kindContext} ${noteStretch}`,
     not_in_timeframe: `${kindContext} ${noteGap}`,
     concern: `${kindContext} ${noteReady}`,
+    unknown: `${kindContext} Not enough recent training data to judge.`,
     not_applicable: `${kindContext} ${noteReady}`,
   };
 
@@ -607,6 +609,11 @@ function analyzeRecovery(
   const hrvThreshold = strict ? -10 : -15;
   const sleepThreshold = strict ? 7.0 : 6.5;
 
+  const signalCount =
+    (rhrDelta != null ? 1 : 0) +
+    (hrvDelta != null ? 1 : 0) +
+    (sleep != null ? 1 : 0);
+
   const flags: string[] = [];
   if (rhrDelta != null && rhrDelta >= rhrThreshold)
     flags.push(`RHR +${rhrDelta} bpm`);
@@ -618,7 +625,16 @@ function analyzeRecovery(
 
   let status: DimensionStatus;
   let note: string;
-  if (flags.length >= 2) {
+  // No recovery signals → UNKNOWN, not "ready". Old code silently
+  // reported "Recovery baselines within normal range." for users with
+  // no Oura/HealthKit connected — a lie that leaked into the verdict
+  // and the ObjectiveCard's weakest-dim picker.
+  if (signalCount < 2) {
+    status = "unknown";
+    note = signalCount === 0
+      ? "No recovery data yet — connect Oura / HealthKit for a real read."
+      : "Only one recovery signal available. Need at least two of sleep / RHR / HRV.";
+  } else if (flags.length >= 2) {
     status = "concern";
     note = `${modePrefix}Recovery signals suggest stress: ${flags.join(", ")}. Rest a day or two before attempting.`;
   } else if (flags.length === 1) {
@@ -654,6 +670,13 @@ function verdictFromDimensions(
   const relevant = dims.filter((d) => d.status !== "not_applicable");
   const has = (s: DimensionStatus) => relevant.some((d) => d.status === s);
   const count = (s: DimensionStatus) => relevant.filter((d) => d.status === s).length;
+  const hasUnknown = has("unknown");
+  // If any dim is UNKNOWN, we cannot honestly call the trail
+  // "comfortable" — there's a real signal missing. Downgrade a would-be
+  // comfortable to "achievable" so the copy reads "achievable with a
+  // caveat" rather than "you're set."
+  const downgrade = (v: Verdict): Verdict =>
+    hasUnknown && v === "comfortable" ? "achievable" : v;
 
   // Day hikes are never "do not attempt". Anyone reasonably mobile can
   // walk a standard day hike with the right pacing + expectations —
@@ -666,7 +689,7 @@ function verdictFromDimensions(
       return "hard";
     }
     if (has("stretch") || has("closable")) return "achievable";
-    return "comfortable";
+    return downgrade("comfortable");
   }
 
   // Worst-dimension gating for real objectives. Averaging dimensions
@@ -680,18 +703,18 @@ function verdictFromDimensions(
   if (kind === "summit_push" || kind === "multi_day") {
     if (has("stretch") || has("concern")) return "hard";
     if (has("closable")) return "achievable";
-    return "comfortable";
+    return downgrade("comfortable");
   }
   if (kind === "long_day") {
     if (count("stretch") >= 2 || has("concern")) return "hard";
     if (has("stretch")) return "hard"; // long_day tolerates one stretch less than the old rule
     if (has("closable")) return "achievable";
-    return "comfortable";
+    return downgrade("comfortable");
   }
   // Fallback (never day_hike — that path returned above).
   if (count("stretch") >= 2 || has("concern")) return "hard";
   if (has("stretch") || has("closable")) return "achievable";
-  return "comfortable";
+  return downgrade("comfortable");
 }
 
 function suggestAdjustments(
@@ -878,6 +901,7 @@ export const STATUS_COLOR: Record<DimensionStatus, string> = {
   stretch: "text-warn",
   concern: "text-warn",
   not_in_timeframe: "text-danger",
+  unknown: "text-muted",
   not_applicable: "text-muted",
 };
 
@@ -887,5 +911,6 @@ export const STATUS_LABEL: Record<DimensionStatus, string> = {
   stretch: "STRETCH",
   concern: "CONCERN",
   not_in_timeframe: "GAP",
+  unknown: "UNKNOWN",
   not_applicable: "N/A",
 };

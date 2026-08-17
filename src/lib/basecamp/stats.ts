@@ -13,6 +13,7 @@ import {
   strengthExercise,
   trainingPlan,
   workout,
+  type SessionCategory,
 } from "@/db/schema";
 import { hrvBaseline, rhrBaseline } from "@/lib/analytics/baselines";
 import { ymd } from "@/lib/date";
@@ -92,6 +93,22 @@ function withExclusion(
 
 // ---------- STR ----------
 // S-rank target: ~15 heavy sets/wk + squat 1RM ~= 2x bodyweight (170 kg @ 85 kg)
+//
+// STR blends three signals so the user isn't punished for skipping the
+// re-log form (Devin r1: "asking users to re-log the prescribed sets in
+// a second form re-opens the friction we just closed"):
+//   1) hard sets logged (weeklyHardSets / 15)
+//   2) squat 1RM (best est. across window, capped at 170 kg)
+//   3) completed strength-category sessions per week (against plan)
+// #3 is the derive-not-capture path: if the plan says "3 lower-body
+// strength sessions/week" and the compliance loop marked them done,
+// that's a valid STR signal — no set-level logging required.
+const STRENGTH_CATS: SessionCategory[] = [
+  "UPPER_STRENGTH",
+  "LOWER_STRENGTH",
+  "FULL_BODY_STRENGTH",
+];
+
 async function computeStr(userId: number, now: Date, opts?: ComputeOpts): Promise<Stat> {
   const windowStart = shiftDate(now, -WINDOW_DAYS.STR);
   const fourWeeksAgo = shiftDate(now, -28);
@@ -124,24 +141,59 @@ async function computeStr(userId: number, now: Date, opts?: ComputeOpts): Promis
   }
   const squatMax = bestByExercise.get("Barbell squat") ?? 0;
 
+  // Completed strength-category planned sessions in the last 4 weeks.
+  // The compliance loop owns the write; we just count.
+  const derivedSessionsRows = await db
+    .select({
+      status: plannedSession.status,
+      sessionCategory: plannedSession.sessionCategory,
+    })
+    .from(plannedSession)
+    .innerJoin(
+      trainingPlan,
+      eq(trainingPlan.id, plannedSession.planId),
+    )
+    .where(
+      and(
+        eq(trainingPlan.userId, userId),
+        eq(trainingPlan.status, "active"),
+        gte(plannedSession.date, ymd(fourWeeksAgo)),
+      ),
+    );
+  const strengthCompleted = derivedSessionsRows.filter(
+    (r) =>
+      STRENGTH_CATS.includes(r.sessionCategory) && r.status === "completed",
+  ).length;
+  const weeklyStrengthSessions = strengthCompleted / 4;
+
   const setsScore = clamp((weeklyHardSets / 15) * 100);
   // Assume bodyweight target ~85 kg; scale to 2x = 170 kg
   const strengthScore = squatMax > 0 ? clamp((squatMax / 170) * 100) : 0;
-  const value = Math.round(setsScore * 0.55 + strengthScore * 0.45);
+  // Sessions-derived: 3 completed strength sessions/wk = full credit.
+  const sessionsScore = clamp((weeklyStrengthSessions / 3) * 100);
+  // If the user hasn't logged sets, weight the derived-sessions signal
+  // more heavily so the plan-completion path stands on its own.
+  const hasSetLog = weeklyHardSets > 0 || squatMax > 0;
+  const value = hasSetLog
+    ? Math.round(
+        setsScore * 0.4 + strengthScore * 0.35 + sessionsScore * 0.25,
+      )
+    : Math.round(sessionsScore);
 
-  const metric =
-    squatMax > 0
+  const metric = hasSetLog
+    ? squatMax > 0
       ? `${weeklyHardSets.toFixed(1)} sets/wk · squat 1RM≈${Math.round(squatMax)} kg`
-      : `${weeklyHardSets.toFixed(1)} sets/wk · squat 1RM not logged`;
+      : `${weeklyHardSets.toFixed(1)} sets/wk · squat 1RM not logged`
+    : `${weeklyStrengthSessions.toFixed(1)} strength sessions/wk (from plan)`;
 
   return {
     key: "STR",
     label: "Strength",
     value,
-    // STR is signal-rich when the user has logged any strength sets.
-    // A zero doesn't mean 'not enough data', it means 'you haven't
-    // strength trained' — which IS the honest signal.
-    hasEnoughData: true,
+    // Enough data if we have EITHER set-level logs OR the user has
+    // been on-plan long enough for the sessions signal to mean
+    // something (2+ completed sessions in the window).
+    hasEnoughData: hasSetLog || strengthCompleted >= 2,
     metric,
     windowDays: WINDOW_DAYS.STR,
     evidence: {

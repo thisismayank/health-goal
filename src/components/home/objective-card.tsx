@@ -38,12 +38,18 @@ export async function ObjectiveCard({ user }: { user: UserProfile }) {
 
   // Weakest buildable dimension (endurance / vertical / pack) — the
   // one that gates 'ready' and drives the weeks-to-ready count.
+  // UNKNOWN dims are excluded: we can't call recovery "the weakest"
+  // when the truth is we just don't have Oura data — that's a
+  // connect-your-tracker prompt, not a training gap.
   const buildable = assessment.dimensions.filter(
-    (d) => d.key === "endurance" || d.key === "vertical" || d.key === "pack",
+    (d) =>
+      (d.key === "endurance" || d.key === "vertical" || d.key === "pack") &&
+      d.status !== "unknown",
   );
-  const weakest = buildable.reduce((worst, d) =>
-    d.ratio < worst.ratio ? d : worst,
-  );
+  const weakest =
+    buildable.length > 0
+      ? buildable.reduce((worst, d) => (d.ratio < worst.ratio ? d : worst))
+      : null;
 
   return (
     <Link
@@ -70,16 +76,18 @@ export async function ObjectiveCard({ user }: { user: UserProfile }) {
       </div>
 
       <div className="mt-2 pt-2 border-t border-blue-500/10 text-xs space-y-1">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="text-muted">
-            Weakest:{" "}
-            <span className="text-foreground capitalize">{weakest.label}</span>
-          </span>
-          <span className="text-[10px] uppercase tracking-wider text-muted">
-            {STATUS_LABEL[weakest.status]}
-          </span>
-        </div>
-        {assessment.weeksToReady != null && (
+        {weakest && (
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-muted">
+              Weakest:{" "}
+              <span className="text-foreground capitalize">{weakest.label}</span>
+            </span>
+            <span className="text-[10px] uppercase tracking-wider text-muted">
+              {STATUS_LABEL[weakest.status]}
+            </span>
+          </div>
+        )}
+        {weakest && assessment.weeksToReady != null && (
           <div className="text-blue-300/90">
             ~
             <span className="font-mono font-medium tabular-nums">
@@ -87,6 +95,11 @@ export async function ObjectiveCard({ user }: { user: UserProfile }) {
             </span>{" "}
             week{assessment.weeksToReady === 1 ? "" : "s"} at your current
             trajectory to close it.
+          </div>
+        )}
+        {!weakest && (
+          <div className="text-muted">
+            All buildable dimensions look ready. Watch weather + recovery.
           </div>
         )}
       </div>
