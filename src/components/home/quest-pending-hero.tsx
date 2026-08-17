@@ -3,6 +3,7 @@ import { LogSessionForm } from "@/components/log-session-form";
 import { ReopenButton } from "@/components/session-actions";
 import { LogPanel } from "@/components/home/log-panel";
 import { PlannedDetails } from "@/components/plan/planned-details";
+import { SessionIcon } from "@/components/ui/icons";
 import type { PlannedSession } from "@/db/schema";
 
 type Prescription = { name: string; sets: number; reps: string }[];
@@ -46,13 +47,6 @@ const FAMILY_STYLE: Record<CategoryFamily, string> = {
   recovery: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
 };
 
-const FAMILY_GLYPH: Record<CategoryFamily, string> = {
-  aerobic: "◐",
-  mountain: "▲",
-  strength: "▮",
-  recovery: "◇",
-};
-
 export async function QuestPendingHero({
   session,
   userId,
@@ -67,25 +61,22 @@ export async function QuestPendingHero({
   return (
     <div className="space-y-3">
       <section className="rounded-lg border border-blue-500/30 bg-blue-950/10 shadow-lg shadow-blue-500/10 p-5 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
-                {isSkipped ? "[QUEST · SKIPPED]" : "[TODAY'S QUEST]"}
-              </div>
-              <span
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${FAMILY_STYLE[family]}`}
-              >
-                <span className="text-[9px] leading-none">
-                  {FAMILY_GLYPH[family]}
-                </span>
-                {session.sessionCategory.replaceAll("_", " ").toLowerCase()}
-              </span>
-            </div>
-            <h2 className="text-xl font-semibold mt-2 leading-tight">
-              {session.title}
-            </h2>
-          </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isSkipped && (
+            <span className="text-[10px] font-mono uppercase tracking-widest text-warn">
+              Skipped
+            </span>
+          )}
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${FAMILY_STYLE[family]}`}
+          >
+            <SessionIcon
+              category={session.sessionCategory}
+              size={12}
+              className="opacity-90"
+            />
+            {session.sessionCategory.replaceAll("_", " ").toLowerCase()}
+          </span>
         </div>
 
         <MetricChips session={session} />

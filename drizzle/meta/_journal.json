@@ -141,6 +141,13 @@
       "when": 1786944395413,
       "tag": "0019_bizarre_inertia",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786947826878,
+      "tag": "0020_common_gabe_jones",
+      "breakpoints": true
     }
   ]
 }

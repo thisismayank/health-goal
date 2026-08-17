@@ -18,7 +18,19 @@ export const dynamic = "force-dynamic";
 export default async function TrainPage() {
   const user = await requireOnboardedUser();
   const plan = await getActivePlan(user.id);
-  if (!plan) return <p className="text-muted">No active training plan.</p>;
+  if (!plan) {
+    return (
+      <div className="space-y-3">
+        <p className="text-muted">No active training plan.</p>
+        <Link
+          href="/plan/new"
+          className="inline-block rounded-md bg-accent-strong hover:bg-accent text-background font-medium text-sm px-4 py-2"
+        >
+          Create one →
+        </Link>
+      </div>
+    );
+  }
 
   const anchor = new Date();
   const days = weekDays(anchor);
@@ -88,10 +100,20 @@ export default async function TrainPage() {
   return (
     <div className="space-y-5">
       <section>
-        <div className="text-xs uppercase tracking-widest text-muted">
-          Week of {format(start, "MMM d")}
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-widest text-muted">
+              Week of {format(start, "MMM d")}
+            </div>
+            <h1 className="text-2xl font-semibold mt-0.5">Training week</h1>
+          </div>
+          <Link
+            href="/plan/new"
+            className="text-xs text-blue-300 hover:underline whitespace-nowrap"
+          >
+            Change plan →
+          </Link>
         </div>
-        <h1 className="text-2xl font-semibold mt-0.5">Training week</h1>
         <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted">
           <span>
             <span className="text-foreground">{completed.length}</span> /{" "}

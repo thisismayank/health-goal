@@ -90,6 +90,22 @@ export const magicLink = pgTable("magic_link", {
     .defaultNow(),
 });
 
+export const PLAN_GOAL_TYPES = [
+  "mountain_summit",
+  "trail_hike",
+  "race_5k",
+  "race_10k",
+  "race_half",
+  "race_full",
+  "strength_cycle",
+  "endurance_base",
+  "general_fitness",
+] as const;
+export type PlanGoalType = (typeof PLAN_GOAL_TYPES)[number];
+
+export const PLAN_SOURCES = ["generated", "uploaded", "hybrid"] as const;
+export type PlanSource = (typeof PLAN_SOURCES)[number];
+
 export const trainingPlan = pgTable("training_plan", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
@@ -97,6 +113,15 @@ export const trainingPlan = pgTable("training_plan", {
     .references(() => userProfile.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   goalEvent: text("goal_event"),
+  // Broad category of what the plan is optimizing for. Drives which
+  // template family the generator picks + which coach voice to use.
+  // Nullable for backward compatibility; existing plans get backfilled
+  // to 'mountain_summit' in migration 0020.
+  goalType: text("goal_type", { enum: PLAN_GOAL_TYPES }),
+  // How the plan came to exist. Uploaded plans skip generator-based
+  // regen when we detect gap changes (we shouldn't rewrite the user's
+  // own plan out from under them).
+  source: text("source", { enum: PLAN_SOURCES }).notNull().default("generated"),
   startDate: text("start_date").notNull(),
   eventDate: text("event_date"),
   currentPhase: integer("current_phase").notNull().default(1),

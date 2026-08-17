@@ -4,6 +4,7 @@ import { isoWeekTag } from "@/lib/date";
 import { pickFeaturedTrail } from "@/lib/notifications/featured-trail";
 import { generateFeaturedNarrative } from "@/lib/coach/featured-narrative";
 import { VERDICT_COLOR, VERDICT_LABEL } from "@/lib/basecamp/trail-assessment";
+import { TrailIcon } from "@/components/ui/icons";
 
 // In-app companion to the Monday featured-trail email. Same pick logic
 // so email + home show the same trail all week.
@@ -32,8 +33,9 @@ export async function FeaturedTrailCard() {
       className="block rounded-lg border border-blue-500/30 bg-blue-950/10 shadow-lg shadow-blue-500/10 p-5 space-y-3 hover:border-blue-400/60 transition"
     >
       <div className="flex items-baseline justify-between gap-3">
-        <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
-          [FEATURED · THIS WEEK]
+        <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-blue-400">
+          <TrailIcon size={12} />
+          Featured this week
         </div>
         <div className="text-[10px] text-muted">for Class {hikerClass}</div>
       </div>

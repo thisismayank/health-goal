@@ -15,8 +15,13 @@ import {
   strengthExercise,
   trail,
   trailCompletion,
+  trainingPlan,
   userProfile,
   workout,
+  PLAN_GOAL_TYPES,
+  SESSION_CATEGORIES,
+  type PlanGoalType,
+  type SessionCategory,
   type TrailTerrainGrade,
 } from "@/db/schema";
 import { getCurrentUser } from "./data";
@@ -1029,4 +1034,176 @@ export async function disconnectStrava() {
     await db.delete(stravaAccount).where(eq(stravaAccount.id, account.id));
   }
   revalidatePath("/settings");
+}
+
+/**
+ * Archive the user's current plan (if any) and generate a fresh one
+ * with the given goal type + constraints. This is the /plan/new
+ * regenerate flow — deliberately destructive of the OLD plan (any
+ * completions in the old plan stay logged, but planned_session rows
+ * for the future are replaced).
+ */
+export async function regeneratePlan(input: {
+  goalType: PlanGoalType;
+  goalEvent?: string;
+  weeklyHours: 3 | 5 | 7 | 10;
+  startingFitness: "new" | "occasional" | "regular" | "active";
+  weeks?: number;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  if (!PLAN_GOAL_TYPES.includes(input.goalType)) {
+    throw new Error(`Unknown goal type: ${input.goalType}`);
+  }
+
+  // Archive current active plan (keeps history queryable, drops it
+  // out of "active" so generateUserPlan doesn't short-circuit).
+  await db
+    .update(trainingPlan)
+    .set({ status: "archived" })
+    .where(
+      and(
+        eq(trainingPlan.userId, user.id),
+        eq(trainingPlan.status, "active"),
+      ),
+    );
+
+  // Persist the new constraints on the user profile too so future
+  // fitness-suggest / refresh flows pick them up.
+  await db
+    .update(userProfile)
+    .set({
+      weeklyTrainingHours: input.weeklyHours,
+      startingFitness: input.startingFitness,
+      updatedAt: new Date(),
+    })
+    .where(eq(userProfile.id, user.id));
+
+  const { generateUserPlan } = await import("./plan/generator");
+  const result = await generateUserPlan({
+    userId: user.id,
+    goalType: input.goalType,
+    goalEvent: input.goalEvent,
+    weeklyHours: input.weeklyHours,
+    startingFitness: input.startingFitness,
+    weeks: input.weeks,
+  });
+
+  revalidatePath("/");
+  revalidatePath("/train");
+  revalidatePath("/plan/new");
+  return { planId: result.planId, sessions: result.sessions };
+}
+
+/**
+ * Upload-a-plan path: accept a validated JSON payload with a list of
+ * sessions and persist as a new active plan (source='uploaded'). We
+ * archive any existing active plan first. The LLM validation /
+ * feedback layer comes later — this ships the ingest path.
+ */
+export type UploadedPlanInput = {
+  name: string;
+  goalType: PlanGoalType;
+  goalEvent?: string;
+  sessions: Array<{
+    date: string; // YYYY-MM-DD
+    category: SessionCategory;
+    title: string;
+    durationMinutes: number;
+    rpeMin?: number | null;
+    rpeMax?: number | null;
+    instructions?: string;
+    strengthPrescription?: Array<{ name: string; sets: number; reps: string }>;
+  }>;
+};
+
+export async function uploadPlan(input: UploadedPlanInput) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  if (!PLAN_GOAL_TYPES.includes(input.goalType)) {
+    throw new Error(`Unknown goal type: ${input.goalType}`);
+  }
+  if (!Array.isArray(input.sessions) || input.sessions.length === 0) {
+    throw new Error("Plan must include at least one session");
+  }
+  if (input.sessions.length > 500) {
+    throw new Error("Plan too large (max 500 sessions)");
+  }
+
+  // Row-level validation before anything gets written. Bail out on
+  // first bad row so users see one clear error not a wall.
+  for (const [i, s] of input.sessions.entries()) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s.date)) {
+      throw new Error(`Session ${i + 1}: invalid date "${s.date}"`);
+    }
+    if (!SESSION_CATEGORIES.includes(s.category)) {
+      throw new Error(
+        `Session ${i + 1}: unknown category "${s.category}". Allowed: ${SESSION_CATEGORIES.join(", ")}`,
+      );
+    }
+    if (!Number.isFinite(s.durationMinutes) || s.durationMinutes <= 0) {
+      throw new Error(`Session ${i + 1}: durationMinutes must be > 0`);
+    }
+    if (!s.title || s.title.length > 120) {
+      throw new Error(`Session ${i + 1}: title required (≤120 chars)`);
+    }
+  }
+
+  const sortedDates = input.sessions
+    .map((s) => s.date)
+    .sort((a, b) => a.localeCompare(b));
+  const startDate = sortedDates[0];
+  const endDate = sortedDates[sortedDates.length - 1];
+
+  // Archive current active plan.
+  await db
+    .update(trainingPlan)
+    .set({ status: "archived" })
+    .where(
+      and(
+        eq(trainingPlan.userId, user.id),
+        eq(trainingPlan.status, "active"),
+      ),
+    );
+
+  const [plan] = await db
+    .insert(trainingPlan)
+    .values({
+      userId: user.id,
+      name: input.name,
+      goalEvent: input.goalEvent ?? null,
+      goalType: input.goalType,
+      source: "uploaded",
+      startDate,
+      eventDate: endDate,
+      currentPhase: 1,
+      status: "active",
+    })
+    .returning();
+
+  const inserts: (typeof plannedSession.$inferInsert)[] = input.sessions.map(
+    (s) => ({
+      planId: plan.id,
+      date: s.date,
+      sessionCategory: s.category,
+      title: s.title,
+      targetDurationMinutes: Math.round(s.durationMinutes),
+      targetRpeMin: s.rpeMin ?? null,
+      targetRpeMax: s.rpeMax ?? null,
+      targetPackWeightLb: null,
+      targetElevationGainFt: null,
+      instructions: s.instructions ?? null,
+      strengthPrescription: s.strengthPrescription
+        ? JSON.stringify(s.strengthPrescription)
+        : null,
+      status: "planned",
+    }),
+  );
+  await db.insert(plannedSession).values(inserts);
+
+  revalidatePath("/");
+  revalidatePath("/train");
+  revalidatePath("/plan/new");
+  revalidatePath("/plan/upload");
+  return { planId: plan.id, sessions: inserts.length };
 }
