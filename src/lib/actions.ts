@@ -859,6 +859,44 @@ export async function saveItineraryTrails(input: {
   return { savedIds };
 }
 
+export async function saveOnboardingConstraints(input: {
+  weeklyHours: 3 | 5 | 7 | 10;
+  startingFitness: "new" | "occasional" | "regular" | "active";
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const validHours = [3, 5, 7, 10] as const;
+  const validFitness = ["new", "occasional", "regular", "active"] as const;
+  if (!validHours.includes(input.weeklyHours)) {
+    throw new Error("Invalid weekly hours");
+  }
+  if (!validFitness.includes(input.startingFitness)) {
+    throw new Error("Invalid starting fitness");
+  }
+
+  await db
+    .update(userProfile)
+    .set({
+      weeklyTrainingHours: input.weeklyHours,
+      startingFitness: input.startingFitness,
+      updatedAt: new Date(),
+    })
+    .where(eq(userProfile.id, user.id));
+
+  // Generate the plan now if the user doesn't already have one. Idempotent
+  // — if a plan exists (Mayank's Rainier plan), we skip.
+  const { generateUserPlan } = await import("./plan/generator");
+  const result = await generateUserPlan({
+    userId: user.id,
+    weeklyHours: input.weeklyHours,
+    startingFitness: input.startingFitness,
+  });
+
+  revalidatePath("/train");
+  revalidatePath("/");
+  return { planId: result.planId, sessionsCreated: result.sessions };
+}
+
 export async function markOnboardingComplete() {
   const user = await getCurrentUser();
   if (!user) throw new Error("No user found");

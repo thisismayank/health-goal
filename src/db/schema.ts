@@ -42,6 +42,10 @@ export const userProfile = pgTable(
     // computed class on home render to detect class-ups → celebration
     // modal. First-seen initializes silently (no celebration on signup).
     lastKnownClass: text("last_known_class"),
+    // Onboarding-collected training constraints. Used by the plan
+    // generator at signup, kept on profile for later regeneration.
+    weeklyTrainingHours: integer("weekly_training_hours"),
+    startingFitness: text("starting_fitness"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

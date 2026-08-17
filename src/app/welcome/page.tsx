@@ -5,10 +5,11 @@ import { db } from "@/db/client";
 import { stravaAccount } from "@/db/schema";
 import { requireCurrentUser } from "@/lib/data";
 import { FinishOnboardingButton } from "./finish-button";
+import { PlanStep } from "./plan-step";
 
 export const dynamic = "force-dynamic";
 
-type StepKey = "1" | "2";
+type StepKey = "1" | "2" | "3";
 
 export default async function WelcomePage({
   searchParams,
@@ -20,14 +21,16 @@ export default async function WelcomePage({
 
   const params = await searchParams;
   const stepRaw = typeof params.step === "string" ? params.step : "1";
-  const step: StepKey = stepRaw === "2" ? "2" : "1";
+  const step: StepKey =
+    stepRaw === "3" ? "3" : stepRaw === "2" ? "2" : "1";
 
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center py-8">
       <div className="w-full max-w-lg space-y-6">
         <StepIndicator current={step} />
         {step === "1" ? <WelcomeStep firstName={firstName(user.name)} /> : null}
-        {step === "2" ? <ConnectStep userId={user.id} /> : null}
+        {step === "2" ? <PlanStep /> : null}
+        {step === "3" ? <ConnectStep userId={user.id} /> : null}
       </div>
     </div>
   );
@@ -38,11 +41,15 @@ function firstName(name: string): string {
 }
 
 function StepIndicator({ current }: { current: StepKey }) {
+  const stepOrder: StepKey[] = ["1", "2", "3"];
+  const currentIdx = stepOrder.indexOf(current);
   return (
-    <div className="flex items-center gap-2 justify-center">
-      <StepDot label="Welcome" active={current === "1"} done={current !== "1"} />
-      <StepConnector done={current !== "1"} />
-      <StepDot label="Connect" active={current === "2"} done={false} />
+    <div className="flex items-center gap-2 justify-center flex-wrap">
+      <StepDot label="Welcome" active={current === "1"} done={currentIdx > 0} />
+      <StepConnector done={currentIdx > 0} />
+      <StepDot label="Plan" active={current === "2"} done={currentIdx > 1} />
+      <StepConnector done={currentIdx > 1} />
+      <StepDot label="Connect" active={current === "3"} done={false} />
     </div>
   );
 }
