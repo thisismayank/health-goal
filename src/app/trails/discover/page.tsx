@@ -160,6 +160,7 @@ export default async function DiscoverPage({
           <ItineraryPlanner
             destinationLabel={query}
             coords={coordsForQuery(query)}
+            units={units}
             presets={assessed.map<ItineraryPresetInput>(({ preset, assessment }) => ({
               slug: preset.slug,
               name: preset.name,

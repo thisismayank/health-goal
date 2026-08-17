@@ -16,6 +16,7 @@ import {
   interpretWeatherCode,
   type DailyForecast,
 } from "@/lib/weather/open-meteo";
+import { formatFt, formatKm, type Units } from "@/lib/units";
 
 // Local mirror of ItineraryNarrativeSchema from the coach module. That
 // module imports drizzle/postgres and can't be pulled into a client
@@ -115,6 +116,7 @@ export function ItineraryPlanner({
   presets,
   destinationLabel,
   coords,
+  units,
 }: {
   presets: ItineraryPresetInput[];
   destinationLabel: string;
@@ -122,6 +124,7 @@ export function ItineraryPlanner({
   // per-day weather badges on each day card. Null = destination coords
   // aren't in our lookup table; weather section is hidden.
   coords: { lat: number; lng: number; label: string } | null;
+  units: Units;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -186,9 +189,22 @@ export function ItineraryPlanner({
   // Fetch weather forecast when the planner opens for a coords-known
   // destination. Refetch if coords change (destination change from
   // parent). Same-session cache: doesn't refetch every open.
+  //
+  // Devin r3 caught an infinite retry loop: forecastState was in the
+  // deps AND the guard only skipped 'loading'/'loaded'. On error the
+  // effect re-fired, set state → 'loading' (flipping per-day rows back
+  // to "Loading forecast…"), fetched again, failed, looped. Guard now
+  // also skips 'error' — a failed forecast stays failed for this
+  // session. Coords-change dep still triggers a fresh fetch since a
+  // new coords value resets the effect.
   useEffect(() => {
     if (!open || !coords) return;
-    if (forecastState === "loading" || forecastState === "loaded") return;
+    if (
+      forecastState === "loading" ||
+      forecastState === "loaded" ||
+      forecastState === "error"
+    )
+      return;
     setForecastState("loading");
     const ctrl = new AbortController();
     fetchDailyForecast(coords.lat, coords.lng, ctrl.signal)
@@ -203,6 +219,13 @@ export function ItineraryPlanner({
       });
     return () => ctrl.abort();
   }, [open, coords, forecastState]);
+
+  // When coords actually change (new destination), reset to idle so
+  // the next fetch runs.
+  useEffect(() => {
+    setForecastState("idle");
+    setForecast(null);
+  }, [coords?.lat, coords?.lng]);
 
   // Sync state → URL query params. Uses history.replaceState so Next
   // doesn't re-run the server component on every keystroke, but the URL
@@ -511,6 +534,7 @@ export function ItineraryPlanner({
               onRevert={() => clearDayOverride(day.dayIndex)}
               weather={forecast?.get(day.dateYmd) ?? null}
               weatherLoading={forecastState === "loading"}
+              units={units}
             />
           );
         })}
@@ -634,6 +658,7 @@ function DayCard({
   onRevert,
   weather,
   weatherLoading,
+  units,
 }: {
   day: ReturnType<typeof buildItinerary>["days"][number];
   coachNote?: string;
@@ -645,6 +670,7 @@ function DayCard({
   onRevert: () => void;
   weather: DailyForecast | null;
   weatherLoading: boolean;
+  units: Units;
 }) {
   const dayLabel = new Intl.DateTimeFormat("en-US", {
     weekday: "short",
@@ -737,8 +763,8 @@ function DayCard({
             {overridden && <CustomBadge />}
           </div>
           <div className="text-xs text-muted mt-0.5">
-            {day.preset.distanceKm} km · +
-            {day.preset.elevationGainFt.toLocaleString()} ft · ~
+            {formatKm(day.preset.distanceKm, units)} · +
+            {formatFt(day.preset.elevationGainFt, units)} · ~
             {day.preset.typicalHours}h
           </div>
         </div>

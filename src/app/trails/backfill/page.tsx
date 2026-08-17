@@ -6,6 +6,7 @@ import { requireOnboardedUser } from "@/lib/data";
 import { matchWorkoutToTrails } from "@/lib/basecamp/trail-matcher";
 import { BackfillList } from "./backfill-list";
 import { RunBackfillButton } from "./run-backfill-button";
+import { AutoLinkButton } from "./auto-link-button";
 import { TrailsSubNav } from "@/components/shell/trails-sub-nav";
 import { pickUnits } from "@/lib/units";
 
@@ -72,6 +73,14 @@ export default async function BackfillPage() {
           candidate workout{candidates.length === 1 ? "" : "s"} found.
           Suggestions use GPS + activity name — you confirm each match.
         </p>
+        <div className="mt-3 flex items-start justify-between gap-3 rounded-md border border-blue-500/20 bg-blue-950/10 p-3">
+          <div className="text-xs text-muted leading-relaxed">
+            Strong matches (proximity + name overlap ≥ 70%) can be auto-linked
+            to your Trail Passport in one click. Weaker candidates still stay
+            manual so you don&apos;t inherit wrong picks.
+          </div>
+          <AutoLinkButton />
+        </div>
       </section>
 
       {candidates.length === 0 && (

@@ -1482,6 +1482,23 @@ export async function relinkCurrentPlan() {
 }
 
 /**
+ * Auto-populate the Trail Passport from unlinked hike workouts whose
+ * top preset match is strong. Devin r3: passport was 0/0 because
+ * users had to click through the backfill list manually. Strong
+ * matches now link automatically.
+ */
+export async function runPassportAutoLink() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const { autoLinkPassport } = await import("./passport/auto-link");
+  const result = await autoLinkPassport(user.id);
+  revalidatePath("/progress");
+  revalidatePath("/trails");
+  revalidatePath("/trails/backfill");
+  return result;
+}
+
+/**
  * Set (or clear) the user's home base. Powers the "Near me" trail
  * ranking on /trails. Accepts a free-form location string OR a
  * literal "lat, lng" paste; geocoding via OSM/Nominatim.

@@ -52,10 +52,10 @@ export default async function CoachPage() {
             Provider settings →
           </Link>
         </div>
-        <p className="text-[11px] text-muted mt-1">
-          {view.provider} · ••••{view.apiKeyLast4}
-          {view.modelId && ` · ${view.modelId}`}
-        </p>
+        {/* Provider label removed from the header — Devin r3 flagged it
+            as noise directly under the h1. The full "provider · key
+            ····xyz · model" line lives on Settings under the Coach
+            section for the user who wants to verify what's connected. */}
       </section>
       <CoachChat />
     </div>
