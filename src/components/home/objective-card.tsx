@@ -18,11 +18,22 @@ import type { UserProfile } from "@/db/schema";
  * many weeks it takes to close. Absorbs the trip-card + summit-hero
  * roles into one honest tile.
  *
- * Silent when the user has no primary trail set — we don't push a
- * default 'go pick one' card in this slot; the discover CTA
- * elsewhere on home covers that.
+ * Silent when:
+ *   - the user has no primary trail set (we don't push a default
+ *     'go pick one' card here — the discover CTA covers that), OR
+ *   - the primary trail IS the trip-week trail being shown by the
+ *     TripWeekHero above (dedupe: no point rendering the same trail
+ *     as two cards). The split-roles design intent is: TripWeekHero
+ *     for imminent trip logistics, ObjectiveCard for the north-star
+ *     goal — when they're the same trail, one card is enough.
  */
-export async function ObjectiveCard({ user }: { user: UserProfile }) {
+export async function ObjectiveCard({
+  user,
+  suppressTrailId,
+}: {
+  user: UserProfile;
+  suppressTrailId?: number;
+}) {
   const [primary] = await db
     .select()
     .from(trail)
@@ -30,6 +41,7 @@ export async function ObjectiveCard({ user }: { user: UserProfile }) {
     .limit(50)
     .then((rows) => rows.filter((r) => r.isPrimary));
   if (!primary) return null;
+  if (suppressTrailId != null && primary.id === suppressTrailId) return null;
 
   const today = todayInTimeZone(user.timezone);
   const assessment = await assessTrail(user.id, primary, today);

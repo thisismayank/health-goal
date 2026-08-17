@@ -168,9 +168,18 @@ export default async function HomePage() {
       </Suspense>
 
       {/* YOUR OBJECTIVE — verdict + weakest dimension + weeks-to-ready.
-          Replaces the broken summit meter + separate trip card. */}
+          Split-roles design: TripWeekHero above owns the immediate
+          trip's logistics; ObjectiveCard owns the north-star goal.
+          When the two are the same trail (user set their next trip AS
+          their goal), suppress this card so the same trail doesn't
+          render twice. */}
       <Suspense fallback={null}>
-        <ObjectiveCard user={state.user} />
+        <ObjectiveCard
+          user={state.user}
+          suppressTrailId={
+            state.kind === "trip_week" ? state.trail.id : undefined
+          }
+        />
       </Suspense>
 
       {/* COACH — expanded, not collapsed. Two-way chat link. */}
