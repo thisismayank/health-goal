@@ -271,6 +271,27 @@ export async function createTrailFromPreset(slug: string, targetDate?: string): 
   const preset = findTrailBySlug(slug);
   if (!preset) throw new Error(`Preset not found: ${slug}`);
 
+  // Idempotent: if the user already saved this preset, return that
+  // row instead of creating a duplicate. If a target date is passed
+  // and the existing row has none, patch it in. This is what fixes
+  // the 'Skyline saved twice with different pack weights' bug —
+  // previously every save action inserted a fresh row.
+  const [existing] = await db
+    .select({ id: trail.id, targetDate: trail.targetDate })
+    .from(trail)
+    .where(and(eq(trail.userId, user.id), eq(trail.presetSlug, preset.slug)))
+    .limit(1);
+  if (existing) {
+    if (targetDate && !existing.targetDate) {
+      await db
+        .update(trail)
+        .set({ targetDate })
+        .where(eq(trail.id, existing.id));
+    }
+    revalidatePath("/trails");
+    return { id: existing.id };
+  }
+
   const [row] = await db
     .insert(trail)
     .values({

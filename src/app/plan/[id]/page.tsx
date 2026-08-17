@@ -84,9 +84,14 @@ export default async function PlanTimelinePage({
   // which is how Devin caught 'Week -3 / 41'). This guarantees the
   // first session is Week 1 by definition.
   const anchorYmd = sessions.length > 0 ? sessions[0].date : plan.startDate;
-  const anchorMs = Date.UTC(
-    ...(anchorYmd.split("-").map(Number) as [number, number, number]),
-  );
+  // Date.UTC expects (year, monthIndex, day) — monthIndex is 0-based.
+  // Passing "2026-08-10".split("-") directly gives (2026, 8, 10) which
+  // is SEPTEMBER 10, not August 10. That was Devin's 'Wk 1 shows 09-10'
+  // bug: the anchor drifted a month forward, weekOf('2026-08-10')
+  // returned -4, and the first weeks of the plan silently disappeared.
+  // Subtract 1 from the month.
+  const [ay, am, ad] = anchorYmd.split("-").map(Number);
+  const anchorMs = Date.UTC(ay, am - 1, ad);
   const weekOf = (ymd: string): number => {
     const [y, m, d] = ymd.split("-").map(Number);
     const ms = Date.UTC(y, m - 1, d);
