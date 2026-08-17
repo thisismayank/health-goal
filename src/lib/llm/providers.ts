@@ -153,11 +153,11 @@ const openai: ProviderAdapter = {
 
 const gemini: ProviderAdapter = {
   provider: "gemini",
-  // gemini-1.5-flash-latest is broadly available on both AI Studio
-  // free-tier and paid API keys; the -exp / -2.0 aliases weren't
-  // exposed on Mayank's tier during testing (404). Users can override
-  // to any newer model via the model-id input.
-  defaultModel: "gemini-1.5-flash-latest",
+  // Google's Gemini catalog moves fast: 1.5-flash-latest and the
+  // 2.0-flash-exp alias both 404 on current AI Studio keys. 2.5-flash
+  // is the stable mid-size model exposed on every current key.
+  // Users can override to Pro or a newer 3.x via the model-id input.
+  defaultModel: "gemini-2.5-flash",
   displayName: "Google (Gemini)",
   keyPattern: /^AI[\w-]{35,}$/,
   async *streamChat({ apiKey, modelId, system, messages, maxTokens = 1024 }) {

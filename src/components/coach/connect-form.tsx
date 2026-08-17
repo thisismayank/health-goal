@@ -24,7 +24,7 @@ const PROVIDER_META: Record<
   },
   gemini: {
     label: "Google (Gemini)",
-    defaultModel: "gemini-1.5-flash-latest",
+    defaultModel: "gemini-2.5-flash",
     docsUrl: "https://aistudio.google.com/apikey",
     keyPlaceholder: "AI...",
   },
