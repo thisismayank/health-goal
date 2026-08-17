@@ -1461,16 +1461,38 @@ export const TRAIL_LIBRARY: TrailPreset[] = [
   },
 ];
 
+// Dedupe on read — the seed data has a few accidental duplicate slugs
+// (grays-torreys, katahdin-knife-edge, inca-trail appear twice with
+// slightly different metadata). Keep the first occurrence so we have
+// one entry per slug across the app. Merging the underlying array
+// entries is a manual editorial pass; this ensures the UI never
+// double-lists the same trail in the meantime.
+const DEDUPED_LIBRARY: TrailPreset[] = (() => {
+  const seen = new Set<string>();
+  const out: TrailPreset[] = [];
+  for (const t of TRAIL_LIBRARY) {
+    if (seen.has(t.slug)) continue;
+    seen.add(t.slug);
+    out.push(t);
+  }
+  return out;
+})();
+
 export function searchTrails(query: string): TrailPreset[] {
   const q = query.trim().toLowerCase();
-  if (!q) return TRAIL_LIBRARY;
+  if (!q) return DEDUPED_LIBRARY;
   const words = q.split(/\s+/).filter(Boolean);
-  return TRAIL_LIBRARY.filter((t) => {
+  return DEDUPED_LIBRARY.filter((t) => {
     const haystack = `${t.name} ${t.region} ${t.country}`.toLowerCase();
     return words.every((w) => haystack.includes(w));
   });
 }
 
 export function findTrailBySlug(slug: string): TrailPreset | undefined {
-  return TRAIL_LIBRARY.find((t) => t.slug === slug);
+  return DEDUPED_LIBRARY.find((t) => t.slug === slug);
+}
+
+/** Deduped view for consumers that iterate the whole library. */
+export function allTrails(): TrailPreset[] {
+  return DEDUPED_LIBRARY;
 }

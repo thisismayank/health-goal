@@ -11,6 +11,7 @@ import {
 import { requireOnboardedUser } from "@/lib/data";
 import { PlannedDetails } from "@/components/plan/planned-details";
 import { SessionIcon } from "@/components/ui/icons";
+import { MarkCompleteForm } from "@/components/plan/mark-complete-form";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +116,15 @@ export default async function SessionDetailPage({
       </section>
 
       <PlannedDetails session={s} />
+
+      <section>
+        <MarkCompleteForm
+          plannedSessionId={s.id}
+          targetDurationMinutes={s.targetDurationMinutes}
+          alreadyDone={!!linkedWorkout}
+          canUnmark={linkedWorkout?.canonicalSource === "manual"}
+        />
+      </section>
 
       {linkedWorkout && (
         <section className="rounded-lg border border-accent/40 bg-accent-strong/5 p-4 space-y-2">

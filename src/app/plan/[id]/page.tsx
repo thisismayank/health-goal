@@ -79,14 +79,18 @@ export default async function PlanTimelinePage({
   const compliance =
     pastCount > 0 ? Math.round((doneCount / pastCount) * 100) : 0;
 
-  // Group sessions by ISO week starting at plan.startDate for phase labels.
-  const planStartMs = Date.UTC(
-    ...(plan.startDate.split("-").map(Number) as [number, number, number]),
+  // Compute plan week numbers anchored to the earliest actual session
+  // date (not plan.startDate — the two can drift after admin shifts,
+  // which is how Devin caught 'Week -3 / 41'). This guarantees the
+  // first session is Week 1 by definition.
+  const anchorYmd = sessions.length > 0 ? sessions[0].date : plan.startDate;
+  const anchorMs = Date.UTC(
+    ...(anchorYmd.split("-").map(Number) as [number, number, number]),
   );
   const weekOf = (ymd: string): number => {
     const [y, m, d] = ymd.split("-").map(Number);
     const ms = Date.UTC(y, m - 1, d);
-    return Math.floor((ms - planStartMs) / (7 * 86_400_000)) + 1;
+    return Math.floor((ms - anchorMs) / (7 * 86_400_000)) + 1;
   };
 
   const byWeek = new Map<number, PlannedSession[]>();
@@ -98,7 +102,13 @@ export default async function PlanTimelinePage({
   }
   const weeks = Array.from(byWeek.keys()).sort((a, b) => a - b);
   const totalWeeks = weeks.length;
-  const currentWeek = weekOf(today);
+  // Clamp so today-before-plan-start shows Week 1, today-after-plan-end
+  // shows the last week — never a negative or overshooting value.
+  const rawCurrentWeek = weekOf(today);
+  const currentWeek = Math.min(
+    totalWeeks,
+    Math.max(1, rawCurrentWeek),
+  );
 
   return (
     <div className="space-y-6">

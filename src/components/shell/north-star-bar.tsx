@@ -9,7 +9,6 @@ import {
 import { computeCharacterSheet } from "@/lib/basecamp/stats";
 import { computeRank } from "@/lib/basecamp/rank";
 import { parseYmd, todayInTimeZone } from "@/lib/date";
-import { TOTAL_SEEDED_WEEKS } from "@/lib/plan";
 
 // Paths where the shell should be hidden entirely — auth pages that need
 // to feel like their own thing, not a page inside the app.
@@ -46,17 +45,41 @@ export async function NorthStarBar() {
   ]);
 
   const rank = computeRank(sheet);
-  const summitPct = Math.min(
-    100,
-    Math.round((vertical.totalFt / Math.max(1, goal.summitFt)) * 100),
-  );
+  // If the user has climbed >= 1× the summit's worth of vertical, the
+  // '%' badge stops meaning anything (would peg at 100 forever). Switch
+  // to a multiplier ('1.4×') so the number stays informative.
+  const summitRatio = vertical.totalFt / Math.max(1, goal.summitFt);
+  const summitBadge =
+    summitRatio >= 1
+      ? `${summitRatio.toFixed(1)}×`
+      : `${Math.round(summitRatio * 100)}%`;
 
   const today = todayInTimeZone(user.timezone);
-  const weekNumber = plan
+  // Use the plan's actual span, not a hardcoded 16-week seed. Falls
+  // back to null when we have no plan.
+  const planTotalWeeks =
+    plan?.eventDate && plan.startDate
+      ? Math.max(
+          1,
+          differenceInCalendarWeeks(
+            parseYmd(plan.eventDate),
+            parseYmd(plan.startDate),
+            { weekStartsOn: 1 },
+          ),
+        )
+      : null;
+  const weekNumberRaw = plan
     ? differenceInCalendarWeeks(parseYmd(today), parseYmd(plan.startDate), {
         weekStartsOn: 1,
       }) + 1
     : null;
+  // Clamp to 1..totalWeeks so a plan shifted into the future can't
+  // render 'Week -3 / 41' — instead show week 1 until it starts, and
+  // the final week after it ends.
+  const weekNumber =
+    weekNumberRaw != null && planTotalWeeks != null
+      ? Math.min(planTotalWeeks, Math.max(1, weekNumberRaw))
+      : weekNumberRaw;
 
   const goalLabel = goal.source === "default_rainier" ? "Rainier" : goal.name;
 
@@ -65,10 +88,10 @@ export async function NorthStarBar() {
       <Link
         href="/trails"
         className="flex items-baseline gap-1.5 min-w-0 hover:opacity-80 transition"
-        title={`Summit progress: ${vertical.totalFt.toLocaleString()} / ${goal.summitFt.toLocaleString()} ft`}
+        title={`${vertical.totalFt.toLocaleString()} ft climbed · ${goal.summitFt.toLocaleString()} ft summit`}
       >
         <span className="font-mono font-semibold text-blue-300 text-sm tabular-nums">
-          {summitPct}%
+          {summitBadge}
         </span>
         <span className="text-xs text-muted truncate">{goalLabel}</span>
       </Link>
@@ -101,7 +124,7 @@ export async function NorthStarBar() {
             </span>
             <span className="font-mono text-blue-300 text-sm tabular-nums">
               {weekNumber}
-              <span className="text-muted text-[10px]">/{TOTAL_SEEDED_WEEKS}</span>
+              <span className="text-muted text-[10px]">/{planTotalWeeks ?? "?"}</span>
             </span>
           </Link>
         </>

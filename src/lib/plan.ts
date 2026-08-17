@@ -99,7 +99,20 @@ const CATEGORY_GROUPS: Record<string, SessionCategory[]> = {
     "LONG_MOUNTAIN_SESSION",
     "MOUNTAIN_LEGS",
   ],
-  recovery: ["ACTIVE_RECOVERY", "MOBILITY"],
+  // Recovery days accept ANY light activity — a walk, easy jog,
+  // stroll on an incline treadmill, or a mobility session all count.
+  // Previously this was ["ACTIVE_RECOVERY", "MOBILITY"] which was so
+  // narrow that a Sunday hike didn't count as the planned recovery,
+  // wrecking compliance for anyone whose actual life includes walking.
+  recovery: [
+    "ACTIVE_RECOVERY",
+    "MOBILITY",
+    "OUTDOOR_HIKE",
+    "EASY_RUN",
+    "ZONE2_CARDIO",
+    "INCLINE_TREADMILL",
+    "CROSS_TRAINING",
+  ],
 };
 
 export function categoriesCompatible(

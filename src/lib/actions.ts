@@ -1207,3 +1207,149 @@ export async function uploadPlan(input: UploadedPlanInput) {
   revalidatePath("/plan/upload");
   return { planId: plan.id, sessions: inserts.length };
 }
+
+/**
+ * Manually mark a planned session complete. Inserts a workout row
+ * that represents the session — no strength sets, no HR data, just
+ * the fact that it happened. Used when a user wants to log without
+ * having imported the activity from Strava.
+ *
+ * Idempotent: if a workout is already linked to this session, updates
+ * the actual duration + RPE + notes in place.
+ */
+export async function markSessionComplete(input: {
+  plannedSessionId: number;
+  actualDurationMinutes?: number;
+  rpe?: number;
+  notes?: string;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+
+  const [ps] = await db
+    .select()
+    .from(plannedSession)
+    .innerJoin(trainingPlan, eq(trainingPlan.id, plannedSession.planId))
+    .where(
+      and(
+        eq(plannedSession.id, input.plannedSessionId),
+        eq(trainingPlan.userId, user.id),
+      ),
+    )
+    .limit(1);
+  if (!ps) throw new Error("Planned session not found");
+
+  const [existing] = await db
+    .select()
+    .from(workout)
+    .where(
+      and(
+        eq(workout.userId, user.id),
+        eq(workout.plannedSessionId, input.plannedSessionId),
+      ),
+    )
+    .limit(1);
+
+  const durationSeconds =
+    input.actualDurationMinutes != null && input.actualDurationMinutes > 0
+      ? Math.round(input.actualDurationMinutes * 60)
+      : (ps.planned_session.targetDurationMinutes ?? 30) * 60;
+  const startTime = new Date(ps.planned_session.date + "T09:00:00Z");
+  const endTime = new Date(startTime.getTime() + durationSeconds * 1000);
+
+  if (existing) {
+    await db
+      .update(workout)
+      .set({
+        durationSeconds,
+        endTime,
+        rpe: input.rpe ?? existing.rpe,
+        notes: input.notes ?? existing.notes,
+      })
+      .where(eq(workout.id, existing.id));
+  } else {
+    await db.insert(workout).values({
+      userId: user.id,
+      plannedSessionId: input.plannedSessionId,
+      startTime,
+      endTime,
+      type: ps.planned_session.sessionCategory,
+      durationSeconds,
+      rpe: input.rpe ?? null,
+      notes: input.notes ?? null,
+      canonicalSource: "manual",
+    });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/train");
+  revalidatePath(`/plan/${ps.planned_session.planId}`);
+  revalidatePath(`/plan/${ps.planned_session.planId}/session/${input.plannedSessionId}`);
+  revalidatePath("/history");
+  return { ok: true };
+}
+
+/**
+ * Undo a manual completion. Only deletes workouts we created via the
+ * manual mark-complete path (canonicalSource='manual'); leaves Strava
+ * / intervals imports alone even if they're linked.
+ */
+export async function unmarkSessionComplete(plannedSessionId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  await db
+    .delete(workout)
+    .where(
+      and(
+        eq(workout.userId, user.id),
+        eq(workout.plannedSessionId, plannedSessionId),
+        eq(workout.canonicalSource, "manual"),
+      ),
+    );
+  revalidatePath("/");
+  revalidatePath("/train");
+  revalidatePath("/history");
+  return { ok: true };
+}
+
+/**
+ * Attach an existing imported workout to a planned session. Used by
+ * the Home 'was this it?' suggest-link card when auto-linking missed.
+ */
+export async function linkWorkoutToPlannedSession(input: {
+  workoutId: number;
+  plannedSessionId: number;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const [w] = await db
+    .select({ id: workout.id, userId: workout.userId })
+    .from(workout)
+    .where(and(eq(workout.id, input.workoutId), eq(workout.userId, user.id)))
+    .limit(1);
+  if (!w) throw new Error("Workout not found or not yours");
+  await db
+    .update(workout)
+    .set({ plannedSessionId: input.plannedSessionId })
+    .where(eq(workout.id, input.workoutId));
+  revalidatePath("/");
+  revalidatePath("/train");
+  return { ok: true };
+}
+
+/**
+ * Trigger a plan-wide relink pass. Called from Settings 'Sync now' and
+ * from any plan-mutating action so newly-widened categories or new
+ * planned sessions pick up orphan workouts.
+ */
+export async function relinkCurrentPlan() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const { relinkOrphanWorkouts } = await import("./plan/relink");
+  const result = await relinkOrphanWorkouts(user.id);
+  revalidatePath("/");
+  revalidatePath("/train");
+  revalidatePath("/history");
+  if (result.planId > 0) revalidatePath(`/plan/${result.planId}`);
+  return result;
+}

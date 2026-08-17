@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireOnboardedUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
-import { TRAIL_LIBRARY, type TrailPreset } from "@/lib/basecamp/trail-library";
+import { allTrails, type TrailPreset } from "@/lib/basecamp/trail-library";
 import { POPULAR_DESTINATIONS, coordsForQuery } from "@/lib/basecamp/destinations";
 import { computeCharacterSheet } from "@/lib/basecamp/stats";
 import { computeRank } from "@/lib/basecamp/rank";
@@ -63,7 +63,7 @@ export default async function DiscoverPage({
   const today = todayInTimeZone(user.timezone);
 
   const matches = query
-    ? TRAIL_LIBRARY.filter((t) => matchesQuery(t, query))
+    ? allTrails().filter((t) => matchesQuery(t, query))
     : [];
 
   // One fitness snapshot for all matches. assessTrail's optional

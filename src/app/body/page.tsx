@@ -127,9 +127,11 @@ export default async function BodyPage() {
               label="Resting HR"
               value={rhr.current != null ? `${rhr.current} bpm` : "–"}
               baseline={
-                rhr.baseline != null
-                  ? `Δ ${rhr.deltaAbs! > 0 ? "+" : ""}${rhr.deltaAbs} vs ${rhr.baseline} bpm`
-                  : `${rhr.samples}/21 days of data`
+                rhr.baseline != null && rhr.deltaAbs != null
+                  ? `Δ ${rhr.deltaAbs > 0 ? "+" : ""}${rhr.deltaAbs} vs ${rhr.baseline} bpm`
+                  : rhr.baseline != null
+                    ? `baseline ${rhr.baseline} bpm · today —`
+                    : `${rhr.samples}/21 days of data`
               }
               tone={
                 rhr.deltaAbs == null
@@ -145,9 +147,11 @@ export default async function BodyPage() {
               label="HRV"
               value={hrv.current != null ? `${hrv.current} ms` : "–"}
               baseline={
-                hrv.baseline != null
-                  ? `Δ ${hrv.deltaPct! > 0 ? "+" : ""}${hrv.deltaPct}% vs ${hrv.baseline} ms`
-                  : `${hrv.samples}/21 days of data`
+                hrv.baseline != null && hrv.deltaPct != null
+                  ? `Δ ${hrv.deltaPct > 0 ? "+" : ""}${hrv.deltaPct}% vs ${hrv.baseline} ms`
+                  : hrv.baseline != null
+                    ? `baseline ${hrv.baseline} ms · today —`
+                    : `${hrv.samples}/21 days of data`
               }
               tone={
                 hrv.deltaPct == null

@@ -27,6 +27,7 @@ import { computeCharacterSheet } from "@/lib/basecamp/stats";
 import { computeRank } from "@/lib/basecamp/rank";
 import { detectClassChangeAndUpdate } from "@/lib/basecamp/class-tracker";
 import { ClassUpOverlay } from "@/components/home/class-up-overlay";
+import { OrphanWorkoutCard } from "@/components/home/orphan-workout-card";
 import { getActiveGoal } from "@/lib/basecamp/summit";
 import {
   classProgressLine,
@@ -159,6 +160,12 @@ export default async function HomePage() {
 
       {/* Today's workout — natural intro + hero */}
       <TodaySection state={state} delta={delta} tripForecast={tripForecast} goalName={goal.name} />
+
+      {/* Suggest linking an unclaimed workout to a planned session — only
+          renders if there's a genuine near-match candidate. */}
+      <Suspense fallback={null}>
+        <OrphanWorkoutCard />
+      </Suspense>
 
       {/* Recovery narrative + stats grid */}
       <section className="pt-5 border-t border-panel-border/40 space-y-3">

@@ -16,23 +16,77 @@ export async function SummitHero({
   const goal = await getActiveGoal(userId);
   const { totalFt, gpsFt, estimatedFt } = await getCumulativeVertical(userId);
   const progress = summitProgressFor(totalFt, goal);
-  const pctToSummit = Math.min(100, progress.fractionThroughCurrent * 100);
   const goalLabel = goal.source === "default_rainier" ? "Rainier" : goal.name;
   const highlight = deltaFt > 0;
+
+  // Two rendering modes. Before the first summit we're on a real climb
+  // with waypoints and a filling bar. After — the bar has no meaning
+  // (would be pinned at 100% or exceed it), so we switch to an odometer.
+  const pastFirstSummit = progress.summitCount > 0;
 
   return (
     <div
       className={`rounded-md border border-blue-500/30 bg-blue-950/10 shadow-lg shadow-blue-500/10 p-5 space-y-4 ${highlight ? "cascade-highlight" : ""}`}
     >
+      {pastFirstSummit ? (
+        <OdometerView
+          goal={goal}
+          goalLabel={goalLabel}
+          totalFt={totalFt}
+          summitCount={progress.summitCount}
+          deltaFt={deltaFt}
+          highlight={highlight}
+        />
+      ) : (
+        <ClimbingView
+          goal={goal}
+          goalLabel={goalLabel}
+          totalFt={totalFt}
+          progress={progress}
+          deltaFt={deltaFt}
+          highlight={highlight}
+        />
+      )}
+
+      {estimatedFt > 0 && (
+        <div className="text-[10px] text-muted">
+          {gpsFt.toLocaleString()} ft measured (GPS) ·{" "}
+          {estimatedFt.toLocaleString()} ft estimated (treadmill / stair).
+        </div>
+      )}
+      {goal.source === "default_rainier" && (
+        <div className="text-[10px] text-muted">
+          Default goal: Mount Rainier.{" "}
+          <Link href="/trails" className="text-blue-300 hover:underline">
+            Pick your own primary goal →
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClimbingView({
+  goal,
+  goalLabel,
+  totalFt,
+  progress,
+  deltaFt,
+  highlight,
+}: {
+  goal: ActiveGoal;
+  goalLabel: string;
+  totalFt: number;
+  progress: ReturnType<typeof summitProgressFor>;
+  deltaFt: number;
+  highlight: boolean;
+}) {
+  return (
+    <>
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <div className="text-xs uppercase tracking-widest text-muted">
             To {goalLabel}
-            {progress.summitCount > 0 && (
-              <span className="ml-2 text-blue-300 font-mono">
-                x{progress.summitCount + 1}
-              </span>
-            )}
           </div>
           <div className="text-3xl font-mono font-semibold text-blue-300 tabular-nums leading-none mt-1">
             {totalFt.toLocaleString()}
@@ -59,7 +113,7 @@ export async function SummitHero({
             </>
           ) : (
             <>
-              <div className="uppercase tracking-widest text-muted">Cleared</div>
+              <div className="uppercase tracking-widest text-muted">Reached</div>
               <div className="text-blue-300 font-medium">Summit</div>
             </>
           )}
@@ -77,25 +131,56 @@ export async function SummitHero({
           )}
         </div>
       )}
-      {estimatedFt > 0 && (
-        <div className="text-[10px] text-muted">
-          {gpsFt.toLocaleString()} ft measured (GPS) ·{" "}
-          {estimatedFt.toLocaleString()} ft estimated (treadmill @ 12%, stair @
-          33 ft/min).
+    </>
+  );
+}
+
+/**
+ * Odometer for users who've already climbed at least one summit's
+ * worth of vertical. No progress bar (it would be meaningless past
+ * 100%). Displays cumulative vertical + how many summits that equals.
+ */
+function OdometerView({
+  goal,
+  goalLabel,
+  totalFt,
+  summitCount,
+  deltaFt,
+  highlight,
+}: {
+  goal: ActiveGoal;
+  goalLabel: string;
+  totalFt: number;
+  summitCount: number;
+  deltaFt: number;
+  highlight: boolean;
+}) {
+  const equivalent = totalFt / goal.summitFt;
+  return (
+    <>
+      <div>
+        <div className="text-xs uppercase tracking-widest text-muted">
+          Cumulative vertical climbed
         </div>
-      )}
-      {goal.source === "default_rainier" && (
-        <div className="text-[10px] text-muted">
-          Default goal: Mount Rainier.{" "}
-          <Link
-            href="/trails"
-            className="text-blue-300 hover:underline"
-          >
-            Pick your own primary goal →
-          </Link>
+        <div className="text-3xl font-mono font-semibold text-blue-300 tabular-nums leading-none mt-1">
+          {totalFt.toLocaleString()}
+          <span className="text-base text-muted"> ft</span>
+          {highlight && (
+            <span className="ml-2 text-sm font-mono text-accent align-middle">
+              +{deltaFt.toLocaleString()}
+            </span>
+          )}
         </div>
-      )}
-    </div>
+      </div>
+      <div className="text-sm text-foreground/85 leading-relaxed">
+        That&apos;s the equivalent of climbing{" "}
+        <span className="font-mono text-blue-300 tabular-nums">
+          {equivalent.toFixed(1)}×
+        </span>{" "}
+        {goalLabel} ({goal.summitFt.toLocaleString()} ft summit) —{" "}
+        {summitCount} full summit{summitCount === 1 ? "" : "s"} in the log.
+      </div>
+    </>
   );
 }
 
@@ -110,7 +195,7 @@ function MountainBar({
 }) {
   const summit = goal.summitFt;
   const yFor = (ft: number) => (ft / summit) * 100;
-  const filledPct = progress.fractionThroughCurrent * 100;
+  const filledPct = Math.min(100, progress.fractionThroughCurrent * 100);
 
   return (
     <div className="relative">

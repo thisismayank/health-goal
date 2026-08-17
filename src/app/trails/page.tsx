@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { trail } from "@/db/schema";
 import { requireOnboardedUser } from "@/lib/data";
-import { TRAIL_LIBRARY } from "@/lib/basecamp/trail-library";
+import { allTrails } from "@/lib/basecamp/trail-library";
 import { TrailForm } from "@/components/trail-form";
 import { TrailSearch } from "@/components/trail-search";
 import { TrailsSubNav } from "@/components/shell/trails-sub-nav";
@@ -134,7 +134,7 @@ export default async function TrailsPage() {
       </details>
 
       <p className="text-xs text-muted italic">
-        Trail data from {TRAIL_LIBRARY.length} curated presets sourced from
+        Trail data from {allTrails().length} curated presets sourced from
         NPS.gov, Wikipedia (CC-BY-SA), USGS, and other public-domain sources.
         Attribution shown per trail. Numbers approximate — verify current
         conditions before attempting.

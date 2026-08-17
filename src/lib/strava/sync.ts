@@ -84,6 +84,19 @@ export async function upsertActivity(
     )
     .limit(1);
 
+  // Strava's total_elevation_gain is barometric-summed and often
+  // wildly wrong for tree-covered / building-shaded activities —
+  // we've seen 5,000 ft gain on a 3-mile city walk. Trust nothing
+  // above 300 m/km (about a 30% average grade, steeper than most
+  // hiking trails). Drop suspicious values so the readiness engine
+  // and summit meter don't build on lies.
+  const rawGainM = a.total_elevation_gain ?? null;
+  const gainPerKm =
+    rawGainM != null && a.distance && a.distance > 0
+      ? (rawGainM * 1000) / a.distance
+      : 0;
+  const sanitizedGainM = gainPerKm > 300 ? null : rawGainM;
+
   const workoutValues = {
     userId,
     plannedSessionId,
@@ -92,7 +105,7 @@ export async function upsertActivity(
     type: category,
     durationSeconds: a.elapsed_time,
     distanceMeters: a.distance ?? null,
-    elevationGainMeters: a.total_elevation_gain ?? null,
+    elevationGainMeters: sanitizedGainM,
     averageHr: a.average_heartrate != null ? Math.round(a.average_heartrate) : null,
     maxHr: a.max_heartrate != null ? Math.round(a.max_heartrate) : null,
     notes: a.description?.trim() || null,
