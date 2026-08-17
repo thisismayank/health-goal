@@ -162,6 +162,13 @@
       "when": 1786955006037,
       "tag": "0022_material_gambit",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1786984521724,
+      "tag": "0023_coach_summary_and_tee_up",
+      "breakpoints": true
     }
   ]
 }

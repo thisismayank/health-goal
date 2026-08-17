@@ -23,9 +23,10 @@ import { getActiveGoal } from "@/lib/basecamp/summit";
 import { computeCharacterSheet } from "@/lib/basecamp/stats";
 import { computeRank } from "@/lib/basecamp/rank";
 import { todayInTimeZone } from "@/lib/date";
+import { getCoachSummary } from "@/lib/coach/summary";
 
 export async function buildCoachSystem(user: UserProfile): Promise<string> {
-  const [goal, sheet, activePlan] = await Promise.all([
+  const [goal, sheet, activePlan, summary] = await Promise.all([
     getActiveGoal(user.id),
     computeCharacterSheet(user.id),
     db
@@ -39,6 +40,7 @@ export async function buildCoachSystem(user: UserProfile): Promise<string> {
       )
       .limit(1)
       .then((r) => r[0] ?? null),
+    getCoachSummary(user.id),
   ]);
 
   const rank = computeRank(sheet);
@@ -66,6 +68,12 @@ export async function buildCoachSystem(user: UserProfile): Promise<string> {
 
   parts.push(COACH_PERSONA);
   parts.push(COACH_GUARDRAILS);
+
+  if (summary?.content) {
+    parts.push(`--- PRIOR CONVERSATION SUMMARY ---
+${summary.content}
+(Only conversation older than the last ~20 turns is summarized here — recent turns are attached verbatim below.)`);
+  }
 
   parts.push(`--- USER ---
 Name: ${user.name}

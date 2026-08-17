@@ -9,6 +9,7 @@ import {
 } from "@/lib/llm/credentials";
 import { getAdapter } from "@/lib/llm/providers";
 import { buildCoachSystem } from "@/lib/llm/coach-context";
+import { maybeRegenerate } from "@/lib/coach/summary";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // stream up to 60s
@@ -120,6 +121,12 @@ export async function POST(req: Request) {
             tokensOut: tokensOut || null,
           });
           await markUsed(user.id);
+          // Fire-and-forget summary regeneration. maybeRegenerate is
+          // a no-op unless the unsummarized-turn count crosses the
+          // threshold; when it does fire, we don't want it blocking
+          // the SSE close (users see 'done' immediately, summary
+          // update lands in the background).
+          void maybeRegenerate(user.id);
         }
         emit({ kind: "done", tokensIn, tokensOut });
       } catch (e) {

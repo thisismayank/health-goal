@@ -391,7 +391,34 @@ export const coachMessage = pgTable(
     // Rough token accounting so users can see what they're spending.
     tokensIn: integer("tokens_in"),
     tokensOut: integer("tokens_out"),
+    // "tee_up" for auto-generated openers we produce when the user
+    // opens /coach after a >24h gap. Distinguishes them from real
+    // assistant replies so we can, e.g., style them subtly or exclude
+    // them from history rollups. Null for organic turns.
+    origin: text("origin"),
     createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+);
+
+// Rolling per-user summary of coach-chat history beyond the recent
+// window. Regenerated when the unsummarized turn count exceeds a
+// threshold. One row per user; content is the LLM-produced digest.
+export const coachSummary = pgTable(
+  "coach_summary",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userProfile.id, { onDelete: "cascade" })
+      .unique(),
+    content: text("content").notNull(),
+    // Highest coach_message.id that's been folded into `content`.
+    // On regen we summarize everything with id > throughMessageId +
+    // the prior summary as prior context.
+    throughMessageId: integer("through_message_id").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },

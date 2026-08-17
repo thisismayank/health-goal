@@ -7,6 +7,9 @@ type Message = {
   role: "user" | "assistant";
   content: string;
   pending?: boolean;
+  // 'tee_up' → auto-generated opener; render with a subtle marker so
+  // users understand the coach didn't wait for them to type first.
+  origin?: string | null;
 };
 
 // Kill the stream if it doesn't finish in 60s total, or if 30s pass
@@ -304,8 +307,14 @@ export function CoachChat() {
 
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
+  const isTeeUp = message.origin === "tee_up";
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+      {isTeeUp && (
+        <div className="text-[9px] font-mono uppercase tracking-widest text-blue-400/70 mb-0.5 ml-1">
+          Coach · opener
+        </div>
+      )}
       <div
         className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap leading-relaxed ${
           isUser
