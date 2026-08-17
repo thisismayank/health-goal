@@ -230,7 +230,13 @@ export type DimensionStatus =
   | "not_applicable";
 
 export type DimensionAnalysis = {
-  key: "endurance" | "vertical" | "pack" | "altitude" | "recovery";
+  key:
+    | "endurance"
+    | "vertical"
+    | "pack"
+    | "altitude"
+    | "recovery"
+    | "terrain";
   label: string;
   status: DimensionStatus;
   ratio: number; // 0-1 current-to-required (or interpreted per dimension)
@@ -560,7 +566,7 @@ function analyzePack(
       ratio: 0,
       current: "no strength or loaded-hike data",
       required: `${needed} lb`,
-      note: `${needed} lb pack — log squats or complete a few prescribed loaded hikes so we can tell you if you're ready. Manual "pack weight" entries are ignored (they were the metric before; too noisy).`,
+      note: `${needed} lb pack — log a squat set or complete a prescribed loaded hike and we'll be able to tell you if you're ready.`,
     };
   }
 
@@ -710,20 +716,45 @@ function analyzeAltitude(
         ? `${modeNote}Effective ~12–14k ft. Closable with real acclimatization: a night at 8-10k a few weeks out, then the guided approach at altitude the day before.`
         : `${modeNote}Effective ~12–14k ft — significant thin air. Sleep the night before at moderate altitude if possible.`;
   } else {
-    // 14k+ effective. This is the hard bar. Only categorically
-    // disqualify when the trip is imminent AND no prior high-altitude
-    // exposure. With runway, this is closable — real 8000m expeditions
-    // are ~2-month acclimatization protocols; sub-15k summit pushes are
-    // closable in half that.
-    if (weeksAvail >= 12) {
+    // 14k+ effective. Bar rises steeply with altitude — a 14er is not
+    // the same as Denali. Bucket by trail altitude, cross with runway
+    // and prior exposure.
+    const priorHigh = known ?? 0;
+    if (alt >= 18000) {
+      // Expedition altitude (Denali, Aconcagua, 7000m+ peaks). Requires
+      // proven prior high-altitude experience regardless of runway;
+      // acclimatization alone doesn't build cellular adaptation the
+      // first time. This is a hard gate.
+      if (priorHigh >= 14000) {
+        status = weeksAvail >= 12 ? "closable" : "stretch";
+        note = `${modeNote}Above 18k ft — expedition altitude. Your prior high (${priorHigh.toLocaleString()} ft) makes this closable, but expect a formal 6-8 wk acclimatization protocol.`;
+      } else {
+        status = "not_in_timeframe";
+        note = `${modeNote}Above 18k ft with no prior high-altitude experience (need at least a 14k+ objective under your belt first). This isn't closable in one season — build up on lower peaks first.`;
+      }
+    } else if (alt >= 16000) {
+      // 16-18k (Aconcagua's approach, Mera Peak). Closable with runway
+      // AND prior exposure to 12k+. Otherwise stretch.
+      if (weeksAvail >= 12 && priorHigh >= 12000) {
+        status = "closable";
+        note = `${modeNote}16-18k ft. Real high altitude — needs the full acclimatization block: progressive exposure to 10-12k a month out, then a night at intermediate altitude before the push.`;
+      } else if (priorHigh >= 10000) {
+        status = "stretch";
+        note = `${modeNote}16-18k ft with limited prior exposure. Doable with a proper acclimatization protocol but expect it to be humbling.`;
+      } else {
+        status = "not_in_timeframe";
+        note = `${modeNote}16-18k ft with no prior altitude above 10k. Build up on a 12-14k objective before attempting this — the physiology needs a rehearsal.`;
+      }
+    } else if (weeksAvail >= 12) {
+      // 14-16k (Rainier, Whitney, standard 14ers). Closable with runway.
       status = "closable";
-      note = `${modeNote}Above 14k ft. Real altitude — needs a formal acclimatization plan (progressive exposure days + a night at intermediate altitude before the summit push). You have ${Math.round(weeksAvail)}wk to build it in.`;
+      note = `${modeNote}14-16k ft. Needs a formal acclimatization plan (progressive exposure days + a night at intermediate altitude before the summit push). You have ${Math.round(weeksAvail)}wk to build it in.`;
     } else if (weeksAvail >= 4) {
       status = "stretch";
-      note = `${modeNote}Above 14k ft with limited runway. Book at least one high day (8-10k+) before your trip and lean hard on the guided acclimatization protocol.`;
+      note = `${modeNote}14-16k ft with limited runway. Book at least one high day (8-10k+) before your trip and lean hard on the guided acclimatization protocol.`;
     } else {
       status = "not_in_timeframe";
-      note = `${modeNote}Above 14k ft with under 4 weeks and no prior high-altitude exposure. Not safe to attempt without a proper acclimatization block. Postpone.`;
+      note = `${modeNote}14k+ ft with under 4 weeks and no prior high-altitude exposure. Not safe to attempt without a proper acclimatization block. Postpone.`;
     }
   }
 
@@ -750,6 +781,111 @@ function analyzeAltitude(
   };
 }
 
+// Terrain/skills gate. Hard-caps the verdict for objectives whose
+// difficulty is about skill (rope work, self-arrest, exposure), not
+// fitness. Devin r3 blocker: Denali (mountaineering) was reading
+// 'Doable — expect to feel it' for a Class E walker because none of
+// the fitness dims tripped a hard gate. Terrain now does.
+//
+// Signal: current Hiker Class (userClassIndex) vs the class this
+// terrain typically requires.
+//
+// Class ladder: E=0, D=1, C=2, B=3, A=4, S=5 (RANKS in ./rank.ts).
+//   - mountaineering  → needs A minimum (4). Below = not_in_timeframe.
+//   - technical       → needs B (3). Below = stretch.
+//   - hard            → needs C (2). Below = stretch.
+//   - moderate / easy → ready.
+function analyzeTerrain(
+  trail: Trail,
+  userClassIndex: number,
+): DimensionAnalysis {
+  const grade = trail.terrainGrade;
+
+  if (grade === "easy" || grade === "moderate") {
+    return {
+      key: "terrain",
+      label: "Terrain",
+      status: "ready",
+      ratio: 1,
+      current: `Class ${classLetterFromIndex(userClassIndex)}`,
+      required: grade,
+      note: `${grade === "easy" ? "Established trail — no skill demands." : "Moderate terrain — occasional scrambling. No special skills needed."}`,
+    };
+  }
+
+  const requiredIndex =
+    grade === "hard"
+      ? 2 // C
+      : grade === "technical"
+        ? 3 // B
+        : /* mountaineering */ 4; // A
+
+  if (userClassIndex >= requiredIndex) {
+    return {
+      key: "terrain",
+      label: "Terrain",
+      status: "ready",
+      ratio: 1,
+      current: `Class ${classLetterFromIndex(userClassIndex)}`,
+      required: `${grade} (Class ${classLetterFromIndex(requiredIndex)}+)`,
+      note:
+        grade === "mountaineering"
+          ? "Mountaineering terrain — glacier travel, rope work, self-arrest. Your class covers it."
+          : grade === "technical"
+            ? "Technical terrain — Class 3 with exposure. Your class covers it."
+            : "Hard terrain — steep, sustained. Your class covers it.",
+    };
+  }
+
+  // User is below the required class. Gate strictness by grade:
+  //   - mountaineering: always not_in_timeframe. No amount of fitness
+  //     substitutes for glacier travel, self-arrest, crevasse rescue.
+  //     Must hire a guide or take a course first.
+  //   - technical: not_in_timeframe if gap >= 2 (Class E → B); stretch
+  //     if gap == 1 (Class A user missing a class). Real Class 3
+  //     scrambling with exposure isn't trivially built up.
+  //   - hard: always stretch max — sustained steep terrain IS buildable
+  //     via progressive fitness + moderate scrambles. Don't hard-gate.
+  const gap = requiredIndex - userClassIndex;
+  const status: DimensionStatus =
+    grade === "mountaineering"
+      ? "not_in_timeframe"
+      : grade === "technical" && gap >= 2
+        ? "not_in_timeframe"
+        : "stretch";
+  const note =
+    grade === "mountaineering"
+      ? `Mountaineering: glacier travel, roped teams, ice axe + crampons, crevasse rescue. You're Class ${classLetterFromIndex(userClassIndex)} — needs Class A. Hire a guided service (RMI, IMG, AAI) or take a mountaineering course first.`
+      : grade === "technical"
+        ? `Technical: Class 3 scrambling with real exposure. You're Class ${classLetterFromIndex(userClassIndex)} — build up on Class 2 scrambles before this.`
+        : `Hard terrain — sustained steep sections. You're Class ${classLetterFromIndex(userClassIndex)} — build up on moderate objectives first.`;
+
+  return {
+    key: "terrain",
+    label: "Terrain",
+    status,
+    ratio: userClassIndex / Math.max(1, requiredIndex),
+    current: `Class ${classLetterFromIndex(userClassIndex)}`,
+    required: `${grade} (Class ${classLetterFromIndex(requiredIndex)}+)`,
+    note,
+  };
+}
+
+function classLetterFromIndex(i: number): string {
+  return ["E", "D", "C", "B", "A", "S"][Math.max(0, Math.min(5, i))] ?? "E";
+}
+
+// Class index derivation. Lazy-import to avoid dragging rank + stats
+// into the module graph for callers that pass userClassIndex directly.
+async function deriveUserClassIndex(userId: number): Promise<number> {
+  const { computeCharacterSheet } = await import("./stats");
+  const { computeRank, RANKS } = await import("./rank");
+  const sheet = await computeCharacterSheet(userId);
+  const rank = computeRank(sheet);
+  const idx = RANKS.indexOf(rank.current);
+  return idx < 0 ? 0 : idx;
+}
+
 function analyzeRecovery(
   snap: FitnessSnapshot,
   kind: TrailKind,
@@ -765,9 +901,14 @@ function analyzeRecovery(
   const hrvThreshold = strict ? -10 : -15;
   const sleepThreshold = strict ? 7.0 : 6.5;
 
+  // "Signal exists" test uses baseline presence, not today's delta.
+  // Devin r3 caught the bug: 14 days of RHR history was being reported
+  // as UNKNOWN because today's RHR hadn't been synced yet, dropping
+  // rhrDelta to null. Baselines encode a recent window (see baselines.ts)
+  // and are the honest test for "do we have enough recovery data."
   const signalCount =
-    (rhrDelta != null ? 1 : 0) +
-    (hrvDelta != null ? 1 : 0) +
+    (snap.rhr.baseline != null ? 1 : 0) +
+    (snap.hrv.baseline != null ? 1 : 0) +
     (sleep != null ? 1 : 0);
 
   const flags: string[] = [];
@@ -964,10 +1105,18 @@ export async function assessTrail(
     // re-running the fitness query per call. Used by the /trails/discover
     // page which scores 10-30 trails at once for a region.
     snapshot?: FitnessSnapshot;
+    // Pre-computed user class index (RANKS: E=0..S=5). Same batching
+    // reason — discover computes rank once for the user, per-trail
+    // analyzers just consume the index. When omitted, we lazily
+    // compute it here via computeCharacterSheet + computeRank.
+    userClassIndex?: number;
   },
 ): Promise<TrailAssessment> {
   const snap =
     opts?.snapshot ?? (await loadFitnessSnapshot(userId, opts));
+
+  const userClassIndex =
+    opts?.userClassIndex ?? (await deriveUserClassIndex(userId));
 
   const daysUntilTrail = trail.targetDate
     ? Math.max(0, daysBetween(todayYmd, trail.targetDate))
@@ -983,6 +1132,7 @@ export async function assessTrail(
     analyzeVertical(trail, snap, weeksAvailable, hasDate, kind),
     analyzePack(trail, snap, weeksAvailable, hasDate, kind),
     analyzeAltitude(trail, snap, kind, weeksAvailable),
+    analyzeTerrain(trail, userClassIndex),
     analyzeRecovery(snap, kind),
   ];
 
@@ -1020,10 +1170,16 @@ function estimateWeeksToReady(
   // Find the least-ready dimension by ratio. Concern/altitude/recovery
   // aren't buildable on a training timescale — skip them for this
   // estimate (their fix is rest, acclimatization, or route change).
+  // Also skip UNKNOWN dims: they carry ratio=0 as a "no data" placeholder
+  // and would otherwise force the estimate to the 41-week global-max
+  // cap on every trail with missing pack/recovery data (Devin r3 #3:
+  // "About 41 weeks" appearing on Skyline, Rainier, Wonderland, Denali).
   const buildable = dims.filter(
     (d) =>
-      d.key === "endurance" || d.key === "vertical" || d.key === "pack",
+      (d.key === "endurance" || d.key === "vertical" || d.key === "pack") &&
+      d.status !== "unknown",
   );
+  if (buildable.length === 0) return null;
   let worstRatio = 1;
   for (const d of buildable) {
     if (d.ratio < worstRatio) worstRatio = d.ratio;
@@ -1037,11 +1193,18 @@ function estimateWeeksToReady(
   return rounded;
 }
 
+// Verdict ladder — deliberately monotonic and plain-language so users
+// can tell which is easier at a glance. Devin r3 caught that the old
+// "Achievable with focused prep" (achievable) sorted BELOW "Doable —
+// expect to feel it" (hard) alphabetically but ABOVE it semantically,
+// leaving no way to know which was better. New ladder is strictly
+// increasing in difficulty:
+//   Ready > Ready with prep > Hard — stretch objective > Not without prep or a guide
 export const VERDICT_LABEL: Record<Verdict, string> = {
-  comfortable: "Comfortable — go crush it",
-  achievable: "Achievable with focused prep",
-  hard: "Doable — expect to feel it",
-  do_not_attempt: "Not in this timeframe — postpone",
+  comfortable: "Ready",
+  achievable: "Ready with prep",
+  hard: "Hard — stretch objective",
+  do_not_attempt: "Not without prep or a guide",
 };
 
 export const VERDICT_COLOR: Record<Verdict, string> = {

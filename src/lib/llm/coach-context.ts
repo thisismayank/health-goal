@@ -91,10 +91,26 @@ ${goal.name}${goal.source === "default_rainier" ? " (default; user hasn't picked
 Summit altitude: ${goal.summitFt} ft`);
 
   if (activePlan) {
+    // Pre-compute total-weeks so the LLM doesn't do its own
+    // date arithmetic and end up disagreeing with the header (Devin r3
+    // #7: header 39, /progress 40, coach 41 for the same plan). One
+    // formula, one number, everywhere: end-inclusive weeks between
+    // start and event dates.
+    const totalWeeks =
+      activePlan.eventDate && activePlan.startDate
+        ? Math.max(
+            1,
+            Math.round(
+              (Date.parse(activePlan.eventDate) -
+                Date.parse(activePlan.startDate)) /
+                (7 * 86400_000),
+            ) + 1,
+          )
+        : null;
     parts.push(`--- ACTIVE PLAN ---
 ${activePlan.name}${activePlan.goalEvent ? ` · ${activePlan.goalEvent}` : ""}
 Source: ${activePlan.source}${activePlan.goalType ? ` · ${activePlan.goalType}` : ""}
-Runs ${activePlan.startDate} → ${activePlan.eventDate ?? "?"}`);
+Runs ${activePlan.startDate} → ${activePlan.eventDate ?? "?"}${totalWeeks ? ` (${totalWeeks} weeks total)` : ""}`);
   } else {
     parts.push(`--- ACTIVE PLAN ---
 None. If the user asks about training, suggest generating one on /plan/new.`);

@@ -55,8 +55,11 @@ export async function NorthStarBar() {
       : `${Math.round(summitRatio * 100)}%`;
 
   const today = todayInTimeZone(user.timezone);
-  // Use the plan's actual span, not a hardcoded 16-week seed. Falls
-  // back to null when we have no plan.
+  // Use the plan's actual span, not a hardcoded 16-week seed. The +1
+  // matches plan-rollup.ts::planTotalWeeks — end-inclusive count so
+  // "week 40 of 40" is the summit week, not "week 40 of 39." Devin r3
+  // caught the previous drift: header showed 39, /progress 40, coach
+  // narrative 41 for the same plan.
   const planTotalWeeks =
     plan?.eventDate && plan.startDate
       ? Math.max(
@@ -65,7 +68,7 @@ export async function NorthStarBar() {
             parseYmd(plan.eventDate),
             parseYmd(plan.startDate),
             { weekStartsOn: 1 },
-          ),
+          ) + 1,
         )
       : null;
   const weekNumberRaw = plan

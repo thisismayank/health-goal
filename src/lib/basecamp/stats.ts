@@ -339,11 +339,18 @@ async function computeRec(userId: number, now: Date): Promise<Stat> {
     components.length === 0
       ? 60 // neutral when no recovery data yet
       : Math.round(components.reduce((s, v) => s + v, 0) / components.length);
-  // Require at least 2 of 3 signals before we call it a trustworthy
-  // recovery reading. A single high sleep-average today doesn't mean
-  // 'ready to push' if HRV and RHR are missing — that's the bug that
-  // was surfacing REC=100 with '—' visible on /body.
-  const hasEnoughData = components.length >= 2;
+  // "Enough data" tests baseline presence, not today's-value presence.
+  // Devin r3 caught: /progress showed REC=100 while trail-level UI said
+  // "Only one recovery signal available" for the SAME user, because the
+  // trail check requires today's delta while this one counted any score
+  // component that was computable. Align both on baseline presence — we
+  // KNOW the user's recent normal for sleep/RHR/HRV, even if today
+  // hasn't been synced. Baselines encode a rolling window.
+  const baselineCount =
+    (rhr.baseline != null ? 1 : 0) +
+    (hrv.baseline != null ? 1 : 0) +
+    (avgSleepH != null ? 1 : 0);
+  const hasEnoughData = baselineCount >= 2;
 
   const bits: string[] = [];
   if (avgSleepH != null) bits.push(`sleep ${avgSleepH.toFixed(1)}h avg`);

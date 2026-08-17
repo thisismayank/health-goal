@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { coachMessage } from "@/db/schema";
 import { requireCurrentUser } from "@/lib/data";
@@ -70,12 +70,19 @@ export async function POST(req: Request) {
     .orderBy(asc(coachMessage.createdAt));
   const trimmed = prior.slice(-40);
 
-  // Persist the incoming user turn immediately.
-  await db.insert(coachMessage).values({
-    userId: user.id,
-    role: "user",
-    content: text,
-  });
+  // Persist the incoming user turn immediately so a stream that fails
+  // mid-generation still keeps the user's question in the transcript.
+  // If the assistant reply comes back empty (Devin r3 #2 — provider
+  // returns success with zero content), we roll this row back below so
+  // orphan user turns don't accumulate.
+  const [userTurn] = await db
+    .insert(coachMessage)
+    .values({
+      userId: user.id,
+      role: "user",
+      content: text,
+    })
+    .returning({ id: coachMessage.id });
 
   const messages = [...trimmed, { role: "user" as const, content: text }];
 
@@ -108,8 +115,6 @@ export async function POST(req: Request) {
             emit({ kind: "error", message: chunk.message });
           }
         }
-        // Persist the assistant reply on completion. If nothing was
-        // yielded (upstream produced no deltas), skip.
         if (assembled.length > 0) {
           await db.insert(coachMessage).values({
             userId: user.id,
@@ -121,17 +126,50 @@ export async function POST(req: Request) {
             tokensOut: tokensOut || null,
           });
           await markUsed(user.id);
-          // Fire-and-forget summary regeneration. maybeRegenerate is
-          // a no-op unless the unsummarized-turn count crosses the
-          // threshold; when it does fire, we don't want it blocking
-          // the SSE close (users see 'done' immediately, summary
-          // update lands in the background).
+          // Fire-and-forget summary regeneration. Non-blocking so the
+          // SSE closes immediately after 'done'.
           void maybeRegenerate(user.id);
+          emit({ kind: "done", tokensIn, tokensOut });
+        } else {
+          // Empty completion. Providers occasionally return success
+          // with zero content (safety refusal, model glitch, upstream
+          // truncation). Old code emitted 'done' anyway → client spun
+          // forever on an empty assistant bubble AND we left an orphan
+          // user turn in the transcript.
+          //
+          // Fix: emit 'error' so the client shows retry, and roll back
+          // the user turn we speculatively persisted so the next send
+          // doesn't ship an ever-growing history of unanswered turns.
+          await db
+            .delete(coachMessage)
+            .where(
+              and(
+                eq(coachMessage.id, userTurn.id),
+                eq(coachMessage.userId, user.id),
+              ),
+            );
+          emit({
+            kind: "error",
+            message:
+              "The provider returned an empty response. Try again — this often clears on retry.",
+          });
         }
-        emit({ kind: "done", tokensIn, tokensOut });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "stream_failed";
         console.error("[coach] stream error:", msg);
+        // Same orphan-cleanup on hard errors, unless we already
+        // streamed partial content (in which case leave both turns
+        // so the user sees what came through).
+        if (assembled.length === 0) {
+          await db
+            .delete(coachMessage)
+            .where(
+              and(
+                eq(coachMessage.id, userTurn.id),
+                eq(coachMessage.userId, user.id),
+              ),
+            );
+        }
         emit({ kind: "error", message: msg });
       } finally {
         controller.close();
