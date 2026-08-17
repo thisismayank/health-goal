@@ -28,6 +28,12 @@ import { PrimaryGoalButton, TrailDeleteButton } from "@/components/trail-actions
 import { TrailEditForm } from "@/components/trail-edit-form";
 import { CoachCardSkeleton } from "@/components/coach-cards";
 import type { Trail as TrailRow } from "@/db/schema";
+import { computeCharacterSheet } from "@/lib/basecamp/stats";
+import { computeRank } from "@/lib/basecamp/rank";
+import {
+  estimatePersonalHours,
+  formatHoursCasual,
+} from "@/lib/basecamp/personal-time";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +58,8 @@ export default async function TrailDetailPage({
   const today = todayInTimeZone(user.timezone);
   const assessment = await assessTrail(user.id, t, today);
   const prepPlan = generatePrepPlan(assessment, t);
+  const rank = computeRank(await computeCharacterSheet(user.id));
+  const personalHours = estimatePersonalHours(t.typicalHours, rank.current);
 
   const completions = await db
     .select()
@@ -81,6 +89,15 @@ export default async function TrailDetailPage({
           {t.distanceKm} km · {t.elevationGainFt.toLocaleString()} ft gain ·
           max {t.maxAltitudeFt.toLocaleString()} ft · ~{t.typicalHours}h
           {t.packWeightLb > 0 && ` · ${t.packWeightLb} lb pack`} · {t.terrainGrade}
+        </div>
+        <div className="text-sm mt-1">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-blue-400 mr-1">
+            For you
+          </span>
+          <span className="text-blue-300 font-mono">
+            aim ~{formatHoursCasual(personalHours)}
+          </span>
+          <span className="text-muted"> · based on Class {rank.current}</span>
         </div>
         {t.targetDate && (
           <div className="text-sm mt-1">

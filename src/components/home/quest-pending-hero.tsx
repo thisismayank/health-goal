@@ -2,6 +2,7 @@ import { getLastSetsForExercise } from "@/lib/data";
 import { LogSessionForm } from "@/components/log-session-form";
 import { ReopenButton } from "@/components/session-actions";
 import { LogPanel } from "@/components/home/log-panel";
+import { PlannedDetails } from "@/components/plan/planned-details";
 import type { PlannedSession } from "@/db/schema";
 
 type Prescription = { name: string; sets: number; reps: string }[];
@@ -89,11 +90,7 @@ export async function QuestPendingHero({
 
         <MetricChips session={session} />
 
-        {session.instructions && (
-          <p className="text-sm leading-relaxed text-foreground/80 pt-1">
-            {session.instructions}
-          </p>
-        )}
+        <PlannedDetails session={session} />
       </section>
 
       {isSkipped ? (

@@ -11,6 +11,7 @@ import {
 } from "@/lib/data";
 import { DAY_LABELS, todayInTimeZone, weekDays, weekStart, ymd } from "@/lib/date";
 import type { PlannedSession } from "@/db/schema";
+import { PlannedDetails } from "@/components/plan/planned-details";
 
 export const dynamic = "force-dynamic";
 
@@ -194,7 +195,7 @@ function DayCard({
         <StatusChip status={session?.status ?? "none"} />
       </div>
 
-      {session && <PlannedDetails session={session} />}
+      {session && <PlannedDetails session={session} variant="inset" />}
 
       {workout && <WorkoutDetails workout={workout} sets={strengthSets} />}
 
@@ -263,64 +264,6 @@ function SessionHeader({
         )}
       </div>
     </>
-  );
-}
-
-type Prescription = { name: string; sets: number; reps: string }[];
-function parsePrescription(raw: string | null): Prescription | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    return parsed as Prescription;
-  } catch {
-    return null;
-  }
-}
-
-function PlannedDetails({ session }: { session: PlannedSession }) {
-  const prescription = parsePrescription(session.strengthPrescription);
-  const hasContent =
-    !!session.instructions ||
-    (prescription != null && prescription.length > 0);
-  if (!hasContent) return null;
-
-  return (
-    <details className="ml-[calc(3.5rem+1rem)] group rounded-md border border-panel-border bg-background/30 open:bg-background/40">
-      <summary className="cursor-pointer select-none px-3 py-2 text-xs text-blue-300 hover:text-blue-200 flex items-center gap-2">
-        <span className="inline-block transition-transform group-open:rotate-90 text-[10px]">
-          ▸
-        </span>
-        What's in this workout
-      </summary>
-      <div className="px-3 pb-3 pt-1 space-y-3">
-        {session.instructions && (
-          <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">
-            {session.instructions}
-          </p>
-        )}
-        {prescription && prescription.length > 0 && (
-          <div className="space-y-1.5">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-muted">
-              Prescribed sets
-            </div>
-            <div className="rounded-md border border-panel-border bg-panel/60 divide-y divide-panel-border">
-              {prescription.map((p, i) => (
-                <div
-                  key={i}
-                  className="flex items-baseline justify-between gap-3 px-3 py-1.5 text-xs"
-                >
-                  <span className="font-medium">{p.name}</span>
-                  <span className="text-muted tabular-nums">
-                    {p.sets} × {p.reps}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </details>
   );
 }
 

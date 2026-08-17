@@ -18,6 +18,12 @@ import {
 } from "@/lib/basecamp/trail-assessment";
 import { SavePresetButton } from "@/components/trails/save-preset-button";
 import { getSquadCompletionsForPreset } from "@/lib/squad/queries";
+import { computeCharacterSheet } from "@/lib/basecamp/stats";
+import { computeRank } from "@/lib/basecamp/rank";
+import {
+  estimatePersonalHours,
+  formatHoursCasual,
+} from "@/lib/basecamp/personal-time";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +85,9 @@ export default async function PresetDetailPage({
 
   const verdictColor = VERDICT_COLOR[assessment.verdict];
 
+  const rank = computeRank(await computeCharacterSheet(user.id));
+  const personalHours = estimatePersonalHours(preset.typicalHours, rank.current);
+
   return (
     <div className="space-y-5">
       <div>
@@ -110,6 +119,11 @@ export default async function PresetDetailPage({
           label="Typical"
           value={`~${preset.typicalHours}`}
           unit="h"
+        />
+        <MetricPill
+          label="For you"
+          value={`aim ~${formatHoursCasual(personalHours)}`}
+          highlight
         />
         {preset.packWeightLb > 0 && (
           <MetricPill
@@ -293,17 +307,23 @@ function MetricPill({
   label,
   value,
   unit,
+  highlight = false,
 }: {
   label: string;
   value: string;
   unit?: string;
+  highlight?: boolean;
 }) {
+  const labelCls = highlight
+    ? "text-[10px] uppercase tracking-wider text-blue-400"
+    : "text-[10px] uppercase tracking-wider text-muted";
+  const valueCls = highlight
+    ? "text-sm font-mono font-medium tabular-nums text-blue-300"
+    : "text-sm font-mono font-medium tabular-nums";
   return (
     <div className="flex items-baseline gap-1">
-      <span className="text-[10px] uppercase tracking-wider text-muted">
-        {label}
-      </span>
-      <span className="text-sm font-mono font-medium tabular-nums">{value}</span>
+      <span className={labelCls}>{label}</span>
+      <span className={valueCls}>{value}</span>
       {unit && <span className="text-[10px] text-muted">{unit}</span>}
     </div>
   );
