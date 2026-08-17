@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { allTrails } from "@/lib/basecamp/trail-library";
+import { getFullTrailLibrary } from "@/lib/basecamp/trail-coords";
 import { presetToVirtualTrail } from "@/lib/basecamp/preset-trail";
 import {
   assessTrail,
@@ -41,8 +41,10 @@ export async function NearMeSection({ user }: { user: UserProfile }) {
 
   // Filter presets by proximity FIRST so we only assess a small
   // number. assessTrail is a few DB reads per call; we don't want
-  // to do it against the whole 200+ preset library.
-  const nearby = allTrails()
+  // to do it against the whole 200+ preset library. Use the
+  // coord-augmented library — many trails only get their trailhead
+  // via the TRAIL_COORDS overlay in lib/basecamp/trail-coords.ts.
+  const nearby = getFullTrailLibrary()
     .filter(
       (p) =>
         p.startLat != null &&

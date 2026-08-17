@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
@@ -9,7 +8,6 @@ import { TrailForm } from "@/components/trail-form";
 import { TrailsSubNav } from "@/components/shell/trails-sub-nav";
 import { TrailIcon } from "@/components/ui/icons";
 import { formatFt, formatKm, formatPackLb, pickUnits } from "@/lib/units";
-import { NearMeSection } from "@/components/trails/near-me-section";
 
 export const dynamic = "force-dynamic";
 
@@ -45,13 +43,6 @@ export default async function TrailsPage() {
         </p>
       </section>
 
-      {/* Near-me feed. Silent when the user hasn't set a home base;
-          when set, we surface ready + achievable trails within 200mi
-          so weekend planning starts from "what's actually reachable"
-          rather than an empty search box. */}
-      <Suspense fallback={null}>
-        <NearMeSection user={user} />
-      </Suspense>
 
       {/* Your trails — front-and-center, per Devin */}
       {savedTrails.length > 0 ? (

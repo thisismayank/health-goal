@@ -19,6 +19,7 @@ import {
   type ItineraryPresetInput,
 } from "@/components/trails/itinerary-planner";
 import { formatFt, formatKm, pickUnits } from "@/lib/units";
+import { NearMeSection } from "@/components/trails/near-me-section";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +108,8 @@ export default async function DiscoverPage({
       </div>
 
       <DiscoverSearch initialQuery={query} />
+
+      {!query && <NearMeSection user={user} />}
 
       {!query && (
         <section className="space-y-2">
