@@ -3,11 +3,32 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+/**
+ * Data-only match spec so server components can safely pass items
+ * across the RSC boundary — functions aren't serializable, so we
+ * describe the match rule declaratively and evaluate it here.
+ *
+ *   { exact: "/train" }
+ *   { prefix: ["/plan/"], notPrefix: ["/plan/new", "/plan/upload"] }
+ */
+export type MatchSpec =
+  | { exact: string }
+  | { prefix: string[]; notPrefix?: string[] };
+
 export type SubNavItem = {
   href: string;
   label: string;
-  matches?: (path: string) => boolean; // default: exact match
+  match?: MatchSpec;
 };
+
+function isActive(pathname: string, item: SubNavItem): boolean {
+  const spec = item.match ?? { exact: item.href };
+  if ("exact" in spec) return pathname === spec.exact;
+  const hasPrefix = spec.prefix.some((p) => pathname.startsWith(p));
+  if (!hasPrefix) return false;
+  if (spec.notPrefix?.some((p) => pathname.startsWith(p))) return false;
+  return true;
+}
 
 /**
  * Segmented sub-nav for pages that have sibling routes. Keeps the
@@ -19,7 +40,7 @@ export function SubNav({ items }: { items: SubNavItem[] }) {
   return (
     <nav className="flex items-center gap-1 overflow-x-auto -mx-1 px-1 py-1 no-scrollbar">
       {items.map((it) => {
-        const active = it.matches ? it.matches(pathname) : pathname === it.href;
+        const active = isActive(pathname, it);
         return (
           <Link
             key={it.href}

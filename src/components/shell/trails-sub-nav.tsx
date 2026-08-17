@@ -1,8 +1,9 @@
 import { SubNav } from "./sub-nav";
 
 /**
- * Sub-nav for the Trails tab. Stays static — the sibling pages are
- * all discoverable and known ahead of time.
+ * Sub-nav for the Trails tab. Static — the sibling pages are known
+ * ahead of time. Match rules are declarative (see MatchSpec in
+ * sub-nav.tsx) so they can safely cross the RSC boundary.
  */
 export function TrailsSubNav() {
   return (
@@ -11,23 +12,25 @@ export function TrailsSubNav() {
         {
           href: "/trails",
           label: "Your trails",
-          matches: (p) =>
-            p === "/trails" ||
-            (p.startsWith("/trails/") &&
-              !p.startsWith("/trails/preset") &&
-              !p.startsWith("/trails/discover") &&
-              !p.startsWith("/trails/backfill") &&
-              !p.startsWith("/trails/link")),
+          match: {
+            prefix: ["/trails"],
+            notPrefix: [
+              "/trails/preset",
+              "/trails/discover",
+              "/trails/backfill",
+              "/trails/link",
+            ],
+          },
         },
         {
           href: "/trails/discover",
           label: "Discover",
-          matches: (p) => p.startsWith("/trails/discover"),
+          match: { prefix: ["/trails/discover"] },
         },
         {
           href: "/trails/backfill",
           label: "Backfill",
-          matches: (p) => p.startsWith("/trails/backfill"),
+          match: { prefix: ["/trails/backfill"] },
         },
       ]}
     />

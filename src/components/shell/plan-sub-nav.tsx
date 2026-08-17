@@ -1,43 +1,35 @@
-import { getActivePlan } from "@/lib/data";
-import { requireCurrentUser } from "@/lib/data";
+import { getActivePlan, requireCurrentUser } from "@/lib/data";
 import { SubNav } from "./sub-nav";
 
 /**
- * Sub-nav for the Plan tab. Server component so it can look up the
- * user's active plan id and link 'Full plan' at the right route.
- * Keeps the sibling routes (This week / Full plan / History / New)
- * one tap away from any of them.
+ * Sub-nav for the Plan tab. Server component — looks up the user's
+ * active plan id so 'Full plan' points at the right route. Match
+ * rules are declarative (see MatchSpec in sub-nav.tsx) so we can
+ * safely serialize them across the RSC boundary.
  */
 export async function PlanSubNav() {
   const user = await requireCurrentUser();
   const plan = await getActivePlan(user.id);
 
   const items = [
-    {
-      href: "/train",
-      label: "This week",
-      matches: (p: string) => p === "/train",
-    },
+    { href: "/train", label: "This week", match: { exact: "/train" as const } },
     ...(plan
       ? [
           {
             href: `/plan/${plan.id}`,
             label: "Full plan",
-            matches: (p: string) =>
-              p.startsWith(`/plan/${plan.id}`) && !p.startsWith("/plan/new"),
+            match: {
+              prefix: [`/plan/${plan.id}`],
+              notPrefix: ["/plan/new", "/plan/upload"],
+            },
           },
         ]
       : []),
-    {
-      href: "/history",
-      label: "History",
-      matches: (p: string) => p === "/history",
-    },
+    { href: "/history", label: "History", match: { exact: "/history" as const } },
     {
       href: "/plan/new",
       label: "New plan",
-      matches: (p: string) =>
-        p === "/plan/new" || p === "/plan/upload",
+      match: { prefix: ["/plan/new", "/plan/upload"] },
     },
   ];
   return <SubNav items={items} />;
