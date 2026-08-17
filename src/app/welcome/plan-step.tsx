@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { saveOnboardingConstraints } from "@/lib/actions";
+import { finishOnboardingWithPlan } from "@/lib/actions";
 
 type Hours = 3 | 5 | 7 | 10;
 type Fitness = "new" | "occasional" | "regular" | "active";
@@ -21,7 +21,7 @@ const FITNESS_OPTIONS: { value: Fitness; label: string; sub: string }[] = [
   { value: "active", label: "Active athlete", sub: "Consistently training hard for a goal" },
 ];
 
-export function PlanStep() {
+export function PlanStep({ stravaConnected }: { stravaConnected: boolean }) {
   const router = useRouter();
   const [hours, setHours] = useState<Hours | null>(null);
   const [fitness, setFitness] = useState<Fitness | null>(null);
@@ -35,11 +35,11 @@ export function PlanStep() {
     setError(null);
     startTransition(async () => {
       try {
-        await saveOnboardingConstraints({
+        await finishOnboardingWithPlan({
           weeklyHours: hours,
           startingFitness: fitness,
         });
-        router.push("/welcome?step=3");
+        router.replace("/");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to save");
       }
@@ -86,6 +86,11 @@ export function PlanStep() {
         <legend className="text-[10px] font-mono uppercase tracking-widest text-muted mb-1">
           Where are you starting?
         </legend>
+        {stravaConnected && (
+          <p className="text-[11px] text-blue-300/90">
+            We'll refine this from your Strava history as it syncs in.
+          </p>
+        )}
         <div className="space-y-2">
           {FITNESS_OPTIONS.map((o) => (
             <button
@@ -120,7 +125,7 @@ export function PlanStep() {
           disabled={!canSubmit}
           className="w-full sm:w-auto sm:min-w-[280px] rounded-md bg-accent-strong text-background font-medium px-6 py-3 hover:bg-accent transition disabled:opacity-50 text-center"
         >
-          {pending ? "Building your plan…" : "Build my plan →"}
+          {pending ? "Building your plan…" : "Build my plan + enter →"}
         </button>
         <p className="text-[11px] text-muted">
           Starting week 1 today, ramped to your level. You can tune it later.

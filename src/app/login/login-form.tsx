@@ -25,10 +25,12 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(
     errorCode ? (ERROR_COPY[errorCode] ?? "Something went wrong.") : null,
   );
+  const [betaLink, setBetaLink] = useState<string | null>(null);
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    setBetaLink(null);
     startTransition(async () => {
       try {
         const res = await fetch("/api/auth/request-link", {
@@ -36,9 +38,17 @@ export function LoginForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email }),
         });
-        const data = (await res.json()) as { ok: boolean; error?: string };
+        const data = (await res.json()) as {
+          ok: boolean;
+          error?: string;
+          betaLink?: string;
+        };
         if (!res.ok || !data.ok) {
           setError(ERROR_COPY[data.error ?? ""] ?? "Something went wrong.");
+          return;
+        }
+        if (data.betaLink) {
+          setBetaLink(data.betaLink);
           return;
         }
         router.replace(
@@ -79,6 +89,23 @@ export function LoginForm({
         <p className="text-sm text-danger" role="alert">
           {error}
         </p>
+      )}
+
+      {betaLink && (
+        <div className="rounded-md border border-blue-500/40 bg-blue-950/20 p-3 space-y-2">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
+            [BETA · EMAIL NOT CONFIGURED]
+          </div>
+          <p className="text-xs text-muted">
+            No mailer set up yet. Tap below to sign in directly:
+          </p>
+          <a
+            href={betaLink}
+            className="block text-center rounded-md bg-accent-strong text-background font-medium px-4 py-2.5 hover:bg-accent transition text-sm"
+          >
+            Sign in as {email} →
+          </a>
+        </div>
       )}
 
       <p className="text-xs text-muted text-center pt-2">

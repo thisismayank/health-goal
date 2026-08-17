@@ -4,7 +4,6 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { stravaAccount } from "@/db/schema";
 import { requireCurrentUser } from "@/lib/data";
-import { FinishOnboardingButton } from "./finish-button";
 import { PlanStep } from "./plan-step";
 
 export const dynamic = "force-dynamic";
@@ -24,13 +23,20 @@ export default async function WelcomePage({
   const step: StepKey =
     stepRaw === "3" ? "3" : stepRaw === "2" ? "2" : "1";
 
+  const [strava] = await db
+    .select({ athleteId: stravaAccount.athleteId })
+    .from(stravaAccount)
+    .where(eq(stravaAccount.userId, user.id))
+    .limit(1);
+  const stravaConnected = !!strava;
+
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center py-8">
       <div className="w-full max-w-lg space-y-6">
         <StepIndicator current={step} />
         {step === "1" ? <WelcomeStep firstName={firstName(user.name)} /> : null}
-        {step === "2" ? <PlanStep /> : null}
-        {step === "3" ? <ConnectStep userId={user.id} /> : null}
+        {step === "2" ? <ConnectStep stravaConnected={stravaConnected} /> : null}
+        {step === "3" ? <PlanStep stravaConnected={stravaConnected} /> : null}
       </div>
     </div>
   );
@@ -47,9 +53,9 @@ function StepIndicator({ current }: { current: StepKey }) {
     <div className="flex items-center gap-2 justify-center flex-wrap">
       <StepDot label="Welcome" active={current === "1"} done={currentIdx > 0} />
       <StepConnector done={currentIdx > 0} />
-      <StepDot label="Plan" active={current === "2"} done={currentIdx > 1} />
+      <StepDot label="Connect" active={current === "2"} done={currentIdx > 1} />
       <StepConnector done={currentIdx > 1} />
-      <StepDot label="Connect" active={current === "3"} done={false} />
+      <StepDot label="Plan" active={current === "3"} done={false} />
     </div>
   );
 }
@@ -136,14 +142,7 @@ function WelcomeStep({ firstName }: { firstName: string }) {
   );
 }
 
-async function ConnectStep({ userId }: { userId: number }) {
-  const [strava] = await db
-    .select({ athleteId: stravaAccount.athleteId })
-    .from(stravaAccount)
-    .where(eq(stravaAccount.userId, userId))
-    .limit(1);
-  const stravaConnected = !!strava;
-
+function ConnectStep({ stravaConnected }: { stravaConnected: boolean }) {
   return (
     <div className="space-y-5">
       <div className="space-y-2 text-center">
@@ -152,7 +151,8 @@ async function ConnectStep({ userId }: { userId: number }) {
         </div>
         <h1 className="text-2xl font-semibold">Where's your training data?</h1>
         <p className="text-sm text-muted leading-relaxed max-w-md mx-auto">
-          Connecting one source is enough. You can add more later.
+          Connecting one source lets us tune your plan to what you're
+          actually doing. You can skip and add later.
         </p>
       </div>
 
@@ -226,15 +226,16 @@ async function ConnectStep({ userId }: { userId: number }) {
       </details>
 
       <div className="flex flex-col items-center gap-3 pt-2">
-        <FinishOnboardingButton
-          primary
-          label={stravaConnected ? "Continue to trails →" : "Continue to trails →"}
-        />
-        {!stravaConnected && (
-          <FinishOnboardingButton
-            label="Skip data connection for now"
-            variant="ghost"
-          />
+        <Link
+          href="/welcome?step=3"
+          className="w-full sm:w-auto sm:min-w-[280px] rounded-md bg-accent-strong text-background font-medium px-6 py-3 hover:bg-accent transition text-center"
+        >
+          {stravaConnected ? "Continue →" : "Skip and continue →"}
+        </Link>
+        {stravaConnected && (
+          <p className="text-[11px] text-muted">
+            We'll use your recent activity to suggest a starting level.
+          </p>
         )}
       </div>
     </div>

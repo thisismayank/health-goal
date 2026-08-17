@@ -8,6 +8,7 @@ import {
 } from "@/components/shell/north-star-bar";
 import { BottomNav } from "@/components/shell/bottom-nav";
 import { InstallPrompt } from "@/components/shell/install-prompt";
+import { ServiceWorkerRegister } from "@/components/shell/sw-register";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -54,6 +55,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </main>
         <InstallPrompt />
         <BottomNav />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

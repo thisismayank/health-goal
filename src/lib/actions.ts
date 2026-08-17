@@ -909,6 +909,21 @@ export async function markOnboardingComplete() {
   revalidatePath("/welcome");
 }
 
+/**
+ * Terminal onboarding step — persists plan constraints, generates
+ * the 12-week plan, and marks the user as onboarded in one round trip.
+ * Called from the final wizard step so we don't split a single UI
+ * action into two server calls.
+ */
+export async function finishOnboardingWithPlan(input: {
+  weeklyHours: 3 | 5 | 7 | 10;
+  startingFitness: "new" | "occasional" | "regular" | "active";
+}) {
+  const result = await saveOnboardingConstraints(input);
+  await markOnboardingComplete();
+  return result;
+}
+
 export async function disconnectStrava() {
   const user = await getCurrentUser();
   if (!user) throw new Error("No user found");

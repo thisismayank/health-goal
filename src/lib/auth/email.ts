@@ -7,7 +7,8 @@
  */
 
 type SendResult =
-  | { ok: true; via: "resend" | "console" }
+  | { ok: true; via: "resend" }
+  | { ok: true; via: "console"; link: string }
   | { ok: false; via: "resend"; error: string };
 
 const FROM_ADDRESS =
@@ -23,7 +24,7 @@ export async function sendMagicLinkEmail(
     console.log(
       `\n[magic-link] Resend not configured. Send this to ${to} manually:\n  ${link}\n`,
     );
-    return { ok: true, via: "console" };
+    return { ok: true, via: "console", link };
   }
 
   const body = {

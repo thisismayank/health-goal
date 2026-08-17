@@ -49,6 +49,19 @@ export async function POST(req: Request) {
         { status: 502 },
       );
     }
+    // Beta fallback: when Resend isn't configured we can't actually
+    // deliver the email. In dev/preview return the link so the client
+    // can render a "tap to sign in" fallback. Never in production —
+    // that would let anyone log in as any address they type.
+    if (result.via === "console") {
+      if (process.env.NODE_ENV === "production") {
+        return NextResponse.json(
+          { ok: false, error: "send_failed" },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({ ok: true, betaLink: result.link });
+    }
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("request-link failed:", err);
