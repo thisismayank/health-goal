@@ -30,7 +30,7 @@ export const dynamic = "force-dynamic";
 const VERDICT_HEADLINE: Record<Verdict, string> = {
   comfortable: "You're ready.",
   achievable: "You can do this.",
-  hard: "This will be a challenge.",
+  hard: "Doable — you'll feel it.",
   do_not_attempt: "Not yet — build up first.",
 };
 
@@ -39,9 +39,9 @@ const VERDICT_SUBHEAD: Record<Verdict, string> = {
     "Your current fitness comfortably meets this trail's demands.",
   achievable:
     "Within reach at your current fitness — expect real effort, but you'll finish.",
-  hard: "Doable, but at the edge of your current fitness. Real preparation recommended.",
+  hard: "Go slower than the guide time, take breaks, expect to feel it the next day. Read the tips below before you set out.",
   do_not_attempt:
-    "Significant fitness gap. Attempting this at current level risks injury or turning back.",
+    "Significant fitness gap for a technical objective. Attempting this at current level risks injury or having to turn back.",
 };
 
 export default async function PresetDetailPage({

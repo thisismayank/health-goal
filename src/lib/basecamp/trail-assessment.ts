@@ -437,6 +437,22 @@ function analyzePack(
   }
 
   // For day hikes, pack is a light day pack — full match matters.
+  // Day-hike short-circuit: a light day pack (≤10 lb — water bottle,
+  // snacks, a jacket) requires no benchmark training. Anyone reasonably
+  // mobile can carry that. Skip the ratio math and mark ready so we
+  // don't wrongly flag people who've never logged a "pack workout".
+  if (kind === "day_hike" && needed <= 10) {
+    return {
+      key: "pack",
+      label: "Pack",
+      status: "ready",
+      ratio: 1,
+      current: cur > 0 ? `${cur} lb (recent max)` : "no pack logged",
+      required: `${needed} lb`,
+      note: "Day pack — water, snacks, a light layer. Trivial load for most people, no prep required.",
+    };
+  }
+
   // For multi-day treks, pack weight is often smaller (porters carry the
   // bulk on Kili/EBC) or spread across days. Slightly relaxed.
   // For summit pushes / expeditions, the number IS what you carry.
@@ -601,10 +617,27 @@ const VERDICT_ORDER: Verdict[] = [
   "do_not_attempt",
 ];
 
-function verdictFromDimensions(dims: DimensionAnalysis[]): Verdict {
+function verdictFromDimensions(
+  dims: DimensionAnalysis[],
+  kind: TrailKind,
+): Verdict {
   const relevant = dims.filter((d) => d.status !== "not_applicable");
   const has = (s: DimensionStatus) => relevant.some((d) => d.status === s);
   const count = (s: DimensionStatus) => relevant.filter((d) => d.status === s).length;
+
+  // Day hikes are never "do not attempt". Anyone reasonably mobile can
+  // walk a standard day hike with the right pacing + expectations —
+  // shutting them down is condescending and wrong. The worst honest
+  // verdict is "hard": doable, but you'll feel it. "Not in timeframe"
+  // is reserved for long_day / summit_push / multi_day objectives
+  // where a real fitness gap is dangerous, not just uncomfortable.
+  if (kind === "day_hike") {
+    if (count("stretch") >= 2 || has("concern") || has("not_in_timeframe")) {
+      return "hard";
+    }
+    if (has("stretch") || has("closable")) return "achievable";
+    return "comfortable";
+  }
 
   if (has("not_in_timeframe")) return "do_not_attempt";
   if (count("stretch") >= 2 || has("concern")) return "hard";
@@ -615,24 +648,80 @@ function verdictFromDimensions(dims: DimensionAnalysis[]): Verdict {
 function suggestAdjustments(
   trail: Trail,
   dims: DimensionAnalysis[],
+  kind: TrailKind,
+  verdict: Verdict,
 ): string[] {
   const s: string[] = [];
   const byKey = Object.fromEntries(dims.map((d) => [d.key, d]));
-  if (byKey.endurance?.status === "stretch" || byKey.endurance?.status === "not_in_timeframe") {
-    s.push(`Slow pace target: expect ${(trail.typicalHours * 1.3).toFixed(1)} hours instead of ${trail.typicalHours}.`);
+  const gappy = (k: string) =>
+    byKey[k]?.status === "stretch" || byKey[k]?.status === "not_in_timeframe";
+
+  // "If you push it anyway" copy — for day hikes where we intentionally
+  // don't shut the user down, give them what to expect + how to make
+  // it work. Prevents the shame spiral of "the app said no".
+  if (kind === "day_hike" && (verdict === "hard" || verdict === "achievable")) {
+    if (gappy("endurance")) {
+      s.push(
+        `Pace it slow — plan ${(trail.typicalHours * 1.3).toFixed(1)} h instead of ${trail.typicalHours}. Rest breaks every 45 min.`,
+      );
+      s.push(
+        "Expect stiff legs the next day. Eat + hydrate on trail and stretch after.",
+      );
+    }
+    if (gappy("vertical")) {
+      s.push(
+        "On climbs: breathe by nose if possible; if you can't hold a short sentence, slow down until you can.",
+      );
+    }
+    if (byKey.altitude?.status === "stretch") {
+      s.push(
+        "Mild altitude: pace conservatively for the first hour. Sip water constantly.",
+      );
+    }
+    if (gappy("pack")) {
+      s.push(
+        `Go lighter than the guide — ${Math.round(trail.packWeightLb * 0.6)} lb is enough (water, a bar, one layer).`,
+      );
+    }
+    if (byKey.recovery?.status === "concern") {
+      s.push(
+        "Recovery is off today — start slower, plan an early turnaround if it feels harder than expected.",
+      );
+    }
+    if (s.length === 0) {
+      s.push(
+        "Nothing exceptional to prep for — go enjoy it.",
+      );
+    }
+    return s;
   }
-  if (byKey.pack?.status === "stretch" || byKey.pack?.status === "not_in_timeframe") {
+
+  // Longer / summit / multi-day objectives: keep the classic prep-plan tone.
+  if (gappy("endurance")) {
+    s.push(
+      `Slow pace target: expect ${(trail.typicalHours * 1.3).toFixed(1)} hours instead of ${trail.typicalHours}.`,
+    );
+  }
+  if (gappy("pack")) {
     const cur = trail.packWeightLb;
-    s.push(`Reduce pack weight to ${Math.round(cur * 0.7)}–${Math.round(cur * 0.85)} lb.`);
+    s.push(
+      `Reduce pack weight to ${Math.round(cur * 0.7)}–${Math.round(cur * 0.85)} lb.`,
+    );
   }
-  if (byKey.vertical?.status === "stretch" || byKey.vertical?.status === "not_in_timeframe") {
-    s.push("Take frequent breaks on steep sections; pace by breathing (still able to talk).");
+  if (gappy("vertical")) {
+    s.push(
+      "Take frequent breaks on steep sections; pace by breathing (still able to talk).",
+    );
   }
   if (byKey.altitude?.status === "concern") {
-    s.push("Sleep at moderate elevation the night before if possible. Hydrate aggressively.");
+    s.push(
+      "Sleep at moderate elevation the night before if possible. Hydrate aggressively.",
+    );
   }
   if (byKey.recovery?.status === "concern") {
-    s.push("Prioritize sleep tonight and tomorrow before the trail; consider postponing 1-2 days.");
+    s.push(
+      "Prioritize sleep tonight and tomorrow before the trail; consider postponing 1-2 days.",
+    );
   }
   return s;
 }
@@ -669,8 +758,8 @@ export async function assessTrail(
     analyzeRecovery(snap, kind),
   ];
 
-  const verdict = verdictFromDimensions(dimensions);
-  const suggestedAdjustments = suggestAdjustments(trail, dimensions);
+  const verdict = verdictFromDimensions(dimensions, kind);
+  const suggestedAdjustments = suggestAdjustments(trail, dimensions, kind, verdict);
 
   return {
     verdict,
@@ -685,7 +774,7 @@ export async function assessTrail(
 export const VERDICT_LABEL: Record<Verdict, string> = {
   comfortable: "Comfortable — go crush it",
   achievable: "Achievable with focused prep",
-  hard: "Hard — expect struggle",
+  hard: "Doable — expect to feel it",
   do_not_attempt: "Not in this timeframe — postpone",
 };
 

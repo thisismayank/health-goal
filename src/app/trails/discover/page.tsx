@@ -32,8 +32,8 @@ const VERDICT_ORDER: Verdict[] = [
 const VERDICT_HEADLINE: Record<Verdict, string> = {
   comfortable: "Ready — pick one and go",
   achievable: "Reachable — some prep helps",
-  hard: "Hard — real build first",
-  do_not_attempt: "Not ready — build up first",
+  hard: "Doable if you pace it",
+  do_not_attempt: "Not ready — technical/long alpine objectives",
 };
 
 function normalize(s: string): string {

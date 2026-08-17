@@ -147,19 +147,68 @@ export function IntervalsConnect({
       <div>
         <div className="font-medium">intervals.icu</div>
         <div className="text-xs text-muted mt-1">
-          Bridges Garmin, Wahoo, Zwift, Peloton, TrainingPeaks. Get your
-          Athlete ID + API key from{" "}
+          Bridges Garmin, Wahoo, Zwift, Peloton, TrainingPeaks, Suunto,
+          Polar. Free to use.
+        </div>
+      </div>
+
+      <details className="rounded-md border border-panel-border bg-background/40 group">
+        <summary className="cursor-pointer select-none px-3 py-2 text-xs text-blue-300 hover:text-blue-200 flex items-center gap-2">
+          <span className="inline-block transition-transform group-open:rotate-90 text-[10px]">
+            ▸
+          </span>
+          First time? Here&apos;s how to get your credentials.
+        </summary>
+        <ol className="px-4 pb-3 pt-1 space-y-2 text-xs text-muted leading-relaxed list-decimal list-inside marker:text-blue-400">
+          <li>
+            Go to{" "}
+            <a
+              className="text-blue-300 hover:underline"
+              href="https://intervals.icu"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              intervals.icu
+            </a>{" "}
+            and create a free account (or sign in with Strava).
+          </li>
+          <li>
+            In the intervals.icu dashboard, click your name (top-right)
+            → <strong className="text-foreground">Settings</strong> →{" "}
+            <strong className="text-foreground">Connections</strong>.
+            Connect your Garmin / Wahoo / Zwift / etc. account — this
+            is one-click OAuth per source.
+          </li>
+          <li>
+            Wait a minute for your history to sync into intervals.icu.
+          </li>
+          <li>
+            Still in Settings, scroll to{" "}
+            <strong className="text-foreground">Developer Settings</strong>.
+            Copy your{" "}
+            <strong className="text-foreground">Athlete ID</strong>{" "}
+            (looks like <code className="text-blue-300">i123456</code>)
+            and{" "}
+            <strong className="text-foreground">API Key</strong> (long
+            hex string).
+          </li>
+          <li>
+            Paste both below and hit Connect. We&apos;ll validate the
+            key and pull your last 30 days of wellness data.
+          </li>
+        </ol>
+        <p className="px-4 pb-3 pt-1 text-[11px] text-muted italic">
+          Prefer a shortcut?{" "}
           <a
+            className="text-blue-300 hover:underline"
             href="https://intervals.icu/settings"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-300 hover:underline"
           >
-            intervals.icu → Settings
+            Jump straight to intervals.icu Settings →
           </a>
-          .
-        </div>
-      </div>
+        </p>
+      </details>
 
       <label className="block space-y-1">
         <span className="text-[10px] font-mono uppercase tracking-widest text-muted">
