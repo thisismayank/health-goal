@@ -461,14 +461,26 @@ function analyzePack(
     };
   }
 
-  // Zero-baseline guard: if the user has literally never logged a pack
-  // AND the trail wants a meaningful load (>15 lb), don't project a
-  // fake growth curve. Zero → 24 lb "closable" over 12 weeks is a lie
-  // — the projection assumes progressive loading that hasn't started.
-  // Force this into 'stretch' at minimum, 'not_in_timeframe' if the
-  // gap is large. This is what caught Wonderland showing pack=closable
-  // at ratio=0.00.
-  if (cur === 0 && needed > 15) {
+  // Zero-baseline guard: if the user has literally never logged a
+  // pack AND the trail wants a meaningful load (>15 lb), we can't
+  // just let the projection curve fake it — Wonderland used to show
+  // pack=closable at ratio 0 because the projection assumed
+  // progressive loading that hadn't started.
+  //
+  // But: the original guard was time-blind. It forced 'postpone' for
+  // any 30lb+ trail even when the user has 10 months to build up. A
+  // conservative loading progression (2 lb/wk) covers 0 → 35 lb in
+  // ~18 weeks, so any weeksAvail comfortably above that should let
+  // the projection speak. We only force the categorical when there
+  // isn't enough runway for real loading.
+  //
+  // Threshold: 20 weeks. Below that, the guard stands (short-notice
+  // 30lb+ objective with no loading history IS disqualifying — you
+  // won't safely close it in 3 months of ramp). Above that, fall
+  // through to the projection.
+  const ZERO_BASELINE_MIN_WEEKS = 20;
+  const shortNotice = weeksAvail < ZERO_BASELINE_MIN_WEEKS;
+  if (cur === 0 && needed > 15 && shortNotice) {
     const status: DimensionStatus =
       needed >= 30 ? "not_in_timeframe" : "stretch";
     return {
@@ -480,7 +492,7 @@ function analyzePack(
       required: `${needed} lb`,
       note:
         status === "not_in_timeframe"
-          ? `${needed} lb pack with zero loading history — you'd need weeks of progressive loaded hikes before you're ready. Start now, or reduce pack weight.`
+          ? `${needed} lb pack with zero loading history and only ${Math.round(weeksAvail)} weeks — you'd need progressive loading you don't have time for. Start now, or reduce pack weight.`
           : `${needed} lb pack is a real load. You've never logged carrying weight — expect the pack to be the limiting factor, not the trail.`,
     };
   }
