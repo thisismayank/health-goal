@@ -21,6 +21,7 @@ import {
   sendNotificationEmail,
 } from "@/lib/notifications/send";
 import { isoWeekTag } from "@/lib/date";
+import { generateFeaturedNarrative } from "@/lib/coach/featured-narrative";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -60,7 +61,17 @@ async function processUser(
     return { userId: user.id, email: user.email, result: "no_pick" };
   }
 
-  const rendered = renderFeaturedTrailEmail({ payload, appUrl });
+  // LLM 'why this pick this week' — cached by (class + preset + week)
+  // so the first user in a class pays the Gemini cost and subsequent
+  // users (in this cron run + on home) get the cached copy.
+  const narrative = await generateFeaturedNarrative({
+    userId: user.id,
+    hikerClass: payload.hikerClass,
+    preset: payload.preset,
+    weekTag,
+  });
+
+  const rendered = renderFeaturedTrailEmail({ payload, appUrl, narrative });
   const dedupeKey = `featured_${weekTag}`;
   const send = await sendNotificationEmail({
     userId: user.id,

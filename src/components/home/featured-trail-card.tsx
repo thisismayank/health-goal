@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireOnboardedUser } from "@/lib/data";
 import { isoWeekTag } from "@/lib/date";
 import { pickFeaturedTrail } from "@/lib/notifications/featured-trail";
+import { generateFeaturedNarrative } from "@/lib/coach/featured-narrative";
 import { VERDICT_COLOR, VERDICT_LABEL } from "@/lib/basecamp/trail-assessment";
 
 // In-app companion to the Monday featured-trail email. Same pick logic
@@ -18,6 +19,12 @@ export async function FeaturedTrailCard() {
   const { preset, verdict, hikerClass, hikerClassLabel } = payload;
   const verdictColor = VERDICT_COLOR[verdict];
   const verdictLabel = VERDICT_LABEL[verdict];
+  const narrative = await generateFeaturedNarrative({
+    userId: user.id,
+    hikerClass,
+    preset,
+    weekTag,
+  });
 
   return (
     <Link
@@ -34,6 +41,14 @@ export async function FeaturedTrailCard() {
         <h3 className="text-lg font-semibold leading-tight">{preset.name}</h3>
         <div className="text-xs text-muted mt-0.5">{preset.region}</div>
       </div>
+      {narrative && (
+        <div className="rounded-md border border-blue-500/20 bg-background/40 p-3 space-y-1.5">
+          <div className="text-sm font-medium leading-snug">
+            {narrative.hook}
+          </div>
+          <p className="text-xs text-muted leading-relaxed">{narrative.why}</p>
+        </div>
+      )}
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
         <span>
           <span className="text-foreground tabular-nums">

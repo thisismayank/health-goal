@@ -135,9 +135,11 @@ export type FeaturedTrailEmail = {
 export function renderFeaturedTrailEmail({
   payload,
   appUrl,
+  narrative,
 }: {
   payload: FeaturedTrailPayload;
   appUrl: string;
+  narrative?: { hook: string; why: string } | null;
 }): FeaturedTrailEmail {
   const { user, preset, verdict, hikerClass, hikerClassLabel } = payload;
   const first = user.name.split(" ")[0];
@@ -145,7 +147,9 @@ export function renderFeaturedTrailEmail({
   const { headline, sub } = verdictCopy(verdict);
   const verdictLabel = VERDICT_LABEL[verdict];
 
-  const subject = `Featured this week: ${preset.name}`;
+  const subject = narrative?.hook
+    ? `${preset.name} — ${narrative.hook}`
+    : `Featured this week: ${preset.name}`;
   const metrics = `${preset.distanceKm} km · +${preset.elevationGainFt.toLocaleString()} ft · ~${preset.typicalHours}h · ${preset.terrainGrade}`;
 
   const text = [
@@ -157,11 +161,14 @@ export function renderFeaturedTrailEmail({
     `${preset.region}`,
     `${metrics}`,
     ``,
+    narrative ? `Why this pick: ${narrative.hook}` : null,
+    narrative ? `${narrative.why}` : null,
+    narrative ? `` : null,
     `For you (${hikerClass} ${hikerClassLabel}): ${verdictLabel}`,
     `${headline}`,
     `${sub}`,
     ``,
-    `About:`,
+    `About the trail:`,
     `${preset.notes}`,
     ``,
     `See the full For You card + save to plan:`,
@@ -170,6 +177,7 @@ export function renderFeaturedTrailEmail({
     `Sources: ${preset.sources.join(", ")}`,
     `Turn off Featured Trail emails in Basecamp Settings.`,
   ]
+    .filter((l): l is string => l !== null)
     .join("\n") + "\n\nBasecamp\n";
 
   const html = `<!doctype html>
@@ -198,8 +206,16 @@ export function renderFeaturedTrailEmail({
       <p style="font-size:13px;color:#9aa0a6;margin:4px 0 0 0;line-height:1.5">${escape(sub)}</p>
     </div>
 
-    <p style="margin:16px 0 4px 0;font-family:ui-monospace,monospace;font-size:11px;letter-spacing:0.15em;color:#7dd3fc;text-transform:uppercase">About</p>
-    <p style="font-size:14px;line-height:1.6;color:#e8eaed;margin:4px 0 0 0">${escape(preset.notes)}</p>
+    ${
+      narrative
+        ? `<p style="margin:16px 0 4px 0;font-family:ui-monospace,monospace;font-size:11px;letter-spacing:0.15em;color:#7dd3fc;text-transform:uppercase">Why this pick</p>` +
+          `<p style="font-size:15px;font-weight:500;color:#e8eaed;margin:4px 0 6px 0;line-height:1.4">${escape(narrative.hook)}</p>` +
+          `<p style="font-size:14px;line-height:1.6;color:#e8eaed;margin:0">${escape(narrative.why)}</p>`
+        : ""
+    }
+
+    <p style="margin:16px 0 4px 0;font-family:ui-monospace,monospace;font-size:11px;letter-spacing:0.15em;color:#9aa0a6;text-transform:uppercase">About the trail</p>
+    <p style="font-size:14px;line-height:1.6;color:#9aa0a6;margin:4px 0 0 0">${escape(preset.notes)}</p>
 
     <div style="margin-top:24px">
       <a href="${trailUrl}" style="display:inline-block;background:#4fa552;color:#0a0b0d;padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:500">
