@@ -1365,7 +1365,7 @@ export async function linkWorkoutToPlannedSession(input: {
  * provider. AES-256-GCM encrypted at rest via APP_ENCRYPTION_KEY.
  */
 export async function saveLlmCredentials(input: {
-  provider: "anthropic" | "openai";
+  provider: "anthropic" | "openai" | "gemini";
   apiKey: string;
   modelId?: string | null;
 }) {

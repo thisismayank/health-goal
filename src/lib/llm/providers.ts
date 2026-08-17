@@ -149,9 +149,67 @@ const openai: ProviderAdapter = {
   },
 };
 
+// ------------- Google (Gemini) -------------
+
+const gemini: ProviderAdapter = {
+  provider: "gemini",
+  defaultModel: "gemini-2.0-flash-exp",
+  displayName: "Google (Gemini)",
+  keyPattern: /^AI[\w-]{35,}$/,
+  async *streamChat({ apiKey, modelId, system, messages, maxTokens = 1024 }) {
+    const model = modelId ?? gemini.defaultModel;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+
+    // Gemini uses "parts" content and distinct system_instruction.
+    const contents = messages.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        contents,
+        systemInstruction: { parts: [{ text: system }] },
+        generationConfig: { maxOutputTokens: maxTokens },
+      }),
+    });
+    if (!res.ok || !res.body) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Gemini ${res.status}: ${text.slice(0, 200)}`);
+    }
+    yield* parseSse(res.body, (event) => {
+      const data = event.data as
+        | {
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+            usageMetadata?: {
+              promptTokenCount?: number;
+              candidatesTokenCount?: number;
+            };
+          }
+        | null;
+      if (!data) return null;
+      const text = data.candidates?.[0]?.content?.parts
+        ?.map((p) => p.text ?? "")
+        .join("");
+      if (text) return { kind: "delta", text };
+      if (data.usageMetadata) {
+        return {
+          kind: "usage",
+          tokensIn: data.usageMetadata.promptTokenCount ?? 0,
+          tokensOut: data.usageMetadata.candidatesTokenCount ?? 0,
+        };
+      }
+      return null;
+    });
+  },
+};
+
 const ADAPTERS: Record<LlmProvider, ProviderAdapter> = {
   anthropic,
   openai,
+  gemini,
 };
 
 export function getAdapter(provider: LlmProvider): ProviderAdapter {

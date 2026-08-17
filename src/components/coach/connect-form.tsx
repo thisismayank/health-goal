@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { disconnectLlm, saveLlmCredentials } from "@/lib/actions";
 
-type Provider = "anthropic" | "openai";
+type Provider = "anthropic" | "openai" | "gemini";
 
 const PROVIDER_META: Record<
   Provider,
@@ -21,6 +21,12 @@ const PROVIDER_META: Record<
     defaultModel: "gpt-4o-mini",
     docsUrl: "https://platform.openai.com/api-keys",
     keyPlaceholder: "sk-...",
+  },
+  gemini: {
+    label: "Google (Gemini)",
+    defaultModel: "gemini-2.0-flash-exp",
+    docsUrl: "https://aistudio.google.com/apikey",
+    keyPlaceholder: "AI...",
   },
 };
 
@@ -137,7 +143,7 @@ export function CoachConnectForm({
           <legend className="text-[10px] font-mono uppercase tracking-widest text-muted mb-1.5">
             Provider
           </legend>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {(Object.keys(PROVIDER_META) as Provider[]).map((p) => (
               <button
                 key={p}

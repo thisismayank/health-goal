@@ -343,7 +343,7 @@ export const stravaAccount = pgTable(
   ],
 );
 
-export const LLM_PROVIDERS = ["anthropic", "openai"] as const;
+export const LLM_PROVIDERS = ["anthropic", "openai", "gemini"] as const;
 export type LlmProvider = (typeof LLM_PROVIDERS)[number];
 
 export const llmCredentials = pgTable(
