@@ -15,6 +15,7 @@ import {
   type Verdict,
 } from "@/lib/basecamp/trail-assessment";
 import { DiscoverSearch } from "@/components/trails/discover-search";
+import { TrailsSubNav } from "@/components/shell/trails-sub-nav";
 import {
   ItineraryPlanner,
   type ItineraryPresetInput,
@@ -98,14 +99,9 @@ export default async function DiscoverPage({
 
   return (
     <div className="space-y-5">
+      <TrailsSubNav />
       <div>
-        <Link
-          href="/trails"
-          className="text-xs text-muted hover:text-foreground"
-        >
-          ← Trails
-        </Link>
-        <h1 className="text-2xl font-semibold mt-2 leading-tight">
+        <h1 className="text-2xl font-semibold leading-tight">
           Where are you going?
         </h1>
         <p className="text-sm text-muted mt-1 leading-relaxed">

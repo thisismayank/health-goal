@@ -6,6 +6,7 @@ import { requireOnboardedUser } from "@/lib/data";
 import { TRAIL_LIBRARY } from "@/lib/basecamp/trail-library";
 import { TrailForm } from "@/components/trail-form";
 import { TrailSearch } from "@/components/trail-search";
+import { TrailsSubNav } from "@/components/shell/trails-sub-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,12 @@ export default async function TrailsPage() {
 
   return (
     <div className="space-y-6">
+      <TrailsSubNav />
       <section>
         <h1 className="text-2xl font-semibold">Trails</h1>
         <p className="text-sm text-muted mt-1">
-          Find any hike and see if you're ready — for you, right now, based on
-          your recent training.
+          Find any hike and see if you&apos;re ready — for you, right now,
+          based on your recent training.
         </p>
       </section>
 

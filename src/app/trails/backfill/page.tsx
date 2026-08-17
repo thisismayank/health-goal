@@ -6,6 +6,7 @@ import { requireOnboardedUser } from "@/lib/data";
 import { matchWorkoutToTrails } from "@/lib/basecamp/trail-matcher";
 import { BackfillList } from "./backfill-list";
 import { RunBackfillButton } from "./run-backfill-button";
+import { TrailsSubNav } from "@/components/shell/trails-sub-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -55,14 +56,9 @@ export default async function BackfillPage() {
 
   return (
     <div className="space-y-6">
+      <TrailsSubNav />
       <section>
-        <Link
-          href="/trails"
-          className="text-xs text-muted hover:text-foreground"
-        >
-          ← Trails
-        </Link>
-        <div className="flex items-center justify-between gap-3 mt-2">
+        <div className="flex items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold">Backfill from history</h1>
           <RunBackfillButton />
         </div>

@@ -3,6 +3,7 @@ import { PLAN_GOAL_TYPES } from "@/db/schema";
 import { requireOnboardedUser } from "@/lib/data";
 import { GOAL_LABEL } from "@/lib/plan/goal-labels";
 import { UploadPlanForm } from "./upload-form";
+import { PlanSubNav } from "@/components/shell/plan-sub-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -46,14 +47,9 @@ export default async function UploadPlanPage() {
   await requireOnboardedUser();
   return (
     <div className="space-y-6">
+      <PlanSubNav />
       <section>
-        <Link
-          href="/plan/new"
-          className="text-xs text-muted hover:text-foreground"
-        >
-          ← Plan
-        </Link>
-        <h1 className="text-2xl font-semibold mt-2">Upload a plan</h1>
+        <h1 className="text-2xl font-semibold">Upload a plan</h1>
         <p className="text-sm text-muted mt-1">
           Paste plan JSON — from a coach, a workout builder, or a script.
           We&apos;ll validate every session before saving. This replaces

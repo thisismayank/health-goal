@@ -6,6 +6,7 @@ import { requireOnboardedUser } from "@/lib/data";
 import { GOAL_DESCRIPTION, GOAL_LABEL } from "@/lib/plan/goal-labels";
 import { defaultWeeksForGoal } from "@/lib/plan/templates";
 import { RegenerateForm } from "./regenerate-form";
+import { PlanSubNav } from "@/components/shell/plan-sub-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -37,14 +38,9 @@ export default async function NewPlanPage() {
 
   return (
     <div className="space-y-6">
+      <PlanSubNav />
       <section>
-        <Link
-          href="/train"
-          className="text-xs text-muted hover:text-foreground"
-        >
-          ← Train
-        </Link>
-        <h1 className="text-2xl font-semibold mt-2">A new plan</h1>
+        <h1 className="text-2xl font-semibold">A new plan</h1>
         <p className="text-sm text-muted mt-1">
           Pick your goal and constraints. We&apos;ll build a plan sized
           to it. Regenerating replaces your current plan going forward

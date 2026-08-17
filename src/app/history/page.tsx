@@ -5,6 +5,7 @@ import {
   getStrengthSetsForWorkouts,
 } from "@/lib/data";
 import type { StrengthExercise } from "@/db/schema";
+import { PlanSubNav } from "@/components/shell/plan-sub-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function HistoryPage() {
 
   return (
     <div className="space-y-6">
+      <PlanSubNav />
       <section>
         <h1 className="text-2xl font-semibold">History</h1>
         <p className="text-sm text-muted mt-1">

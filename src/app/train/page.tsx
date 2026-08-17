@@ -12,6 +12,7 @@ import {
 import { DAY_LABELS, todayInTimeZone, weekDays, weekStart, ymd } from "@/lib/date";
 import type { PlannedSession } from "@/db/schema";
 import { PlannedDetails } from "@/components/plan/planned-details";
+import { PlanSubNav } from "@/components/shell/plan-sub-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -99,21 +100,12 @@ export default async function TrainPage() {
 
   return (
     <div className="space-y-5">
+      <PlanSubNav />
       <section>
-        <div className="flex items-baseline justify-between gap-3">
-          <div>
-            <div className="text-xs uppercase tracking-widest text-muted">
-              Week of {format(start, "MMM d")}
-            </div>
-            <h1 className="text-2xl font-semibold mt-0.5">Training week</h1>
-          </div>
-          <Link
-            href="/plan/new"
-            className="text-xs text-blue-300 hover:underline whitespace-nowrap"
-          >
-            Change plan →
-          </Link>
+        <div className="text-xs uppercase tracking-widest text-muted">
+          Week of {format(start, "MMM d")}
         </div>
+        <h1 className="text-2xl font-semibold mt-0.5">Training week</h1>
         <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted">
           <span>
             <span className="text-foreground">{completed.length}</span> /{" "}
