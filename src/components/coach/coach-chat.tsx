@@ -9,6 +9,13 @@ type Message = {
   pending?: boolean;
 };
 
+// Kill the stream if it doesn't finish in 60s total, or if 30s pass
+// between chunks. Providers occasionally hang mid-stream (Anthropic's
+// upstream connection resets show up as a silent stall); without a
+// client-side abort the pending "…" bubble spins forever.
+const TOTAL_TIMEOUT_MS = 60_000;
+const IDLE_TIMEOUT_MS = 30_000;
+
 const SUGGESTIONS = [
   "Am I on track this week?",
   "I'm sore in the legs — should I move tomorrow's session?",
@@ -21,8 +28,10 @@ export function CoachChat() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastFailed, setLastFailed] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Load history on mount.
   useEffect(() => {
@@ -58,6 +67,7 @@ export function CoachChat() {
     if (sending || !bodyText.trim()) return;
     const trimmed = bodyText.trim();
     setError(null);
+    setLastFailed(null);
     setSending(true);
     const nowKey = `local-${Date.now()}`;
     setMessages((m) => [
@@ -67,11 +77,28 @@ export function CoachChat() {
     ]);
     setText("");
 
+    const abort = new AbortController();
+    abortRef.current = abort;
+    const totalTimer = setTimeout(
+      () => abort.abort(new Error("timeout: no response in 60s")),
+      TOTAL_TIMEOUT_MS,
+    );
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const bumpIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(
+        () => abort.abort(new Error("timeout: no chunks for 30s")),
+        IDLE_TIMEOUT_MS,
+      );
+    };
+    bumpIdle();
+
     try {
       const res = await fetch("/api/coach/message", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: trimmed }),
+        signal: abort.signal,
       });
       if (!res.ok || !res.body) {
         const body = await res.json().catch(() => ({}));
@@ -83,6 +110,7 @@ export function CoachChat() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        bumpIdle();
         buffer += decoder.decode(value, { stream: true });
         let idx: number;
         while ((idx = buffer.indexOf("\n\n")) !== -1) {
@@ -130,20 +158,46 @@ export function CoachChat() {
         }
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Send failed";
+      const raw = e instanceof Error ? e.message : "Send failed";
+      // Friendlier copy for common cases so users know whether to
+      // retry, check keys, or wait.
+      const msg = /timeout/i.test(raw)
+        ? "The coach didn't respond in time. Try again — provider may be slow."
+        : /401|403|invalid|api key|unauthor/i.test(raw)
+          ? "Your API key was rejected. Check it in settings and reconnect."
+          : /429|rate/i.test(raw)
+            ? "Rate-limited by the provider. Give it a minute."
+            : raw;
       setError(msg);
+      setLastFailed(trimmed);
       setMessages((m) => {
         const clone = [...m];
         const last = clone[clone.length - 1];
         if (last?.role === "assistant" && last.pending && !last.content) {
           clone.pop();
+        } else if (last?.role === "assistant" && last.pending) {
+          // Partial reply arrived, then the stream died — freeze it
+          // so the user sees what did come through instead of a
+          // permanent pending bubble.
+          clone[clone.length - 1] = { ...last, pending: false };
         }
         return clone;
       });
     } finally {
+      clearTimeout(totalTimer);
+      if (idleTimer) clearTimeout(idleTimer);
+      abortRef.current = null;
       setSending(false);
     }
   };
+
+  // Abort any in-flight stream on unmount so tab switches don't leak
+  // an open connection.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const clearHistory = async () => {
     if (!confirm("Wipe the coach chat history?")) return;
@@ -189,9 +243,18 @@ export function CoachChat() {
       </div>
 
       {error && (
-        <p className="text-xs text-danger py-1" role="alert">
-          {error}
-        </p>
+        <div className="text-xs py-1 flex items-center gap-3" role="alert">
+          <span className="text-danger">{error}</span>
+          {lastFailed && !sending && (
+            <button
+              type="button"
+              onClick={() => send(lastFailed)}
+              className="text-blue-300 hover:text-blue-200 underline underline-offset-4"
+            >
+              Retry
+            </button>
+          )}
+        </div>
       )}
 
       <form

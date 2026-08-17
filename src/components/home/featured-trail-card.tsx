@@ -5,6 +5,7 @@ import { pickFeaturedTrail } from "@/lib/notifications/featured-trail";
 import { generateFeaturedNarrative } from "@/lib/coach/featured-narrative";
 import { VERDICT_COLOR, VERDICT_LABEL } from "@/lib/basecamp/trail-assessment";
 import { TrailIcon } from "@/components/ui/icons";
+import { formatFt, formatKm, pickUnits } from "@/lib/units";
 
 // In-app companion to the Monday featured-trail email. Same pick logic
 // so email + home show the same trail all week.
@@ -20,6 +21,7 @@ export async function FeaturedTrailCard() {
   const { preset, verdict, hikerClass, hikerClassLabel } = payload;
   const verdictColor = VERDICT_COLOR[verdict];
   const verdictLabel = VERDICT_LABEL[verdict];
+  const units = pickUnits(user);
   const narrative = await generateFeaturedNarrative({
     userId: user.id,
     hikerClass,
@@ -52,17 +54,11 @@ export async function FeaturedTrailCard() {
         </div>
       )}
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-        <span>
-          <span className="text-foreground tabular-nums">
-            {preset.distanceKm}
-          </span>{" "}
-          km
+        <span className="text-foreground tabular-nums">
+          {formatKm(preset.distanceKm, units)}
         </span>
-        <span>
-          <span className="text-foreground tabular-nums">
-            +{preset.elevationGainFt.toLocaleString()}
-          </span>{" "}
-          ft
+        <span className="text-foreground tabular-nums">
+          +{formatFt(preset.elevationGainFt, units)}
         </span>
         <span>
           ~

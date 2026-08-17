@@ -18,6 +18,7 @@ import {
   ItineraryPlanner,
   type ItineraryPresetInput,
 } from "@/components/trails/itinerary-planner";
+import { formatFt, formatKm, pickUnits } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ export default async function DiscoverPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireOnboardedUser();
+  const units = pickUnits(user);
   const params = await searchParams;
   const rawQuery = typeof params.q === "string" ? params.q : "";
   const query = rawQuery.trim();
@@ -222,8 +224,8 @@ export default async function DiscoverPage({
                         <div className="text-xs text-muted mt-1">
                           {preset.region}
                           {" · "}
-                          {preset.distanceKm} km · +
-                          {preset.elevationGainFt.toLocaleString()} ft · ~
+                          {formatKm(preset.distanceKm, units)} · +
+                          {formatFt(preset.elevationGainFt, units)} · ~
                           {preset.typicalHours}h · {preset.terrainGrade}
                         </div>
                         {assessment.suggestedAdjustments.length > 0 &&

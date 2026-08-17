@@ -12,6 +12,7 @@ import {
 import { DAY_LABELS, todayInTimeZone, weekDays, weekStart, ymd } from "@/lib/date";
 import type { PlannedSession } from "@/db/schema";
 import { PlannedDetails } from "@/components/plan/planned-details";
+import { InlineSessionActions } from "@/components/plan/inline-actions";
 import { PlanSubNav } from "@/components/shell/plan-sub-nav";
 
 export const dynamic = "force-dynamic";
@@ -131,12 +132,14 @@ export default async function TrainPage() {
             workout ? setsByWorkout.get(workout.id) ?? [] : [];
           const extras = extrasByDate.get(dateStr) ?? [];
           const isToday = dateStr === today;
+          const isFuture = dateStr > today;
           return (
             <DayCard
               key={dateStr}
               dayLabel={DAY_LABELS[i]}
               dateLabel={format(d, "d")}
               isToday={isToday}
+              isFuture={isFuture}
               session={session ?? null}
               workout={workout ?? null}
               strengthSets={strengthSets}
@@ -169,6 +172,7 @@ function DayCard({
   dayLabel,
   dateLabel,
   isToday,
+  isFuture,
   session,
   workout,
   strengthSets,
@@ -178,6 +182,7 @@ function DayCard({
   dayLabel: string;
   dateLabel: string;
   isToday: boolean;
+  isFuture: boolean;
   session: PlannedSession | null;
   workout: Workout | null;
   strengthSets: StrengthExercise[];
@@ -212,6 +217,20 @@ function DayCard({
       {session && <PlannedDetails session={session} variant="inset" />}
 
       {workout && <WorkoutDetails workout={workout} sets={strengthSets} />}
+
+      {session && (
+        <div className="flex justify-end pt-1 border-t border-panel-border/50">
+          <InlineSessionActions
+            plannedSessionId={session.id}
+            targetDurationMinutes={session.targetDurationMinutes}
+            status={session.status}
+            isFuture={isFuture}
+            hasImportedWorkout={
+              workout != null && workout.canonicalSource !== "manual"
+            }
+          />
+        </div>
+      )}
 
       {extras.length > 0 && (
         <div className="pt-2 border-t border-panel-border space-y-2">

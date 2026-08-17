@@ -62,6 +62,27 @@ export function formatBodyWeightKg(
   return `${lb.toFixed(1)} lb`;
 }
 
+// ---- Preset-native inputs (trail library stores km + ft directly) ----
+// Prefer these when you already have km / ft and want the user's
+// display preference applied — cheaper than round-tripping through
+// meters and back.
+
+export function formatKm(km: number | null | undefined, units: Units): string {
+  if (km == null) return "—";
+  if (units === "metric") return `${km.toFixed(km < 10 ? 1 : 0)} km`;
+  const miles = km * 0.6213712;
+  return `${miles.toFixed(miles < 10 ? 1 : 0)} mi`;
+}
+
+export function formatFt(ft: number | null | undefined, units: Units): string {
+  if (ft == null) return "—";
+  if (units === "metric") {
+    const m = ft * 0.3048;
+    return `${Math.round(m).toLocaleString()} m`;
+  }
+  return `${Math.round(ft).toLocaleString()} ft`;
+}
+
 // ---- Convenience: pull user's units off the profile ----
 
 export function pickUnits(

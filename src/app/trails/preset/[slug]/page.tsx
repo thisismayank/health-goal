@@ -24,6 +24,7 @@ import {
   estimatePersonalHours,
   formatHoursCasual,
 } from "@/lib/basecamp/personal-time";
+import { formatFt, formatKm, formatPackLb, pickUnits } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,7 @@ export default async function PresetDetailPage({
 
   const rank = computeRank(await computeCharacterSheet(user.id));
   const personalHours = estimatePersonalHours(preset.typicalHours, rank.current);
+  const units = pickUnits(user);
 
   return (
     <div className="space-y-5">
@@ -104,16 +106,14 @@ export default async function PresetDetailPage({
       </div>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-        <MetricPill label="Distance" value={`${preset.distanceKm}`} unit="km" />
+        <MetricPill label="Distance" value={formatKm(preset.distanceKm, units)} />
         <MetricPill
           label="Vertical"
-          value={`+${preset.elevationGainFt.toLocaleString()}`}
-          unit="ft"
+          value={`+${formatFt(preset.elevationGainFt, units)}`}
         />
         <MetricPill
           label="Max alt"
-          value={`${preset.maxAltitudeFt.toLocaleString()}`}
-          unit="ft"
+          value={formatFt(preset.maxAltitudeFt, units)}
         />
         <MetricPill
           label="Typical"
@@ -128,8 +128,7 @@ export default async function PresetDetailPage({
         {preset.packWeightLb > 0 && (
           <MetricPill
             label="Pack"
-            value={`${preset.packWeightLb}`}
-            unit="lb"
+            value={formatPackLb(preset.packWeightLb, units)}
           />
         )}
         <MetricPill label="Terrain" value={preset.terrainGrade} />
@@ -349,7 +348,9 @@ function DimensionCompact({ d }: { d: DimensionAnalysis }) {
           ? "bg-warn"
           : d.status === "not_in_timeframe"
             ? "bg-danger"
-            : "bg-panel-border";
+            : d.status === "unknown"
+              ? "bg-panel-border/60"
+              : "bg-panel-border";
 
   return (
     <div className="rounded-md border border-panel-border bg-panel p-3 space-y-1.5">

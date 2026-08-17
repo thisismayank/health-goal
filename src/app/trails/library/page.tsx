@@ -2,6 +2,7 @@ import Link from "next/link";
 import { allTrails } from "@/lib/basecamp/trail-library";
 import { requireOnboardedUser } from "@/lib/data";
 import { TrailsSubNav } from "@/components/shell/trails-sub-nav";
+import { pickUnits } from "@/lib/units";
 import { LibrarySearch } from "./library-search";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,8 @@ export const dynamic = "force-dynamic";
  * scroll — no inner scroller.
  */
 export default async function LibraryPage() {
-  await requireOnboardedUser();
+  const user = await requireOnboardedUser();
+  const units = pickUnits(user);
   const trails = allTrails();
 
   return (
@@ -39,7 +41,7 @@ export default async function LibraryPage() {
         </p>
       </section>
 
-      <LibrarySearch trails={trails} />
+      <LibrarySearch trails={trails} units={units} />
     </div>
   );
 }

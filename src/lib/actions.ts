@@ -25,6 +25,7 @@ import {
   type TrailTerrainGrade,
 } from "@/db/schema";
 import { getCurrentUser } from "./data";
+import { todayInTimeZone } from "./date";
 import {
   getCumulativeVerticalFt,
   RAINIER_SUMMIT_FT,
@@ -1260,6 +1261,16 @@ export async function markSessionComplete(input: {
     .limit(1);
   if (!ps) throw new Error("Planned session not found");
 
+  // Block completion of sessions that haven't happened yet in the
+  // user's local timezone. Devin r2: manual mark-done was accepting
+  // future dates and silently backdating compliance.
+  const today = todayInTimeZone(user.timezone);
+  if (ps.planned_session.date > today) {
+    throw new Error(
+      "Can't mark a future session complete — wait until the day of.",
+    );
+  }
+
   const [existing] = await db
     .select()
     .from(workout)
@@ -1302,6 +1313,14 @@ export async function markSessionComplete(input: {
     });
   }
 
+  // Flip the session status too. Old code only inserted the workout
+  // row, which meant compliance %, StatusChip, and STR-from-sessions
+  // (see basecamp/stats.ts) all silently missed manual completions.
+  await db
+    .update(plannedSession)
+    .set({ status: "completed" })
+    .where(eq(plannedSession.id, input.plannedSessionId));
+
   revalidatePath("/");
   revalidatePath("/train");
   revalidatePath(`/plan/${ps.planned_session.planId}`);
@@ -1327,6 +1346,25 @@ export async function unmarkSessionComplete(plannedSessionId: number) {
         eq(workout.canonicalSource, "manual"),
       ),
     );
+  // Only flip status back to 'planned' if no other workout is still
+  // linked (e.g. a Strava-imported one). Otherwise the session is
+  // still legitimately complete via the imported activity.
+  const [remaining] = await db
+    .select({ id: workout.id })
+    .from(workout)
+    .where(
+      and(
+        eq(workout.userId, user.id),
+        eq(workout.plannedSessionId, plannedSessionId),
+      ),
+    )
+    .limit(1);
+  if (!remaining) {
+    await db
+      .update(plannedSession)
+      .set({ status: "planned" })
+      .where(eq(plannedSession.id, plannedSessionId));
+  }
   revalidatePath("/");
   revalidatePath("/train");
   revalidatePath("/history");

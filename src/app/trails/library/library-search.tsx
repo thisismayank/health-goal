@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { TrailPreset } from "@/lib/basecamp/trail-library";
+import {
+  formatFt,
+  formatKm,
+  formatPackLb,
+  type Units,
+} from "@/lib/units";
 
 type Difficulty = "any" | "easy" | "moderate" | "hard" | "technical" | "mountaineering";
 type Duration = "any" | "short" | "day" | "long" | "epic";
@@ -23,7 +29,13 @@ function matchesDuration(hours: number, filter: Duration): boolean {
   return hours > 10;
 }
 
-export function LibrarySearch({ trails }: { trails: TrailPreset[] }) {
+export function LibrarySearch({
+  trails,
+  units,
+}: {
+  trails: TrailPreset[];
+  units: Units;
+}) {
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("any");
   const [duration, setDuration] = useState<Duration>("any");
@@ -125,10 +137,11 @@ export function LibrarySearch({ trails }: { trails: TrailPreset[] }) {
                       </div>
                     </div>
                     <div className="text-xs text-muted mt-0.5">
-                      {t.distanceKm} km · +
-                      {t.elevationGainFt.toLocaleString()} ft · ~
+                      {formatKm(t.distanceKm, units)} · +
+                      {formatFt(t.elevationGainFt, units)} · ~
                       {t.typicalHours}h
-                      {t.packWeightLb > 0 && ` · ${t.packWeightLb} lb`}
+                      {t.packWeightLb > 0 &&
+                        ` · ${formatPackLb(t.packWeightLb, units)}`}
                     </div>
                   </Link>
                 ))}

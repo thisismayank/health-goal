@@ -7,6 +7,7 @@ import { allTrails } from "@/lib/basecamp/trail-library";
 import { TrailForm } from "@/components/trail-form";
 import { TrailsSubNav } from "@/components/shell/trails-sub-nav";
 import { TrailIcon } from "@/components/ui/icons";
+import { formatFt, formatKm, formatPackLb, pickUnits } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function TrailsPage() {
   const user = await requireOnboardedUser();
+  const units = pickUnits(user);
 
   const savedTrails = await db
     .select()
@@ -74,10 +76,11 @@ export default async function TrailsPage() {
                   )}
                 </div>
                 <div className="text-xs text-muted mt-1">
-                  {t.distanceKm} km · {t.elevationGainFt.toLocaleString()} ft
-                  gain · max {t.maxAltitudeFt.toLocaleString()} ft · ~
-                  {t.typicalHours}h
-                  {t.packWeightLb > 0 && ` · ${t.packWeightLb} lb pack`}
+                  {formatKm(t.distanceKm, units)} · +
+                  {formatFt(t.elevationGainFt, units)} gain · max{" "}
+                  {formatFt(t.maxAltitudeFt, units)} · ~{t.typicalHours}h
+                  {t.packWeightLb > 0 &&
+                    ` · ${formatPackLb(t.packWeightLb, units)} pack`}
                   {t.isPrimary && (
                     <span className="text-blue-300 ml-2 font-mono uppercase tracking-wider text-[10px]">
                       · primary goal
