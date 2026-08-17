@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { and, asc, eq, gt, isNotNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { trail } from "@/db/schema";
@@ -10,32 +10,22 @@ import { QuestDoneHero } from "@/components/home/quest-done-hero";
 import { RecapHero } from "@/components/home/recap-hero";
 import { NoSessionHero } from "@/components/home/no-session-hero";
 import { TripWeekHero } from "@/components/home/trip-week-hero";
-import { StatsStrip } from "@/components/home/stats-strip";
-import { WeeklyQuestCard } from "@/components/home/weekly-quest-card";
 import { FeaturedTrailCard } from "@/components/home/featured-trail-card";
-import { SummitHero } from "@/components/summit-hero";
-import { UpcomingTrails } from "@/components/upcoming-trails";
+import { ObjectiveCard } from "@/components/home/objective-card";
+import { OrphanWorkoutCard } from "@/components/home/orphan-workout-card";
 import { CoachCardSkeleton, DailyCoachCard } from "@/components/coach-cards";
 import {
   computeCompletionDelta,
   type CompletionDelta,
 } from "@/lib/basecamp/completion-delta";
-import type { StatKey } from "@/lib/basecamp/stats";
 import { tryFetchTripForecast } from "@/lib/weather/trip-forecast";
 import type { DailyForecast } from "@/lib/weather/open-meteo";
 import { computeCharacterSheet } from "@/lib/basecamp/stats";
 import { computeRank } from "@/lib/basecamp/rank";
 import { detectClassChangeAndUpdate } from "@/lib/basecamp/class-tracker";
 import { ClassUpOverlay } from "@/components/home/class-up-overlay";
-import { OrphanWorkoutCard } from "@/components/home/orphan-workout-card";
 import { getActiveGoal } from "@/lib/basecamp/summit";
-import {
-  classProgressLine,
-  greetingFor,
-  northStarBeats,
-  recoveryLine,
-  whyThisWorkout,
-} from "@/lib/home/framing";
+import { whyThisWorkout } from "@/lib/home/framing";
 
 export const dynamic = "force-dynamic";
 
@@ -47,13 +37,28 @@ function daysFromYmd(fromYmd: string, toYmd: string): number {
   return Math.round((to - from) / 86_400_000);
 }
 
+/**
+ * Home. Redesigned per Devin's Home critique:
+ *
+ * - Thin context line, not an h1 greeting
+ * - Today section is the daily loop — session + Done/Log/Skip actions
+ *   (or the 'was this your session?' import-confirm card when
+ *   auto-linking missed a real workout)
+ * - Your objective card: primary trail verdict + weakest dimension +
+ *   weeks-to-ready. Absorbs the trip card + broken summit meter roles.
+ * - Coach is expanded (not accordion) and links straight into chat
+ * - Below fold: featured trail. Weekly quest, stats grid, and
+ *   character-sheet moved to their tabs — they belong there.
+ *
+ * The shape differs per state via TodaySection: session_pending /
+ * session_done / post_workout / trip_week / no_session.
+ */
 export default async function HomePage() {
   const state = await getHomeState();
 
   if (state.kind === "no_user") redirect("/login");
   if (!state.user.onboardedAt) redirect("/welcome");
 
-  // ---- state cascade for post-workout deltas (unchanged) ----
   const delta =
     state.kind === "post_workout"
       ? await computeCompletionDelta({
@@ -63,9 +68,6 @@ export default async function HomePage() {
           todayYmd: state.today,
         })
       : null;
-  const highlightStats: StatKey[] =
-    delta?.stats.filter((s) => s.delta !== 0).map((s) => s.key) ?? [];
-  const summitDeltaFt = delta?.summit.deltaFt ?? 0;
 
   const tripForecast: DailyForecast | null =
     state.kind === "trip_week" && state.trail.targetDate
@@ -76,7 +78,7 @@ export default async function HomePage() {
         })
       : null;
 
-  // ---- character sheet + rank (used by narrative + class-up + stats) ----
+  // Class-up celebration (unchanged — this is a moment, not chrome)
   const sheet = await computeCharacterSheet(state.user.id);
   const rank = computeRank(sheet);
   const classChange = await detectClassChangeAndUpdate(
@@ -85,7 +87,7 @@ export default async function HomePage() {
   );
   const upgradeMoment = classChange?.direction === "up" ? classChange : null;
 
-  // ---- north-star context: primary goal + next scheduled trip ----
+  // Context line beats — primary trail proximity + next trip
   const goal = await getActiveGoal(state.user.id);
   const primaryTrail = goal.primaryTrailId
     ? (
@@ -113,17 +115,10 @@ export default async function HomePage() {
     nextTrip?.targetDate != null
       ? daysFromYmd(state.today, nextTrip.targetDate)
       : null;
-  const northStarDays =
+  const primaryDays =
     primaryTrail?.targetDate != null
       ? daysFromYmd(state.today, primaryTrail.targetDate)
       : null;
-
-  const beats = northStarBeats({
-    nextTripName: nextTrip?.name ?? null,
-    nextTripDaysAway: nextTripDays,
-    northStarName: primaryTrail?.name ?? null,
-    northStarDaysAway: northStarDays,
-  });
 
   const dayLabel = new Intl.DateTimeFormat("en-US", {
     weekday: "long",
@@ -131,116 +126,96 @@ export default async function HomePage() {
     day: "numeric",
     timeZone: state.user.timezone,
   }).format(new Date());
-  const localHour = Number(
-    new Intl.DateTimeFormat("en-US", {
-      hour: "numeric",
-      hour12: false,
-      timeZone: state.user.timezone,
-    }).format(new Date()),
-  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {upgradeMoment && <ClassUpOverlay change={upgradeMoment} />}
 
-      {/* Greeting + north-star beats */}
+      {/* Thin context line. No h1 greeting. */}
       <section>
-        <div className="text-[11px] uppercase tracking-widest text-muted">
-          {dayLabel}
+        <div className="text-[11px] uppercase tracking-widest text-muted flex flex-wrap items-baseline gap-x-2">
+          <span>{dayLabel}</span>
+          {nextTrip && nextTripDays != null && nextTripDays >= 0 && (
+            <span className="text-blue-300/90 normal-case tracking-normal">
+              · {shortTripLine(nextTrip.name, nextTripDays)}
+            </span>
+          )}
+          {primaryTrail &&
+            primaryDays != null &&
+            primaryDays >= 0 &&
+            (nextTrip?.id !== primaryTrail.id) && (
+              <span className="text-muted normal-case tracking-normal">
+                · {shortTripLine(primaryTrail.name, primaryDays)}
+              </span>
+            )}
         </div>
-        <h1 className="text-2xl font-semibold mt-1">
-          {greetingFor(state.user.name, localHour)}
-        </h1>
-        {beats.length > 0 && (
-          <p className="mt-3 text-sm leading-relaxed text-blue-300/90">
-            {beats.join(" ")}
-          </p>
-        )}
       </section>
 
-      {/* Today's workout — natural intro + hero */}
-      <TodaySection state={state} delta={delta} tripForecast={tripForecast} goalName={goal.name} />
+      {/* TODAY — the daily loop. Session + Done/Log/Skip via the
+          existing hero components (which own the log form). */}
+      <TodaySection
+        state={state}
+        delta={delta}
+        tripForecast={tripForecast}
+        goalName={goal.name}
+      />
 
-      {/* Suggest linking an unclaimed workout to a planned session — only
-          renders if there's a genuine near-match candidate. */}
+      {/* Auto-match confirm card. Silent when no candidate — surfaces
+          orphan imports so compliance closes without opening /train. */}
       <Suspense fallback={null}>
         <OrphanWorkoutCard />
       </Suspense>
 
-      {/* Recovery narrative + stats grid */}
-      <section className="pt-5 border-t border-panel-border/40 space-y-3">
-        <p className="text-sm leading-relaxed text-foreground/90">
-          {recoveryLine(sheet)}
-        </p>
-        <StatsStrip userId={state.user.id} highlightStats={highlightStats} />
+      {/* YOUR OBJECTIVE — verdict + weakest dimension + weeks-to-ready.
+          Replaces the broken summit meter + separate trip card. */}
+      <Suspense fallback={null}>
+        <ObjectiveCard user={state.user} />
+      </Suspense>
+
+      {/* COACH — expanded, not collapsed. Two-way chat link. */}
+      <section className="space-y-2">
+        <div className="flex items-baseline justify-between gap-3">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
+            [COACH · TODAY]
+          </div>
+          <Link
+            href="/coach"
+            className="text-xs text-blue-300 hover:underline"
+          >
+            Chat with the coach →
+          </Link>
+        </div>
+        <Suspense fallback={<CoachCardSkeleton label="Coach · thinking" />}>
+          <DailyCoachCard
+            userId={state.user.id}
+            today={state.today}
+            tz={state.user.timezone}
+            plan={
+              state.plan
+                ? { id: state.plan.id, startDate: state.plan.startDate }
+                : null
+            }
+          />
+        </Suspense>
       </section>
 
-      {/* Class progress narrative + summit hero */}
+      {/* BELOW FOLD — trail worth thinking about. Nothing else fights
+          for attention up top. Character sheet + weekly quest live on
+          their own tabs where they have context. */}
       <section className="pt-5 border-t border-panel-border/40 space-y-3">
-        <p className="text-sm leading-relaxed text-foreground/90">
-          {classProgressLine(rank)}
-        </p>
-        <SummitHero userId={state.user.id} deltaFt={summitDeltaFt} />
-      </section>
-
-      {/* Featured trail with warm intro */}
-      <section className="pt-5 border-t border-panel-border/40 space-y-3">
-        <p className="text-sm leading-relaxed text-foreground/90">
-          A trail worth thinking about this week
-          <span className="text-muted"> —</span>
-        </p>
         <Suspense fallback={null}>
           <FeaturedTrailCard />
         </Suspense>
       </section>
-
-      {/* Collapsibles for less-frequent needs */}
-      <section className="pt-5 border-t border-panel-border/40 space-y-2">
-        <details className="text-sm">
-          <summary className="cursor-pointer select-none text-blue-300 hover:text-blue-200 flex items-center gap-2">
-            <span className="inline-block transition-transform group-open:rotate-90 text-[10px]">
-              ▸
-            </span>
-            What your coach is thinking
-          </summary>
-          <div className="mt-3">
-            <Suspense fallback={<CoachCardSkeleton label="Coach · thinking" />}>
-              <DailyCoachCard
-                userId={state.user.id}
-                today={state.today}
-                tz={state.user.timezone}
-                plan={
-                  state.plan
-                    ? { id: state.plan.id, startDate: state.plan.startDate }
-                    : null
-                }
-              />
-            </Suspense>
-          </div>
-        </details>
-
-        <details className="text-sm">
-          <summary className="cursor-pointer select-none text-blue-300 hover:text-blue-200 flex items-center gap-2">
-            <span className="text-[10px]">▸</span>
-            Trails coming up
-          </summary>
-          <div className="mt-3">
-            <UpcomingTrails userId={state.user.id} tz={state.user.timezone} />
-          </div>
-        </details>
-
-        <details className="text-sm">
-          <summary className="cursor-pointer select-none text-blue-300 hover:text-blue-200 flex items-center gap-2">
-            <span className="text-[10px]">▸</span>
-            This week&apos;s quest
-          </summary>
-          <div className="mt-3">
-            <WeeklyQuestCard userId={state.user.id} tz={state.user.timezone} />
-          </div>
-        </details>
-      </section>
     </div>
   );
+}
+
+function shortTripLine(name: string, days: number): string {
+  const short = name.split(" — ")[0].split(/[·•]/)[0].trim();
+  if (days === 0) return `${short} today`;
+  if (days === 1) return `${short} tomorrow`;
+  return `${short} in ${days}d`;
 }
 
 async function TodaySection({
@@ -254,7 +229,6 @@ async function TodaySection({
   tripForecast: DailyForecast | null;
   goalName: string | null;
 }) {
-  // Trip-week state: dedicated hero already tells the full story.
   if (state.kind === "trip_week") {
     return (
       <TripWeekHero
@@ -273,7 +247,7 @@ async function TodaySection({
     return (
       <section className="space-y-3">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-blue-400">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-blue-400">
             Today
           </div>
           <h2 className="text-xl font-semibold mt-0.5">
@@ -292,7 +266,7 @@ async function TodaySection({
     return (
       <section className="space-y-3">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-accent">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-accent">
             Done today
           </div>
           <h2 className="text-xl font-semibold mt-0.5">
@@ -319,11 +293,11 @@ async function TodaySection({
     );
   }
 
-  // no_session
+  // no_session — deliberately quiet.
   return (
     <section className="space-y-3">
       <div>
-        <div className="text-[11px] uppercase tracking-widest text-muted">
+        <div className="text-[10px] font-mono uppercase tracking-widest text-muted">
           Today
         </div>
         <h2 className="text-xl font-semibold mt-0.5">Rest day.</h2>
