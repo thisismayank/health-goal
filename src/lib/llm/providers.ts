@@ -240,6 +240,15 @@ async function* parseSse(
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  const emit = function* (raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    const evt = parseSseFrame(trimmed);
+    if (!evt) return;
+    if (typeof evt.data === "string" && evt.data === "[DONE]") return;
+    const chunk = extract(evt);
+    if (chunk) yield chunk;
+  };
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -250,12 +259,15 @@ async function* parseSse(
       while ((idx = buffer.indexOf("\n\n")) !== -1) {
         const raw = buffer.slice(0, idx);
         buffer = buffer.slice(idx + 2);
-        const evt = parseSseFrame(raw);
-        if (!evt) continue;
-        if (typeof evt.data === "string" && evt.data === "[DONE]") continue;
-        const chunk = extract(evt);
-        if (chunk) yield chunk;
+        yield* emit(raw);
       }
+    }
+    // Flush the trailing frame. Some providers (Gemini in single-turn
+    // replies) emit one 'data: {...}' line without the trailing blank
+    // — without this, we silently drop the entire response.
+    if (buffer.length > 0) {
+      yield* emit(buffer);
+      buffer = "";
     }
   } finally {
     reader.releaseLock();
