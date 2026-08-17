@@ -218,6 +218,12 @@ function DayCard({
 
       {workout && <WorkoutDetails workout={workout} sets={strengthSets} />}
 
+      {session && workout && workout.type !== session.sessionCategory && (
+        <div className="pl-[calc(3.5rem+1rem)] text-[10px] font-mono uppercase tracking-wider text-blue-300/70">
+          counts as → {session.sessionCategory.replaceAll("_", " ").toLowerCase()}
+        </div>
+      )}
+
       {session && (
         <div className="flex justify-end pt-1 border-t border-panel-border/50">
           <InlineSessionActions

@@ -81,6 +81,7 @@ export const EASY_RUN_MINUTES_BY_WEEK: Record<number, number> = {
 // stress" for planned-vs-actual matching. An imported workout should only
 // auto-complete a planned session when they share at least one group.
 import type { SessionCategory } from "@/db/schema";
+import { checkMovementSubstitute } from "./plan/substitution";
 
 const CATEGORY_GROUPS: Record<string, SessionCategory[]> = {
   running: ["EASY_RUN", "QUALITY_RUN"],
@@ -151,23 +152,37 @@ export function sessionCompletionQualifies(
     sessionCategory: SessionCategory;
   },
 ): boolean {
-  if (!categoriesCompatible(actualCategory, planned.sessionCategory)) {
-    return false;
-  }
   const actualMin =
     actualDurationSeconds != null ? actualDurationSeconds / 60 : 0;
 
-  // Strength: presence-based, not duration-based. Strava's activity duration
-  // strips rest between sets — a real 60-min lift often reports as 15-20 min
-  // of "active time." Trust that a strength-category workout on the day means
-  // the strength session happened.
-  if (STRENGTH_CATEGORIES.includes(planned.sessionCategory)) {
-    return actualMin >= STRENGTH_MIN_MINUTES;
+  if (categoriesCompatible(actualCategory, planned.sessionCategory)) {
+    // Strength: presence-based, not duration-based. Strava's activity duration
+    // strips rest between sets — a real 60-min lift often reports as 15-20 min
+    // of "active time." Trust that a strength-category workout on the day means
+    // the strength session happened.
+    if (STRENGTH_CATEGORIES.includes(planned.sessionCategory)) {
+      return actualMin >= STRENGTH_MIN_MINUTES;
+    }
+
+    // Cardio-focused (runs, hikes, stairs, long mountain, recovery walks):
+    // must hit ≥70% of the target duration. Cardio duration is a real signal
+    // because there's no "rest between sets" — you're moving or you're not.
+    if (planned.targetDurationMinutes == null)
+      return actualMin >= CARDIO_MIN_MINUTES;
+    return actualMin >= planned.targetDurationMinutes * CARDIO_DURATION_FLOOR;
   }
 
-  // Cardio-focused (runs, hikes, stairs, long mountain, recovery walks):
-  // must hit ≥70% of the target duration. Cardio duration is a real signal
-  // because there's no "rest between sets" — you're moving or you're not.
-  if (planned.targetDurationMinutes == null) return actualMin >= CARDIO_MIN_MINUTES;
-  return actualMin >= planned.targetDurationMinutes * CARDIO_DURATION_FLOOR;
+  // Fallback: physio-equivalence substitution. Enables cross-category
+  // matches when the actual delivered equivalent MET-minutes (a walk
+  // covers a Zone-2 spin, an incline treadmill covers a hike). See
+  // lib/plan/substitution.ts for the reasoning and thresholds — kept
+  // in its own module so the policy can evolve without touching the
+  // category groups above.
+  return checkMovementSubstitute(
+    { category: actualCategory, durationSeconds: actualDurationSeconds },
+    {
+      category: planned.sessionCategory,
+      targetDurationMinutes: planned.targetDurationMinutes,
+    },
+  ).qualifies;
 }
