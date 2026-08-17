@@ -35,12 +35,24 @@ export default async function WelcomePage({
   const suggestedFitness =
     step === "3" ? await suggestStartingFitness(user.id) : null;
 
+  const justConnected = params.connected === "strava";
+  const importedCount =
+    typeof params.imported === "string" && /^\d+$/.test(params.imported)
+      ? Number(params.imported)
+      : null;
+
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center py-8">
       <div className="w-full max-w-lg space-y-6">
         <StepIndicator current={step} />
         {step === "1" ? <WelcomeStep firstName={firstName(user.name)} /> : null}
-        {step === "2" ? <ConnectStep stravaConnected={stravaConnected} /> : null}
+        {step === "2" ? (
+          <ConnectStep
+            stravaConnected={stravaConnected}
+            justConnected={justConnected}
+            importedCount={importedCount}
+          />
+        ) : null}
         {step === "3" ? (
           <PlanStep
             stravaConnected={stravaConnected}
@@ -152,7 +164,15 @@ function WelcomeStep({ firstName }: { firstName: string }) {
   );
 }
 
-function ConnectStep({ stravaConnected }: { stravaConnected: boolean }) {
+function ConnectStep({
+  stravaConnected,
+  justConnected,
+  importedCount,
+}: {
+  stravaConnected: boolean;
+  justConnected: boolean;
+  importedCount: number | null;
+}) {
   return (
     <div className="space-y-5">
       <div className="space-y-2 text-center">
@@ -165,6 +185,23 @@ function ConnectStep({ stravaConnected }: { stravaConnected: boolean }) {
           actually doing. You can skip and add later.
         </p>
       </div>
+
+      {justConnected && stravaConnected && (
+        <div className="rounded-md border border-accent/50 bg-accent-strong/10 px-4 py-3 text-sm">
+          <span className="text-accent font-mono">✓</span> Strava
+          connected
+          {importedCount != null && importedCount > 0 && (
+            <>
+              {" — "}
+              <span className="text-accent font-mono">
+                {importedCount}
+              </span>{" "}
+              recent activit{importedCount === 1 ? "y" : "ies"} imported
+            </>
+          )}
+          .
+        </div>
+      )}
 
       <section
         className={`rounded-lg border p-4 space-y-3 ${

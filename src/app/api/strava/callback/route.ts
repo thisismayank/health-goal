@@ -1,78 +1,23 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { db } from "@/db/client";
-import { stravaAccount } from "@/db/schema";
-import { exchangeCode } from "@/lib/strava/client";
-import { getCurrentUser } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Strava redirects here after OAuth. We used to do the token exchange
+ * + activity sync inline (2-5s of blank browser), then redirect. Now
+ * we bounce immediately to /oauth/strava/return which shows a branded
+ * loading state via loading.tsx while the same work runs server-side.
+ *
+ * We keep this as an API route so the Strava-registered redirect_uri
+ * doesn't need to change.
+ */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const err = url.searchParams.get("error");
 
-  if (err) {
-    return NextResponse.redirect(
-      `${url.origin}/settings?error=${encodeURIComponent(err)}`,
-    );
-  }
-  if (!code) {
-    return NextResponse.redirect(`${url.origin}/settings?error=missing_code`);
-  }
-
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.redirect(`${url.origin}/settings?error=no_user`);
-  }
-
-  try {
-    const tokens = await exchangeCode(code);
-    const values = {
-      userId: user.id,
-      athleteId: String(tokens.athlete.id),
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      expiresAt: new Date(tokens.expires_at * 1000),
-      scope: "read,activity:read_all",
-      updatedAt: new Date(),
-    };
-
-    const existing = await db
-      .select()
-      .from(stravaAccount)
-      .where(eq(stravaAccount.userId, user.id))
-      .limit(1);
-
-    if (existing[0]) {
-      await db
-        .update(stravaAccount)
-        .set(values)
-        .where(eq(stravaAccount.id, existing[0].id));
-    } else {
-      await db.insert(stravaAccount).values(values);
-    }
-
-    // Pull the last 30 days of activities inline so the onboarding plan
-    // step has real data to suggest a starting fitness from. Best-effort
-    // — failure here shouldn't block the OAuth flow, so we swallow.
-    try {
-      const { syncRecent } = await import("@/lib/strava/sync");
-      await syncRecent(user.id, 30);
-      const { refreshPlanIfEligible } = await import("@/lib/plan/generator");
-      await refreshPlanIfEligible(user.id);
-    } catch (e) {
-      console.error("[strava callback] post-connect sync/refresh failed:", e);
-    }
-
-    // Bounce back into the onboarding wizard if they connected from there;
-    // otherwise the settings screen (default post-OAuth landing).
-    const dest = user.onboardedAt ? "/settings?connected=1" : "/welcome?step=2";
-    return NextResponse.redirect(`${url.origin}${dest}`);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "unknown";
-    return NextResponse.redirect(
-      `${url.origin}/settings?error=${encodeURIComponent(msg)}`,
-    );
-  }
+  const dest = new URL("/oauth/strava/return", url.origin);
+  if (err) dest.searchParams.set("error", err);
+  if (code) dest.searchParams.set("code", code);
+  return NextResponse.redirect(dest);
 }

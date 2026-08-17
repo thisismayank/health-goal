@@ -22,7 +22,13 @@ export default async function SettingsPage({
   searchParams,
 }: PageProps<"/settings">) {
   const params = await searchParams;
-  const connected = params.connected === "1";
+  // Support both legacy `?connected=1` and the new `?connected=strava`.
+  const connected =
+    params.connected === "1" || params.connected === "strava";
+  const importedCount =
+    typeof params.imported === "string" && /^\d+$/.test(params.imported)
+      ? Number(params.imported)
+      : null;
   const err = typeof params.error === "string" ? params.error : null;
 
   const user = await requireCurrentUser();
@@ -70,7 +76,16 @@ export default async function SettingsPage({
 
       {connected && (
         <div className="rounded-md bg-accent-strong/20 border border-accent-strong/40 text-accent px-4 py-2 text-sm">
-          Strava connected. Recent activities will start flowing in shortly.
+          <span className="font-mono">✓</span> Strava connected
+          {importedCount != null && importedCount > 0 ? (
+            <>
+              {" — "}
+              <span className="font-mono">{importedCount}</span> recent
+              activit{importedCount === 1 ? "y" : "ies"} imported.
+            </>
+          ) : (
+            "."
+          )}
         </div>
       )}
       {err && (
