@@ -73,6 +73,11 @@ async function processUser(
     dedupeKey,
   });
   const total = payload.ready.length + payload.achievable.length;
+  const topPick = payload.ready[0] ?? payload.achievable[0] ?? null;
+  const discoverUrl = `${appUrl}/trails/discover`;
+  const topUrl = topPick
+    ? `${appUrl}/trails/preset/${topPick.preset.slug}`
+    : discoverUrl;
   await sendNotificationPush({
     userId: user.id,
     kind: KIND,
@@ -83,8 +88,18 @@ async function processUser(
         payload.ready[0]?.preset.name ??
         payload.achievable[0]?.preset.name ??
         "See what's ready →",
-      url: `${appUrl}/trails/discover`,
+      url: discoverUrl,
       tag: "weekend_nudge",
+      actions: topPick
+        ? [
+            {
+              action: "top",
+              title: `See ${firstWord(topPick.preset.name)}`,
+            },
+            { action: "browse", title: "Browse all" },
+          ]
+        : [{ action: "browse", title: "Browse trails" }],
+      actionUrls: { top: topUrl, browse: discoverUrl },
     },
   }).catch(() => {});
 
@@ -155,3 +170,7 @@ export async function GET(req: Request) {
 }
 
 export const POST = GET;
+
+function firstWord(s: string): string {
+  return s.split(/\s+/)[0] ?? "trail";
+}

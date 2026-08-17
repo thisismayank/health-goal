@@ -25,11 +25,22 @@ function ensureVapid(): boolean {
   return true;
 }
 
+export type PushAction = {
+  action: string; // stable id, used as event.action in SW
+  title: string; // human label on the button
+  icon?: string;
+};
+
 export type PushPayload = {
   title: string;
   body: string;
   url?: string;
   tag?: string;
+  // Extra buttons on the notification. Chrome/Android show all;
+  // desktop may collapse behind '…'. Max ~2 shown reliably.
+  actions?: PushAction[];
+  // Maps action.id → URL for the SW to route to on tap.
+  actionUrls?: Record<string, string>;
 };
 
 export type SendPushInput = {

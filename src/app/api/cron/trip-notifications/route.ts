@@ -152,6 +152,8 @@ async function processUser(user: UserProfile, appUrl: string): Promise<ProcessRe
     dedupeKey,
   });
   // Push in parallel — silent when VAPID isn't set / no subs / opted out.
+  const trailUrl = `${appUrl}/trails/${trip.id}`;
+  const showLogAction = phase === "trip_day" || phase === "post_trip";
   await sendNotificationPush({
     userId: user.id,
     kind: KIND,
@@ -161,6 +163,15 @@ async function processUser(user: UserProfile, appUrl: string): Promise<ProcessRe
       body: tripPushBody(phase, trip.name, Math.max(0, days)),
       url: `${appUrl}/`,
       tag: `trip_${trip.id}`,
+      actions: showLogAction
+        ? [
+            { action: "log", title: "Log completion" },
+            { action: "open", title: "Open trail" },
+          ]
+        : [{ action: "open", title: "Open trail" }],
+      actionUrls: showLogAction
+        ? { log: trailUrl, open: trailUrl }
+        : { open: trailUrl },
     },
   }).catch(() => {});
   if (send.ok && send.skipped === "deduped") {

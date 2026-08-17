@@ -119,6 +119,8 @@ export async function notifySquadOfCompletion({
     // Push in parallel — silent no-op when VAPID unset / no subs /
     // opted-out. Even if the user opted out of email, they can be
     // opted into push independently.
+    const trailUrl = `${appUrl}/trails/${row.trailId}`;
+    const squadUrl = `${appUrl}/squad`;
     await sendNotificationPush({
       userId: r.userId,
       kind: KIND,
@@ -128,8 +130,13 @@ export async function notifySquadOfCompletion({
         body: row.notes
           ? `"${row.notes}"`
           : `${row.distanceKm} km · +${row.elevationGainFt.toLocaleString()} ft`,
-        url: `${appUrl}/trails/${row.trailId}`,
+        url: trailUrl,
         tag: `squad_${completionId}`,
+        actions: [
+          { action: "trail", title: "See trail" },
+          { action: "squad", title: "Squad feed" },
+        ],
+        actionUrls: { trail: trailUrl, squad: squadUrl },
       },
     }).catch(() => {});
   }

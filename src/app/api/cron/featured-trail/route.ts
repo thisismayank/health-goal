@@ -83,6 +83,8 @@ async function processUser(
     kind: KIND,
     dedupeKey,
   });
+  const presetUrl = `${appUrl}/trails/preset/${payload.preset.slug}`;
+  const discoverUrl = `${appUrl}/trails/discover`;
   await sendNotificationPush({
     userId: user.id,
     kind: KIND,
@@ -90,8 +92,13 @@ async function processUser(
     payload: {
       title: `Featured this week: ${payload.preset.name}`,
       body: narrative?.hook ?? payload.preset.region,
-      url: `${appUrl}/trails/preset/${payload.preset.slug}`,
+      url: presetUrl,
       tag: `featured_${weekTag}`,
+      actions: [
+        { action: "see", title: "See the trail" },
+        { action: "discover", title: "More options" },
+      ],
+      actionUrls: { see: presetUrl, discover: discoverUrl },
     },
   }).catch(() => {});
 

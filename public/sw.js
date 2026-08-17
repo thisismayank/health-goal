@@ -14,18 +14,27 @@ self.addEventListener("push", (event) => {
     body: data.body || "",
     icon: "/icon",
     badge: "/icon",
-    data: { url: data.url || "/" },
+    // actionUrls maps action-id → URL so notificationclick can route
+    // to the right place when the user taps an action button.
+    data: {
+      url: data.url || "/",
+      actionUrls: data.actionUrls || {},
+    },
     tag: data.tag || undefined,
     renotify: !!data.tag,
+    actions: Array.isArray(data.actions) ? data.actions : [],
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data && event.notification.data.url
-    ? event.notification.data.url
-    : "/";
+  const clicked = event.action; // '' when body tapped; else action id
+  const actionUrls =
+    (event.notification.data && event.notification.data.actionUrls) || {};
+  const url = clicked && actionUrls[clicked]
+    ? actionUrls[clicked]
+    : (event.notification.data && event.notification.data.url) || "/";
   event.waitUntil(
     (async () => {
       const clientList = await self.clients.matchAll({
