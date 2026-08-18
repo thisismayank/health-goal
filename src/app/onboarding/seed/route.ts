@@ -1,0 +1,135 @@
+import { NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { trail, userProfile } from "@/db/schema";
+import { getUserFromSession } from "@/lib/auth/sessions";
+import { readAndConsumeSeed } from "@/lib/cold-start/seed";
+import { findTrailBySlug } from "@/lib/basecamp/trail-library";
+import { getFullTrailLibrary } from "@/lib/basecamp/trail-coords";
+import type { ColdStartAnswers } from "@/lib/basecamp/synthetic-snapshot";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * Cold-start post-signup handoff.
+ *
+ * Runs once, right after a user signs up via the /start flow. Reads
+ * the signed seed cookie the pre-auth /start page wrote, then:
+ *   1. Saves the chosen trail (from the seed's slug) as primary.
+ *   2. Seeds userProfile.weeklyTrainingHours + startingFitness from
+ *      the bucketed answers so /plan/new can generate a plan
+ *      without asking the same questions again.
+ *   3. Redirects to /plan/new with a from=cold-start marker so the
+ *      plan page can show a warmer "welcome, here's your plan"
+ *      state instead of the default wizard step.
+ *
+ * Idempotent-ish: if there's no seed cookie or the seed already
+ * consumed, we redirect to home. If the trail slug doesn't resolve
+ * we skip the trail insert but still seed profile so the user's
+ * onboarding isn't blocked.
+ */
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const user = await getUserFromSession();
+  if (!user) {
+    return NextResponse.redirect(new URL("/login?next=/onboarding/seed", url));
+  }
+
+  const seed = await readAndConsumeSeed();
+  if (!seed) {
+    // No seed (direct visit, expired, or already consumed). Just
+    // land on home — routing there will steer to /welcome if the
+    // user isn't onboarded yet.
+    return NextResponse.redirect(new URL("/", url));
+  }
+
+  const { weeklyHours, startingFitness } = mapAnswers(seed.answers);
+
+  await db
+    .update(userProfile)
+    .set({
+      weeklyTrainingHours: weeklyHours,
+      startingFitness,
+      updatedAt: new Date(),
+    })
+    .where(eq(userProfile.id, user.id));
+
+  // Save the trail as primary — the whole hook of cold-start is
+  // "you cared about this hike enough to answer three questions;
+  // it's now your objective."
+  const preset =
+    findTrailBySlug(seed.slug) ??
+    getFullTrailLibrary().find((p) => p.slug === seed.slug);
+  if (preset) {
+    // Enforce the "one primary at a time" invariant: unmark all
+    // existing primaries first, then insert/mark ours.
+    await db
+      .update(trail)
+      .set({ isPrimary: false })
+      .where(and(eq(trail.userId, user.id), eq(trail.isPrimary, true)));
+
+    const [existing] = await db
+      .select({ id: trail.id })
+      .from(trail)
+      .where(
+        and(eq(trail.userId, user.id), eq(trail.presetSlug, preset.slug)),
+      )
+      .limit(1);
+    if (existing) {
+      await db
+        .update(trail)
+        .set({ isPrimary: true })
+        .where(eq(trail.id, existing.id));
+    } else {
+      await db.insert(trail).values({
+        userId: user.id,
+        name: preset.name,
+        distanceKm: preset.distanceKm,
+        elevationGainFt: preset.elevationGainFt,
+        maxAltitudeFt: preset.maxAltitudeFt,
+        typicalHours: preset.typicalHours,
+        packWeightLb: preset.packWeightLb,
+        terrainGrade: preset.terrainGrade,
+        notes: preset.notes
+          ? `${preset.region} — ${preset.notes}`
+          : preset.region,
+        presetSlug: preset.slug,
+        isPrimary: true,
+      });
+    }
+  }
+
+  // Land the user on the plan generator with the objective + baseline
+  // already filled in. The plan page reads userProfile so it doesn't
+  // need any extra params — from=cold-start just lets the UI say
+  // "here's a plan for {trail}" instead of the generic wizard copy.
+  return NextResponse.redirect(new URL("/plan/new?from=cold-start", url));
+}
+
+// Cold-start buckets → the plan generator's constraint shape. The
+// generator doesn't take our raw buckets, and we don't want to change
+// its signature just for this path. Map with the same conservatism
+// as synthSnapshot — lower end of each range so the plan doesn't
+// over-prescribe.
+function mapAnswers(
+  a: ColdStartAnswers,
+): { weeklyHours: 3 | 5 | 7 | 10; startingFitness: "new" | "occasional" | "regular" | "active" } {
+  const weeklyHours: 3 | 5 | 7 | 10 =
+    a.weeklyHoursBucket === "over_6"
+      ? 7
+      : a.weeklyHoursBucket === "3_to_6"
+        ? 5
+        : 3;
+  // Fitness self-report proxy: longest-hike bucket. Someone who's
+  // done 10+ hour days is 'active'; a beginner who has never hiked
+  // is 'new'.
+  const startingFitness: "new" | "occasional" | "regular" | "active" =
+    a.longestHikeBucket === "never"
+      ? "new"
+      : a.longestHikeBucket === "under_3"
+        ? "occasional"
+        : a.longestHikeBucket === "3_to_6"
+          ? "regular"
+          : "active";
+  return { weeklyHours, startingFitness };
+}

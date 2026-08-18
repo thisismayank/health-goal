@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { consumeMagicLink } from "@/lib/auth/magic-links";
 import { createSession, setSessionCookie } from "@/lib/auth/sessions";
 
@@ -24,7 +25,17 @@ export async function GET(req: Request) {
   const { token: sessionToken, expiresAt } = await createSession(result.userId);
   await setSessionCookie(sessionToken, expiresAt);
 
-  // First-time users could be routed to onboarding once it exists.
-  // For now, everyone lands on home.
+  // Cold-start handoff: if the user came in via /start (public
+  // verdict-before-signup), a signed cookie was set on that path
+  // with their trail slug + answers. Route them to /onboarding/seed
+  // so the answers become their onboarding baseline + the trail is
+  // saved as primary. Home routing takes over from there.
+  const store = await cookies();
+  if (store.get("cold_start_seed")) {
+    return NextResponse.redirect(new URL("/onboarding/seed", url));
+  }
+
+  // First-time users otherwise land on home; unonboarded users get
+  // routed onward from there.
   return NextResponse.redirect(new URL("/", url));
 }
