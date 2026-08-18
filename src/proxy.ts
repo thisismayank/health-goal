@@ -14,6 +14,10 @@ const PUBLIC_PATHS = new Set<string>([
   "/manifest.webmanifest",
   "/icon",
   "/apple-icon",
+  // Cold-start public entry point — the whole acquisition wedge
+  // is verdict-before-signup, so /start and /start/[slug] must be
+  // reachable without a session cookie.
+  "/start",
 ]);
 const PUBLIC_PREFIXES: string[] = [
   "/api/auth/",
@@ -21,6 +25,8 @@ const PUBLIC_PREFIXES: string[] = [
   "/api/health-import",
   // Cron jobs authenticate with Bearer $CRON_SECRET, not session cookies.
   "/api/cron/",
+  // Cold-start /start/[slug] pages + their server-action POSTs.
+  "/start/",
 ];
 
 function safeEqual(a: string, b: string): boolean {

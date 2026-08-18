@@ -253,8 +253,13 @@ async function* parseSse(
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      // SSE events end with a blank line
+      // Normalize CRLF → LF up front. Google's Gemini streams use
+      // \r\n\r\n as the SSE frame delimiter, not \n\n. Before this
+      // normalization, .indexOf("\n\n") never matched a Gemini
+      // frame and the parser silently swallowed the entire response
+      // — the exact behavior Devin r3 hit ("provider returns 200
+      // with an empty completion").
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
       let idx: number;
       while ((idx = buffer.indexOf("\n\n")) !== -1) {
         const raw = buffer.slice(0, idx);
