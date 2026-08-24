@@ -25,6 +25,7 @@ import {
   type Baseline,
 } from "@/lib/analytics/baselines";
 import { ymd } from "@/lib/date";
+import { stepAerobicMinutesPerWeek } from "@/lib/analytics/step-credit";
 import { estimatedVerticalMeters, metersToFeet } from "./summit";
 
 // -------- Fitness snapshot --------
@@ -121,10 +122,19 @@ export async function loadFitnessSnapshot(
     ),
   );
 
-  const aerobicMin28 = workouts28
+  const workoutAerobicMin28 = workouts28
     .filter((w) => AEROBIC_CATS.includes(w.type))
     .reduce((s, w) => s + (w.durationSeconds ?? 0) / 60, 0);
-  const weeklyAerobic = Math.round(aerobicMin28 / 4);
+  // Ambient-step credit — see lib/analytics/step-credit.ts. Turns
+  // 15-20k step days into aerobic minutes for the endurance analysis
+  // so users don't get scored as sedentary when they're clearly
+  // moving all day.
+  const stepAerobicWeekly = await stepAerobicMinutesPerWeek({
+    userId,
+    windowDays: 28,
+    now,
+  });
+  const weeklyAerobic = Math.round(workoutAerobicMin28 / 4 + stepAerobicWeekly);
 
   const perWorkoutVertFt = workouts90.map((w) =>
     metersToFeet(estimatedVerticalMeters(w).meters),

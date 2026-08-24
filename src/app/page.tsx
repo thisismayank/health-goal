@@ -6,6 +6,7 @@ import { db } from "@/db/client";
 import { trail } from "@/db/schema";
 import { getHomeState, type HomeState } from "@/lib/home/state";
 import { QuestPendingHero } from "@/components/home/quest-pending-hero";
+import { TodayStepsCredit } from "@/components/home/today-steps-credit";
 import { QuestDoneHero } from "@/components/home/quest-done-hero";
 import { RecapHero } from "@/components/home/recap-hero";
 import { NoSessionHero } from "@/components/home/no-session-hero";
@@ -269,6 +270,12 @@ async function TodaySection({
           </p>
         </div>
         <QuestPendingHero session={state.session} userId={state.user.id} />
+        <Suspense fallback={null}>
+          <TodayStepsCredit
+            userId={state.user.id}
+            tz={state.user.timezone}
+          />
+        </Suspense>
       </section>
     );
   }

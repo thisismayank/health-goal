@@ -170,11 +170,10 @@ export default async function BodyPage() {
                   ? todayRow.steps.toLocaleString()
                   : "–"
               }
-              baseline={
-                todayRow?.activeEnergyKcal != null
-                  ? `${todayRow.activeEnergyKcal} kcal active`
-                  : ""
-              }
+              baseline={stepsBaseline(
+                todayRow?.steps,
+                todayRow?.activeEnergyKcal,
+              )}
               tone="neutral"
             />
           </div>
@@ -301,6 +300,30 @@ type ExtendedRow = {
   ctl?: number | null;
   atl?: number | null;
 };
+
+// Baseline copy under the Steps card. When the count is above the
+// "ambient baseline" from lib/analytics/step-credit.ts, we surface
+// how many aerobic minutes that translates to so users see that
+// their walking counts. Keeps the existing kcal footnote when we
+// have that value.
+function stepsBaseline(
+  steps: number | null | undefined,
+  activeEnergyKcal: number | null | undefined,
+): string {
+  const STEP_BASELINE = 5000;
+  const STEPS_PER_MINUTE = 100;
+  const CAP_MIN = 90;
+  const parts: string[] = [];
+  if (steps != null && steps > STEP_BASELINE) {
+    const min = Math.min(
+      CAP_MIN,
+      Math.round((steps - STEP_BASELINE) / STEPS_PER_MINUTE),
+    );
+    if (min > 0) parts.push(`≈ ${min} aerobic min`);
+  }
+  if (activeEnergyKcal != null) parts.push(`${activeEnergyKcal} kcal active`);
+  return parts.join(" · ");
+}
 
 function ExtendedWellness({ todayRow }: { todayRow: ExtendedRow | undefined }) {
   if (!todayRow) return null;

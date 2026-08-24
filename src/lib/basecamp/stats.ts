@@ -16,6 +16,7 @@ import {
   type SessionCategory,
 } from "@/db/schema";
 import { hrvBaseline, rhrBaseline } from "@/lib/analytics/baselines";
+import { stepAerobicMinutesPerWeek } from "@/lib/analytics/step-credit";
 import { ymd } from "@/lib/date";
 import { estimatedVerticalMeters } from "./summit";
 
@@ -222,7 +223,18 @@ async function computeEnd(userId: number, now: Date, opts?: ComputeOpts): Promis
   const aerobicMin = rows
     .filter((w) => AEROBIC_CATS.includes(w.type) || MOUNTAIN_CATS.includes(w.type))
     .reduce((s, w) => s + (w.durationSeconds ?? 0) / 60, 0);
-  const weeklyAerobic = aerobicMin / (WINDOW_DAYS.END / 7);
+  const workoutWeeklyAerobic = aerobicMin / (WINDOW_DAYS.END / 7);
+
+  // Ambient-step credit. Days with high step counts contribute to
+  // endurance even when no workout was logged — a user walking
+  // 15-20k steps has real Zone-1 base that shouldn't be invisible
+  // to the stat. See lib/analytics/step-credit.ts for the model.
+  const stepWeeklyAerobic = await stepAerobicMinutesPerWeek({
+    userId,
+    windowDays: WINDOW_DAYS.END,
+    now,
+  });
+  const weeklyAerobic = workoutWeeklyAerobic + stepWeeklyAerobic;
 
   const longestMin = rows.reduce(
     (max, w) => Math.max(max, (w.durationSeconds ?? 0) / 60),
@@ -233,15 +245,21 @@ async function computeEnd(userId: number, now: Date, opts?: ComputeOpts): Promis
   const longestScore = clamp((longestMin / 360) * 100);
   const value = Math.round(volumeScore * 0.5 + longestScore * 0.5);
 
+  const stepsMetric =
+    stepWeeklyAerobic > 0
+      ? ` · ${Math.round(stepWeeklyAerobic)} of that from ambient steps`
+      : "";
   return {
     key: "END",
     label: "Endurance",
     value,
     hasEnoughData: true, // aerobic volume is present-or-absent, always honest
-    metric: `${Math.round(weeklyAerobic)} min/wk aerobic · longest ${Math.round(longestMin)} min`,
+    metric: `${Math.round(weeklyAerobic)} min/wk aerobic · longest ${Math.round(longestMin)} min${stepsMetric}`,
     windowDays: WINDOW_DAYS.END,
     evidence: {
       weeklyAerobicMin: Math.round(weeklyAerobic),
+      workoutWeeklyAerobicMin: Math.round(workoutWeeklyAerobic),
+      stepWeeklyAerobicMin: Math.round(stepWeeklyAerobic),
       longestSessionMin: Math.round(longestMin),
       sessionCount: rows.length,
     },
