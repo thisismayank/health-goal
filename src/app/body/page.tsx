@@ -13,6 +13,8 @@ import {
   sleepBaseline,
 } from "@/lib/analytics/baselines";
 import { BodyMetricForm } from "@/components/body-metric-form";
+import { InjuryPanel } from "@/components/body/injury-panel";
+import { activeInjuries } from "@/lib/injury/queries";
 
 export default async function BodyPage() {
   const user = await requireOnboardedUser();
@@ -20,6 +22,7 @@ export default async function BodyPage() {
   const today = todayInTimeZone(user.timezone);
   const metrics = await getRecentBodyMetrics(user.id, 60);
   const todayRow = metrics.find((m) => m.date === today);
+  const injuries = await activeInjuries(user.id);
 
   const weights = metrics.map((m) => m.bodyWeightKg);
   const rolling = rollingAverage(weights, 7);
@@ -71,6 +74,8 @@ export default async function BodyPage() {
           currentFatigue={todayRow?.fatigue1to10 ?? null}
         />
       </div>
+
+      <InjuryPanel injuries={injuries} />
 
       <div className="grid grid-cols-2 gap-3">
         <Stat

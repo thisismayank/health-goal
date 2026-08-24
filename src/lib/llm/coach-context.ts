@@ -24,9 +24,10 @@ import { computeCharacterSheet } from "@/lib/basecamp/stats";
 import { computeRank } from "@/lib/basecamp/rank";
 import { todayInTimeZone } from "@/lib/date";
 import { getCoachSummary } from "@/lib/coach/summary";
+import { activeInjuries } from "@/lib/injury/queries";
 
 export async function buildCoachSystem(user: UserProfile): Promise<string> {
-  const [goal, sheet, activePlan, summary] = await Promise.all([
+  const [goal, sheet, activePlan, summary, injuries] = await Promise.all([
     getActiveGoal(user.id),
     computeCharacterSheet(user.id),
     db
@@ -41,6 +42,7 @@ export async function buildCoachSystem(user: UserProfile): Promise<string> {
       .limit(1)
       .then((r) => r[0] ?? null),
     getCoachSummary(user.id),
+    activeInjuries(user.id),
   ]);
 
   const rank = computeRank(sheet);
@@ -68,6 +70,22 @@ export async function buildCoachSystem(user: UserProfile): Promise<string> {
 
   parts.push(COACH_PERSONA);
   parts.push(COACH_GUARDRAILS);
+
+  if (injuries.length > 0) {
+    // Injuries land before summary + plan context so the LLM
+    // weights them highly. Also gated by a HARD RULE block below
+    // (added to COACH_GUARDRAILS) so the model never recommends a
+    // session that conflicts with an active injury without
+    // explicit user override.
+    parts.push(`--- ACTIVE INJURIES ---
+${injuries
+  .map(
+    (i) =>
+      `${i.region} · ${i.severity} · since ${i.startDate}${i.notes ? ` — ${i.notes}` : ""}`,
+  )
+  .join("\n")}
+Adapt everything you say to these. Do NOT recommend running / loaded hikes / lower-body strength that would aggravate them; propose swaps (cycling, upper-body strength, unloaded hikes) or rest as appropriate.`);
+  }
 
   if (summary?.content) {
     parts.push(`--- PRIOR CONVERSATION SUMMARY ---

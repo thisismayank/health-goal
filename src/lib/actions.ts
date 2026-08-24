@@ -1481,6 +1481,50 @@ export async function relinkCurrentPlan() {
   return result;
 }
 
+export async function logInjury(input: {
+  region:
+    | "knee"
+    | "back"
+    | "ankle"
+    | "hip"
+    | "shoulder"
+    | "other";
+  severity: "light" | "moderate" | "recovering";
+  notes?: string;
+  startDate?: string; // YMD; defaults to today
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const { injury } = await import("@/db/schema");
+  const today = todayInTimeZone(user.timezone);
+  await db.insert(injury).values({
+    userId: user.id,
+    region: input.region,
+    severity: input.severity,
+    notes: input.notes?.trim() || null,
+    startDate: input.startDate ?? today,
+  });
+  revalidatePath("/body");
+  revalidatePath("/");
+  revalidatePath("/train");
+  return { ok: true };
+}
+
+export async function resolveInjury(injuryId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No user found");
+  const { injury } = await import("@/db/schema");
+  const today = todayInTimeZone(user.timezone);
+  await db
+    .update(injury)
+    .set({ endDate: today, updatedAt: new Date() })
+    .where(and(eq(injury.id, injuryId), eq(injury.userId, user.id)));
+  revalidatePath("/body");
+  revalidatePath("/");
+  revalidatePath("/train");
+  return { ok: true };
+}
+
 /**
  * Auto-populate the Trail Passport from unlinked hike workouts whose
  * top preset match is strong. Devin r3: passport was 0/0 because

@@ -503,6 +503,52 @@ export const TRAIL_TERRAIN_GRADES = [
 
 export type TrailTerrainGrade = (typeof TRAIL_TERRAIN_GRADES)[number];
 
+// Body regions we can adapt the plan around. Kept coarse — the
+// adaptation rules (lib/plan/injury-adaptation.ts) don't need
+// per-joint granularity, and giving users too many options invites
+// analysis paralysis. Users add free-text notes for the specifics.
+export const INJURY_REGIONS = [
+  "knee",
+  "back",
+  "ankle",
+  "hip",
+  "shoulder",
+  "other",
+] as const;
+export type InjuryRegion = (typeof INJURY_REGIONS)[number];
+
+// Severity ladder. Determines how aggressive the adaptation is:
+//   - 'light': downgrade intensity/load, keep the modality.
+//   - 'moderate': swap the session modality (running → cycling,
+//     lower-body strength → upper-body).
+//   - 'recovering': skip anything conflicting entirely, replace
+//     with mobility / active recovery.
+export const INJURY_SEVERITIES = ["light", "moderate", "recovering"] as const;
+export type InjurySeverity = (typeof INJURY_SEVERITIES)[number];
+
+export const injury = pgTable("injury", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => userProfile.id, { onDelete: "cascade" }),
+  region: text("region", { enum: INJURY_REGIONS }).notNull(),
+  severity: text("severity", { enum: INJURY_SEVERITIES }).notNull(),
+  // Free-text so users can capture the specific ("MCL sprain",
+  // "spinal impingement flare from Tuesday's deadlift"). Coach
+  // context uses this verbatim.
+  notes: text("notes"),
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  // Null = active. Setting endDate resolves the injury; adaptation
+  // stops applying and coach context stops mentioning it.
+  endDate: text("end_date"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const trail = pgTable("trail", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")

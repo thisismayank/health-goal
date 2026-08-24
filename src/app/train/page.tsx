@@ -14,6 +14,8 @@ import type { PlannedSession } from "@/db/schema";
 import { PlannedDetails } from "@/components/plan/planned-details";
 import { InlineSessionActions } from "@/components/plan/inline-actions";
 import { PlanSubNav } from "@/components/shell/plan-sub-nav";
+import { activeInjuries } from "@/lib/injury/queries";
+import { adaptSession } from "@/lib/plan/injury-adaptation";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +40,7 @@ export default async function TrainPage() {
   const days = weekDays(anchor);
   const sessions = await getWeekSessions(plan.id, anchor);
   const workouts = await getWeekWorkouts(user.id, anchor);
+  const injuries = await activeInjuries(user.id);
 
   const sessionByDate = new Map(sessions.map((s) => [s.date, s]));
   const workoutBySession = new Map(
@@ -133,6 +136,9 @@ export default async function TrainPage() {
           const extras = extrasByDate.get(dateStr) ?? [];
           const isToday = dateStr === today;
           const isFuture = dateStr > today;
+          const adaptation = session
+            ? adaptSession(session.sessionCategory, injuries)
+            : null;
           return (
             <DayCard
               key={dateStr}
@@ -145,6 +151,7 @@ export default async function TrainPage() {
               strengthSets={strengthSets}
               extras={extras}
               extraSets={setsByWorkout}
+              adaptation={adaptation}
             />
           );
         })}
@@ -178,6 +185,7 @@ function DayCard({
   strengthSets,
   extras,
   extraSets,
+  adaptation,
 }: {
   dayLabel: string;
   dateLabel: string;
@@ -188,6 +196,7 @@ function DayCard({
   strengthSets: StrengthExercise[];
   extras: Workout[];
   extraSets: Map<number, StrengthExercise[]>;
+  adaptation: import("@/lib/plan/injury-adaptation").AdaptationResult | null;
 }) {
   const border = isToday
     ? "border-blue-500/60 bg-blue-950/10"
@@ -213,6 +222,15 @@ function DayCard({
         </div>
         <StatusChip status={session?.status ?? "none"} />
       </div>
+
+      {session && adaptation && adaptation.kind !== "keep" && (
+        <div className="ml-[calc(3.5rem+1rem)] rounded-md border border-warn/40 bg-warn/5 p-2.5 text-xs space-y-0.5">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-warn">
+            [ADAPTED · INJURY]
+          </div>
+          <div className="text-foreground/85">{adaptation.note}</div>
+        </div>
+      )}
 
       {session && <PlannedDetails session={session} variant="inset" />}
 
