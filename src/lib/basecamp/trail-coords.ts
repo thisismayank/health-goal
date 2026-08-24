@@ -39,7 +39,7 @@ export const TRAIL_COORDS: Record<string, { lat: number; lng: number }> = {
   "alum-cave-leconte": { lat: 35.6289, lng: -83.4514 },
 
   // Rainier NP (existing, in case Mayank's Skyline hike triggers)
-  "skyline-paradise-loop": { lat: 46.7856, lng: -121.7367 },
+  "skyline-paradise": { lat: 46.7856, lng: -121.7367 },
   "rainier-dc": { lat: 46.7856, lng: -121.7367 },
   "rainier-emmons": { lat: 46.8547, lng: -121.6408 },
 };

@@ -274,6 +274,18 @@ export async function syncRecent(
     .update(stravaAccount)
     .set({ lastSyncAt: new Date() })
     .where(eq(stravaAccount.userId, userId));
+
+  // Best-effort passport auto-link. If any of the just-imported
+  // activities strongly match a preset (proximity + name), the
+  // trailCompletion row is created here so users don't have to
+  // click through /trails/backfill after every sync. Never throws
+  // — a matcher failure shouldn't tank the sync.
+  try {
+    const { autoLinkPassport } = await import("@/lib/passport/auto-link");
+    await autoLinkPassport(userId);
+  } catch (e) {
+    console.warn("[strava/sync] passport auto-link failed:", e);
+  }
   return results;
 }
 

@@ -73,6 +73,17 @@ export async function syncActivitiesRecent(
   }
 
   await markSynced(userId);
+
+  // Best-effort passport auto-link — mirror of the Strava sync path.
+  // Strong-match preset hits become trailCompletion rows so the
+  // passport populates as activities import, without requiring the
+  // user to click through /trails/backfill.
+  try {
+    const { autoLinkPassport } = await import("@/lib/passport/auto-link");
+    await autoLinkPassport(userId);
+  } catch (e) {
+    console.warn("[intervals/sync] passport auto-link failed:", e);
+  }
   return { fetched: activities.length, created, updated, skipped };
 }
 
