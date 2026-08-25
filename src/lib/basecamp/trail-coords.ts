@@ -43,6 +43,7 @@ export const TRAIL_COORDS: Record<string, { lat: number; lng: number }> = {
   "skyline-paradise": { lat: 46.7856, lng: -121.7367 },
   "rainier-dc": { lat: 46.7856, lng: -121.7367 },
   "rainier-emmons": { lat: 46.8547, lng: -121.6408 },
+  "camp-muir-dayhike": { lat: 46.7856, lng: -121.7367 },
 };
 
 /**
@@ -261,6 +262,171 @@ export const EXTRA_TRAIL_PRESETS: TrailPreset[] = [
     sources: ["NPS.gov"],
     startLat: 34.8125,
     startLng: -109.8756,
+  },
+
+  // ────── Rainier NP content pass (2026-08-25) ──────
+  // First LLM-assisted bulk pass, verified against NPS.gov trail
+  // pages for the safety-critical fields (max altitude, permit,
+  // terrain grade). Other fields (distance, elevation, typical
+  // hours) sourced from NPS + guidebook consensus and may need
+  // ±5% tolerance. Skyline / DC / Emmons / Wonderland already
+  // live in the base TRAIL_LIBRARY — this fills in the day-hike
+  // and training-hike gaps around them.
+  {
+    slug: "naches-peak-loop",
+    name: "Naches Peak Loop",
+    region: "Rainier NP · Cascades",
+    country: "US",
+    distanceKm: 8.7,
+    elevationGainFt: 700,
+    maxAltitudeFt: 5900,
+    typicalHours: 3,
+    packWeightLb: 6,
+    terrainGrade: "easy",
+    notes:
+      "Wildflower loop straddling the PCT with views of Rainier over Dewey Lake. Peaks late July through mid-August. Ridgeline exposure to weather in late afternoon.",
+    sources: ["NPS.gov", "Washington Trails Association"],
+    startLat: 46.8709,
+    startLng: -121.5169,
+  },
+  {
+    slug: "tolmie-peak-lookout",
+    name: "Tolmie Peak Lookout",
+    region: "Rainier NP · Cascades",
+    country: "US",
+    distanceKm: 10.5,
+    elevationGainFt: 1600,
+    maxAltitudeFt: 5940,
+    typicalHours: 4,
+    packWeightLb: 7,
+    terrainGrade: "moderate",
+    notes:
+      "Mowich Lake side. Passes Eunice Lake before the final climb to the fire-lookout tower. North-face Rainier view.",
+    sources: ["NPS.gov", "WTA"],
+    startLat: 46.9339,
+    startLng: -121.8621,
+  },
+  {
+    slug: "comet-falls",
+    name: "Comet Falls / Van Trump Park",
+    region: "Rainier NP · Cascades",
+    country: "US",
+    distanceKm: 9.2,
+    elevationGainFt: 1700,
+    maxAltitudeFt: 5800,
+    typicalHours: 4,
+    packWeightLb: 7,
+    terrainGrade: "moderate",
+    notes:
+      "One of the tallest waterfalls in the park (~300 ft). Van Trump Park continues into meadows above the falls; adds ~800 ft to reach it.",
+    sources: ["NPS.gov", "WTA"],
+    startLat: 46.7756,
+    startLng: -121.7811,
+  },
+  {
+    slug: "burroughs-mountain-2nd",
+    name: "Burroughs Mountain (2nd Burroughs)",
+    region: "Rainier NP · Cascades",
+    country: "US",
+    distanceKm: 11.3,
+    elevationGainFt: 2500,
+    maxAltitudeFt: 7402,
+    typicalHours: 5,
+    packWeightLb: 8,
+    terrainGrade: "moderate",
+    notes:
+      "Arctic tundra above treeline on volcanic scree. Snowfields linger into August on the north slope. Continue to 3rd Burroughs (~1.5 mi more) for the closest walk-up view of Emmons Glacier.",
+    sources: ["NPS.gov", "WTA"],
+    startLat: 46.9147,
+    startLng: -121.6425,
+  },
+  {
+    slug: "fremont-lookout",
+    name: "Mount Fremont Lookout",
+    region: "Rainier NP · Cascades",
+    country: "US",
+    distanceKm: 9.2,
+    elevationGainFt: 900,
+    maxAltitudeFt: 7181,
+    typicalHours: 3.5,
+    packWeightLb: 7,
+    terrainGrade: "moderate",
+    notes:
+      "Sunrise-side ridge walk to another fire-lookout tower. Marmots common. Ridge is exposed — turn back for lightning.",
+    sources: ["NPS.gov", "WTA"],
+    startLat: 46.9147,
+    startLng: -121.6425,
+  },
+  {
+    slug: "rampart-ridge-loop",
+    name: "Rampart Ridge Loop",
+    region: "Rainier NP · Cascades",
+    country: "US",
+    distanceKm: 7.4,
+    elevationGainFt: 1300,
+    maxAltitudeFt: 4058,
+    typicalHours: 3,
+    packWeightLb: 6,
+    terrainGrade: "moderate",
+    notes:
+      "Old-growth Douglas fir loop from Longmire. Snow-free earlier and later than the alpine trails — good shoulder-season option.",
+    sources: ["NPS.gov", "WTA"],
+    startLat: 46.7503,
+    startLng: -121.8144,
+  },
+  // Camp Muir day hike already lives in TRAIL_LIBRARY; details
+  // overlay is applied via trail-details.ts. Adding a coord entry
+  // for its trailhead so the matcher can score it.
+  {
+    slug: "pinnacle-peak-saddle",
+    name: "Pinnacle Peak Saddle",
+    region: "Rainier NP · Cascades",
+    country: "US",
+    distanceKm: 4.2,
+    elevationGainFt: 1050,
+    maxAltitudeFt: 6000,
+    typicalHours: 2,
+    packWeightLb: 5,
+    terrainGrade: "moderate",
+    notes:
+      "Short but relentless climb from Reflection Lake to the saddle between Pinnacle and Plummer Peak. Summit push above the saddle is Class 2-3 scramble — most hikers stop at the saddle.",
+    sources: ["NPS.gov", "WTA"],
+    startLat: 46.7692,
+    startLng: -121.7367,
+  },
+  {
+    slug: "summerland",
+    name: "Summerland",
+    region: "Rainier NP · Cascades",
+    country: "US",
+    distanceKm: 13.5,
+    elevationGainFt: 2100,
+    maxAltitudeFt: 5900,
+    typicalHours: 5.5,
+    packWeightLb: 7,
+    terrainGrade: "moderate",
+    notes:
+      "Wonderland Trail spur climbing to a bench of subalpine meadows and a stone shelter. Panhandle Gap adds another 1,300 ft and puts you above snow year-round.",
+    sources: ["NPS.gov", "WTA"],
+    startLat: 46.9083,
+    startLng: -121.6519,
+  },
+  {
+    slug: "silver-falls-loop",
+    name: "Silver Falls Loop",
+    region: "Rainier NP · Cascades",
+    country: "US",
+    distanceKm: 4.8,
+    elevationGainFt: 300,
+    maxAltitudeFt: 2200,
+    typicalHours: 1.5,
+    packWeightLb: 4,
+    terrainGrade: "easy",
+    notes:
+      "Ohanapecosh-side old-growth loop past a wide cascading waterfall. Family-friendly, open most of the year.",
+    sources: ["NPS.gov", "WTA"],
+    startLat: 46.7381,
+    startLng: -121.5644,
   },
 
   // ────── Hudson Highlands / Catskills / Shawangunks (NY) ──────
