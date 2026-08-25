@@ -9,6 +9,7 @@
  */
 
 import { TRAIL_LIBRARY, type TrailPreset } from "./trail-library";
+import { withDetails } from "./trail-details";
 
 export const TRAIL_COORDS: Record<string, { lat: number; lng: number }> = {
   // Rocky Mountain NP
@@ -417,5 +418,7 @@ export function getFullTrailLibrary(): TrailPreset[] {
     const overlay = TRAIL_COORDS[t.slug];
     return overlay ? { ...t, startLat: overlay.lat, startLng: overlay.lng } : t;
   });
-  return [...withCoords, ...EXTRA_TRAIL_PRESETS];
+  // Apply Tier A detail overlay (best months, permits, water, cell,
+  // parking, steepest grade, route shape) — see trail-details.ts.
+  return [...withCoords, ...EXTRA_TRAIL_PRESETS].map(withDetails);
 }

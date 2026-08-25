@@ -33,6 +33,30 @@ export type TrailPreset = {
   // eligible for GPS-based matching (name fallback still works).
   startLat?: number;
   startLng?: number;
+  // -------- Tier A trail details (all optional) --------
+  // Hand-curated for the hero trails; missing on the long tail. The
+  // preset detail page renders whichever fields are present in a
+  // "Trail details" section; nothing shows when nothing is set.
+  //
+  // Steepest sustained grade (%), from guidebook / recent hiker
+  // reports. Distinct from avg grade (which we derive at render).
+  steepestGradePct?: number;
+  // Route shape — matters for return logistics (out-and-back = you
+  // walk back, point-to-point = shuttle needed).
+  routeShape?: "out_and_back" | "loop" | "point_to_point";
+  // Recommended months. Short 3-char labels, e.g. ["Jul","Aug","Sep"].
+  // Used to warn users planning off-season attempts.
+  bestMonths?: string[];
+  // Water availability on the route. Short human-readable, e.g.
+  // "None — carry all", "Reliable creeks every 3-4 mi", "Seasonal only".
+  waterOnRoute?: string;
+  // Permit / reservation requirement + brief instructions.
+  permitRequired?: boolean;
+  permitNotes?: string;
+  // Cell reception along the route. Coarse enum.
+  cellReception?: "none" | "patchy" | "reliable";
+  // Parking / trailhead access notes — one-liners.
+  parkingNotes?: string;
 };
 
 export const TRAIL_LIBRARY: TrailPreset[] = [

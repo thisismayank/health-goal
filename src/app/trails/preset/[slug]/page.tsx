@@ -5,7 +5,7 @@ import { db } from "@/db/client";
 import { trail, trailCompletion } from "@/db/schema";
 import { requireOnboardedUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
-import { findTrailBySlug } from "@/lib/basecamp/trail-library";
+import type { TrailPreset } from "@/lib/basecamp/trail-library";
 import { getFullTrailLibrary } from "@/lib/basecamp/trail-coords";
 import { presetToVirtualTrail } from "@/lib/basecamp/preset-trail";
 import {
@@ -25,7 +25,7 @@ import {
   estimatePersonalHours,
   formatHoursCasual,
 } from "@/lib/basecamp/personal-time";
-import { formatFt, formatKm, formatPackLb, pickUnits } from "@/lib/units";
+import { formatFt, formatKm, formatPackLb, pickUnits, type Units } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -52,12 +52,11 @@ export default async function PresetDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  // findTrailBySlug reads only the deduped TRAIL_LIBRARY. Extra
-  // presets defined in trail-coords.ts (Northeast day-trip trailheads,
-  // etc.) only surface via getFullTrailLibrary(), so fall back there.
-  const preset =
-    findTrailBySlug(slug) ??
-    getFullTrailLibrary().find((t) => t.slug === slug);
+  // Always resolve through getFullTrailLibrary so the Tier A detail
+  // overlay (permits, best months, water, etc. from trail-details.ts)
+  // gets applied. findTrailBySlug alone reads the raw library and
+  // misses the overlay.
+  const preset = getFullTrailLibrary().find((t) => t.slug === slug);
   if (!preset) notFound();
 
   const user = await requireOnboardedUser();
@@ -304,6 +303,8 @@ export default async function PresetDetailPage({
         </section>
       )}
 
+      <TrailDetailsSection preset={preset} units={units} />
+
       <section className="text-xs text-muted italic">
         Trail data:{" "}
         {preset.sources.map((s, i) => (
@@ -317,6 +318,125 @@ export default async function PresetDetailPage({
     </div>
   );
 }
+
+// Tier A trail details — renders only when the trail has any of the
+// hand-curated fields set (see lib/basecamp/trail-details.ts). Missing
+// fields degrade gracefully; nothing shows when nothing is set.
+function TrailDetailsSection({
+  preset,
+  units,
+}: {
+  preset: TrailPreset;
+  units: Units;
+}) {
+  const {
+    steepestGradePct,
+    routeShape,
+    bestMonths,
+    waterOnRoute,
+    permitRequired,
+    permitNotes,
+    cellReception,
+    parkingNotes,
+  } = preset;
+  const hasAny =
+    steepestGradePct != null ||
+    routeShape != null ||
+    (bestMonths?.length ?? 0) > 0 ||
+    waterOnRoute != null ||
+    permitRequired != null ||
+    cellReception != null ||
+    parkingNotes != null;
+  if (!hasAny) return null;
+
+  // Compute avg grade from what we already have — no data-sourcing
+  // needed. Rendered alongside steepest so the "steepest 45%" reads
+  // in context (avg 12% + steepest 45% = one bad section, not the
+  // whole trail).
+  const distanceM = preset.distanceKm * 1000;
+  const gainM = preset.elevationGainFt * 0.3048;
+  const avgGradePct =
+    distanceM > 0 ? Math.round((gainM / distanceM) * 100) : null;
+
+  return (
+    <section className="rounded-md border border-panel-border bg-panel/60 p-4 space-y-3">
+      <div className="text-xs uppercase tracking-widest text-muted">
+        Trail details
+      </div>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+        {routeShape && (
+          <DetailRow label="Route shape" value={ROUTE_SHAPE_LABEL[routeShape]} />
+        )}
+        {avgGradePct != null && (
+          <DetailRow
+            label="Grade"
+            value={`avg ${avgGradePct}%${steepestGradePct != null ? ` · steepest ${steepestGradePct}%` : ""}`}
+          />
+        )}
+        {bestMonths && bestMonths.length > 0 && (
+          <DetailRow label="Best months" value={bestMonths.join(" · ")} />
+        )}
+        {waterOnRoute && <DetailRow label="Water" value={waterOnRoute} />}
+        {cellReception && (
+          <DetailRow
+            label="Cell reception"
+            value={CELL_LABEL[cellReception]}
+          />
+        )}
+        {parkingNotes && <DetailRow label="Access" value={parkingNotes} />}
+        {permitRequired != null && (
+          <DetailRow
+            label="Permit"
+            value={
+              permitRequired
+                ? `Required${permitNotes ? " — " + permitNotes : ""}`
+                : permitNotes ?? "None"
+            }
+            fullWidth={permitRequired && !!permitNotes}
+          />
+        )}
+      </dl>
+      {units === "metric" && steepestGradePct != null && null}
+    </section>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+  fullWidth = false,
+}: {
+  label: string;
+  value: string;
+  fullWidth?: boolean;
+}) {
+  return (
+    <div className={fullWidth ? "sm:col-span-2" : ""}>
+      <dt className="text-[10px] font-mono uppercase tracking-widest text-muted">
+        {label}
+      </dt>
+      <dd className="text-foreground/90 mt-0.5 leading-snug">{value}</dd>
+    </div>
+  );
+}
+
+const ROUTE_SHAPE_LABEL: Record<
+  NonNullable<TrailPreset["routeShape"]>,
+  string
+> = {
+  out_and_back: "Out & back",
+  loop: "Loop",
+  point_to_point: "Point-to-point",
+};
+
+const CELL_LABEL: Record<
+  NonNullable<TrailPreset["cellReception"]>,
+  string
+> = {
+  none: "None — carry a beacon",
+  patchy: "Patchy",
+  reliable: "Reliable",
+};
 
 function MetricPill({
   label,
