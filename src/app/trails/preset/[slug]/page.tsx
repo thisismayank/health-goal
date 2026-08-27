@@ -18,6 +18,7 @@ import {
   type Verdict,
 } from "@/lib/basecamp/trail-assessment";
 import { SavePresetButton } from "@/components/trails/save-preset-button";
+import { TrailPhoto } from "@/components/trails/trail-photo";
 import { getSquadCompletionsForPreset } from "@/lib/squad/queries";
 import { computeCharacterSheet } from "@/lib/basecamp/stats";
 import { computeRank } from "@/lib/basecamp/rank";
@@ -97,17 +98,25 @@ export default async function PresetDetailPage({
 
   return (
     <div className="space-y-5">
-      <div>
-        <Link
-          href="/trails"
-          className="text-xs text-muted hover:text-foreground"
-        >
-          ← Trail library
-        </Link>
-        <h1 className="text-2xl font-semibold mt-2 leading-tight">
-          {preset.name}
-        </h1>
-        <div className="text-sm text-muted mt-0.5">{preset.region}</div>
+      {/* Hero top-band. Photo when the trail has one; topo-line SVG
+          fallback otherwise. Renders full-bleed under the shell padding
+          via a negative-margin trick that respects the max-w container. */}
+      <div className="relative -mx-4 sm:-mx-6 md:mx-0 md:rounded-lg overflow-hidden">
+        <TrailPhoto preset={preset} aspect="wide" priority showAttribution />
+        <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 space-y-1">
+          <Link
+            href="/trails"
+            className="inline-block text-[11px] text-white/70 hover:text-white bg-black/40 backdrop-blur px-2 py-0.5 rounded"
+          >
+            ← Trail library
+          </Link>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-white leading-tight drop-shadow-lg">
+            {preset.name}
+          </h1>
+          <div className="text-sm text-white/80 drop-shadow">
+            {preset.region}
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1.5">

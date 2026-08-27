@@ -30,6 +30,8 @@ type DetailFields = Partial<
     | "permitNotes"
     | "cellReception"
     | "parkingNotes"
+    | "photoUrl"
+    | "photoAttribution"
   >
 >;
 
@@ -282,5 +284,7 @@ export function withDetails(preset: TrailPreset): TrailPreset {
     permitNotes: preset.permitNotes ?? overlay.permitNotes,
     cellReception: preset.cellReception ?? overlay.cellReception,
     parkingNotes: preset.parkingNotes ?? overlay.parkingNotes,
+    photoUrl: preset.photoUrl ?? overlay.photoUrl,
+    photoAttribution: preset.photoAttribution ?? overlay.photoAttribution,
   };
 }

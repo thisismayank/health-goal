@@ -6,6 +6,7 @@ import { generateFeaturedNarrative } from "@/lib/coach/featured-narrative";
 import { VERDICT_COLOR, VERDICT_LABEL } from "@/lib/basecamp/trail-assessment";
 import { TrailIcon } from "@/components/ui/icons";
 import { formatFt, formatKm, pickUnits } from "@/lib/units";
+import { TrailPhoto } from "@/components/trails/trail-photo";
 
 // In-app companion to the Monday featured-trail email. Same pick logic
 // so email + home show the same trail all week.
@@ -32,19 +33,29 @@ export async function FeaturedTrailCard() {
   return (
     <Link
       href={`/trails/preset/${preset.slug}`}
-      className="block rounded-lg border border-blue-500/30 bg-blue-950/10 shadow-lg shadow-blue-500/10 p-5 space-y-3 hover:border-blue-400/60 transition"
+      className="block rounded-lg border border-blue-500/30 bg-blue-950/10 shadow-lg shadow-blue-500/10 overflow-hidden hover:border-blue-400/60 transition"
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-blue-400">
-          <TrailIcon size={12} />
-          Featured this week
+      <div className="relative">
+        <TrailPhoto preset={preset} aspect="wide" />
+        <div className="absolute inset-x-0 top-0 p-3 flex items-baseline justify-between gap-3">
+          <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-blue-300 bg-black/40 backdrop-blur px-2 py-0.5 rounded">
+            <TrailIcon size={12} />
+            Featured this week
+          </div>
+          <div className="text-[10px] text-white/70 bg-black/40 backdrop-blur px-2 py-0.5 rounded">
+            for Class {hikerClass}
+          </div>
         </div>
-        <div className="text-[10px] text-muted">for Class {hikerClass}</div>
+        <div className="absolute inset-x-0 bottom-0 p-3">
+          <h3 className="text-lg font-semibold leading-tight text-white drop-shadow-lg">
+            {preset.name}
+          </h3>
+          <div className="text-xs text-white/70 mt-0.5 drop-shadow">
+            {preset.region}
+          </div>
+        </div>
       </div>
-      <div>
-        <h3 className="text-lg font-semibold leading-tight">{preset.name}</h3>
-        <div className="text-xs text-muted mt-0.5">{preset.region}</div>
-      </div>
+      <div className="p-4 pt-3 space-y-3">
       {narrative && (
         <div className="rounded-md border border-blue-500/20 bg-background/40 p-3 space-y-1.5">
           <div className="text-sm font-medium leading-snug">
@@ -81,6 +92,7 @@ export async function FeaturedTrailCard() {
         <span className="text-xs text-blue-300 whitespace-nowrap">
           See it →
         </span>
+      </div>
       </div>
     </Link>
   );

@@ -57,6 +57,16 @@ export type TrailPreset = {
   cellReception?: "none" | "patchy" | "reliable";
   // Parking / trailhead access notes — one-liners.
   parkingNotes?: string;
+  // Hero photo for the trail — rendered as a top-band on the preset
+  // detail page and on tile cards across Home / Discover / Near-me /
+  // /start. Missing → SVG topo-line fallback keyed off terrainGrade.
+  //
+  // Sourcing rule: only license-clean images (CC-BY / CC-BY-SA /
+  // public-domain / Unsplash). Attribution surfaces in a small
+  // overlay on the trail detail top-band. External URLs must be on
+  // one of the allowed remote patterns in next.config.
+  photoUrl?: string;
+  photoAttribution?: string; // e.g. "Photo by NPS / Kevin Bacher"
 };
 
 export const TRAIL_LIBRARY: TrailPreset[] = [

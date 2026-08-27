@@ -2,6 +2,7 @@ import Link from "next/link";
 import { findTrailBySlug } from "@/lib/basecamp/trail-library";
 import { getFullTrailLibrary } from "@/lib/basecamp/trail-coords";
 import { HERO_TRAILS } from "@/lib/basecamp/hero-trails";
+import { TrailPhoto } from "@/components/trails/trail-photo";
 
 // Public — no auth. A stranger's first tap should already be about
 // picking a hike, not signing up.
@@ -58,24 +59,33 @@ export default function StartPage() {
           </p>
         </section>
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {trails.map(({ slug, hook, preset }) => (
             <Link
               key={slug}
               href={`/start/${slug}`}
-              className="rounded-lg border border-panel-border bg-panel p-4 hover:border-blue-500/50 transition space-y-1"
+              className="group rounded-lg border border-panel-border bg-panel overflow-hidden hover:border-blue-500/50 transition"
             >
-              <div className="text-base font-medium truncate">
-                {preset.name}
+              <div className="relative">
+                <TrailPhoto preset={preset} aspect="tile" />
+                <div className="absolute inset-x-0 bottom-0 p-3">
+                  <div className="text-base font-semibold text-white leading-tight drop-shadow-lg truncate">
+                    {preset.name}
+                  </div>
+                  <div className="text-[11px] text-white/70 drop-shadow">
+                    {preset.region}
+                  </div>
+                </div>
               </div>
-              <div className="text-[11px] text-muted">{preset.region}</div>
-              <div className="text-xs text-blue-300/90 mt-1">{hook}</div>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-muted mt-2">
-                {preset.distanceKm >= 30
-                  ? `${Math.round(preset.distanceKm * 0.6213712)} mi`
-                  : `${(preset.distanceKm * 0.6213712).toFixed(1)} mi`}{" "}
-                · +{preset.elevationGainFt.toLocaleString()} ft · ~
-                {preset.typicalHours}h
+              <div className="p-3 space-y-1">
+                <div className="text-xs text-blue-300/90">{hook}</div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-muted">
+                  {preset.distanceKm >= 30
+                    ? `${Math.round(preset.distanceKm * 0.6213712)} mi`
+                    : `${(preset.distanceKm * 0.6213712).toFixed(1)} mi`}{" "}
+                  · +{preset.elevationGainFt.toLocaleString()} ft · ~
+                  {preset.typicalHours}h
+                </div>
               </div>
             </Link>
           ))}
