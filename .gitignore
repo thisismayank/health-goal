@@ -44,3 +44,6 @@ local.db-*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Personal drafts / notes not for git
+yc-application-draft.md
