@@ -62,6 +62,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "none",
     parkingNotes: "White River trailhead — road opens late-June.",
     steepestGradePct: 35,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Mount_Rainier_6909h.JPG/500px-Mount_Rainier_6909h.JPG",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "skyline-paradise": {
     routeShape: "loop",
@@ -72,8 +75,10 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "patchy",
     parkingNotes: "Paradise lot fills by 10am summer weekends.",
     steepestGradePct: 22,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Mount_Rainier_National_Park_-_53024017635.jpg/500px-Mount_Rainier_National_Park_-_53024017635.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
-
   // ────── Rainier NP content-pass day/training hikes ──────
   "naches-peak-loop": {
     routeShape: "loop",
@@ -84,6 +89,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "patchy",
     parkingNotes: "Tipsoo Lake / Chinook Pass — small lot, arrive early.",
     steepestGradePct: 10,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Naches_Peak_from_Highway_410_switchbacks.jpg/500px-Naches_Peak_from_Highway_410_switchbacks.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "tolmie-peak-lookout": {
     routeShape: "out_and_back",
@@ -94,6 +102,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "none",
     parkingNotes: "Mowich Lake lot; road closes late-Oct until mid-July.",
     steepestGradePct: 18,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Tolmie_Peak.jpg/500px-Tolmie_Peak.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "comet-falls": {
     routeShape: "out_and_back",
@@ -104,6 +115,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "none",
     parkingNotes: "Christine Falls TH, mile 4.4 on Paradise Rd — small lot.",
     steepestGradePct: 20,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Comet_Falls_%2895ee215cf0334ec3ba1168be837570be%29.JPG/500px-Comet_Falls_%2895ee215cf0334ec3ba1168be837570be%29.JPG",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "burroughs-mountain-2nd": {
     routeShape: "out_and_back",
@@ -114,6 +128,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "patchy",
     parkingNotes: "Sunrise Visitor Center; fills before 10am on clear weekends.",
     steepestGradePct: 25,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Burroughs_Mountain_from_east.jpg/500px-Burroughs_Mountain_from_east.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "fremont-lookout": {
     routeShape: "out_and_back",
@@ -124,6 +141,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "patchy",
     parkingNotes: "Same as Burroughs — Sunrise lot; overflow at White River.",
     steepestGradePct: 15,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Mount_Fremont_in_Mount_Rainier_National_Park.jpg/500px-Mount_Fremont_in_Mount_Rainier_National_Park.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "rampart-ridge-loop": {
     routeShape: "loop",
@@ -145,6 +165,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "patchy",
     parkingNotes: "Paradise lot; fills by 8am on clear summer weekends.",
     steepestGradePct: 35,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/RMI_buildings_on_the_west_side_of_Camp_Muir_%286_October_2024%29.jpg/500px-RMI_buildings_on_the_west_side_of_Camp_Muir_%286_October_2024%29.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "pinnacle-peak-saddle": {
     routeShape: "out_and_back",
@@ -278,6 +301,7 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
       "https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/View_from_Bear_Mountain_overlooking_Hudson_River.jpg/500px-View_from_Bear_Mountain_overlooking_Hudson_River.jpg",
     photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
+  // breakneck-ridge photo added just below
   "breakneck-ridge": {
     routeShape: "loop",
     bestMonths: ["Apr", "May", "Jun", "Sep", "Oct", "Nov"],
@@ -287,6 +311,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "reliable",
     parkingNotes: "Roadside on Rt-9D fills fast; train station is better.",
     steepestGradePct: 50,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Breakneck_Ridge.jpg/500px-Breakneck_Ridge.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
 };
 

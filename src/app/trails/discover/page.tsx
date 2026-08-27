@@ -20,6 +20,7 @@ import {
 } from "@/components/trails/itinerary-planner";
 import { formatFt, formatKm, pickUnits } from "@/lib/units";
 import { NearMeSection } from "@/components/trails/near-me-section";
+import { TrailPhoto } from "@/components/trails/trail-photo";
 
 export const dynamic = "force-dynamic";
 
@@ -121,14 +122,30 @@ export default async function DiscoverPage({
               <Link
                 key={d.query}
                 href={`/trails/discover?q=${encodeURIComponent(d.query)}`}
-                className="rounded-md border border-panel-border bg-panel px-3 py-2 hover:border-blue-500/40 transition"
+                className="group rounded-md border border-panel-border bg-panel overflow-hidden hover:border-blue-500/40 transition"
               >
-                <div className="text-sm font-medium truncate">{d.label}</div>
-                {d.hint && (
-                  <div className="text-[10px] text-muted mt-0.5 truncate">
-                    {d.hint}
+                <div className="relative">
+                  <TrailPhoto
+                    preset={{
+                      name: d.label,
+                      slug: d.query,
+                      photoUrl: d.photoUrl,
+                      photoAttribution: d.photoAttribution,
+                      terrainGrade: "moderate",
+                    }}
+                    aspect="tile"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 p-2">
+                    <div className="text-sm font-semibold text-white leading-tight drop-shadow-lg truncate">
+                      {d.label}
+                    </div>
+                    {d.hint && (
+                      <div className="text-[10px] text-white/70 drop-shadow truncate">
+                        {d.hint}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </Link>
             ))}
           </div>

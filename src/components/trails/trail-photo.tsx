@@ -1,6 +1,15 @@
 import Image from "next/image";
 import type { TrailPreset } from "@/lib/basecamp/trail-library";
 
+// Minimal shape TrailPhoto needs. Accepting this (instead of a full
+// TrailPreset) lets us render destination tiles on /trails/discover
+// with the same component, using a synthetic slug for the hash seed
+// and a default terrain grade for the fallback tint.
+export type PhotoSubject = Pick<
+  TrailPreset,
+  "name" | "photoUrl" | "photoAttribution" | "terrainGrade" | "slug"
+>;
+
 /**
  * Hero photo for a trail card/panel. When the preset has a
  * `photoUrl`, uses next/image with fill + cover. When it doesn't,
@@ -28,15 +37,7 @@ export function TrailPhoto({
   priority = false,
   className = "",
 }: {
-  preset: Pick<
-    TrailPreset,
-    | "name"
-    | "photoUrl"
-    | "photoAttribution"
-    | "terrainGrade"
-    | "maxAltitudeFt"
-    | "slug"
-  >;
+  preset: PhotoSubject;
   aspect?: Aspect;
   showAttribution?: boolean;
   priority?: boolean;
@@ -78,7 +79,7 @@ function TopoFallback({
   preset,
   className,
 }: {
-  preset: Pick<TrailPreset, "name" | "terrainGrade" | "maxAltitudeFt" | "slug">;
+  preset: Pick<TrailPreset, "name" | "terrainGrade" | "slug">;
   className: string;
 }) {
   const palette = TERRAIN_PALETTE[preset.terrainGrade] ?? TERRAIN_PALETTE.moderate;
