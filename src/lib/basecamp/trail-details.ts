@@ -48,6 +48,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     parkingNotes:
       "Paradise lot fills by 8am on weekends. Overflow at Longmire, shuttle mid-summer.",
     steepestGradePct: 40,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Rainier20200906.jpg/500px-Rainier20200906.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "rainier-emmons": {
     routeShape: "out_and_back",
@@ -185,6 +188,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "none",
     parkingNotes: "Fly-in from Talkeetna — no drive access.",
     steepestGradePct: 55,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Wonder_Lake_and_Denali.jpg/500px-Wonder_Lake_and_Denali.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "kilimanjaro-machame": {
     routeShape: "point_to_point",
@@ -196,6 +202,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "patchy",
     parkingNotes: "Machame Gate — operator handles transfer.",
     steepestGradePct: 30,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Kilimanjaro_from_Amboseli.jpg/500px-Kilimanjaro_from_Amboseli.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "ebc-trek": {
     routeShape: "out_and_back",
@@ -207,6 +216,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "patchy",
     parkingNotes: "Fly Lukla — book 2-3 months out for peak season.",
     steepestGradePct: 25,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Khumbutse.jpg/500px-Khumbutse.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "wonderland-trail": {
     routeShape: "loop",
@@ -219,6 +231,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     parkingNotes:
       "Longmire, White River, or Mowich Lake — depends on itinerary direction.",
     steepestGradePct: 30,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/5/50/CowlitzDivide.JPG/500px-CowlitzDivide.JPG",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
 
   // ────── Day / weekend ──────
@@ -232,6 +247,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "patchy",
     parkingNotes: "Zion shuttle only — no private car in-canyon.",
     steepestGradePct: 45,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/Angels_Landing_-_Zion_Canyon.jpg/500px-Angels_Landing_-_Zion_Canyon.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "whitney-dayhike": {
     routeShape: "out_and_back",
@@ -243,6 +261,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "none",
     parkingNotes: "Whitney Portal — arrive night before to acclimate.",
     steepestGradePct: 25,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Mount_Whitney_2003-03-25.jpg/500px-Mount_Whitney_2003-03-25.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "bear-mountain-loop": {
     routeShape: "loop",
@@ -253,6 +274,9 @@ export const TRAIL_DETAILS: Record<string, DetailFields> = {
     cellReception: "reliable",
     parkingNotes: "Bear Mtn Inn lot fills by 10am weekends; go early.",
     steepestGradePct: 30,
+    photoUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/View_from_Bear_Mountain_overlooking_Hudson_River.jpg/500px-View_from_Bear_Mountain_overlooking_Hudson_River.jpg",
+    photoAttribution: "Wikimedia Commons · CC BY-SA",
   },
   "breakneck-ridge": {
     routeShape: "loop",
