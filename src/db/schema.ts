@@ -91,9 +91,13 @@ export const authSession = pgTable("auth_session", {
 
 // Magic-link tokens for passwordless sign-in / signup. userId is nullable
 // when the request is for a new email (we upsert the user on verify).
+// code is a 6-digit alternative to the URL token — mobile users can type
+// it into the same tab where they entered their email, avoiding the
+// cross-app browser jump that loses the cold_start_seed cookie.
 export const magicLink = pgTable("magic_link", {
   id: serial("id").primaryKey(),
   token: text("token").notNull().unique(),
+  code: text("code"),
   requestedEmail: text("requested_email").notNull(),
   userId: integer("user_id").references(() => userProfile.id, {
     onDelete: "cascade",

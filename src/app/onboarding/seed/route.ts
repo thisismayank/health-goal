@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { trail, userProfile } from "@/db/schema";
+import { trail, userProfile, type PlanGoalType } from "@/db/schema";
 import { getUserFromSession } from "@/lib/auth/sessions";
 import { readAndConsumeSeed } from "@/lib/cold-start/seed";
-import { findTrailBySlug } from "@/lib/basecamp/trail-library";
+import {
+  findTrailBySlug,
+  type TrailPreset,
+} from "@/lib/basecamp/trail-library";
 import { getFullTrailLibrary } from "@/lib/basecamp/trail-coords";
 import type { ColdStartAnswers } from "@/lib/basecamp/synthetic-snapshot";
+import { generateUserPlan } from "@/lib/plan/generator";
 
 export const dynamic = "force-dynamic";
 
@@ -15,18 +19,19 @@ export const dynamic = "force-dynamic";
  *
  * Runs once, right after a user signs up via the /start flow. Reads
  * the signed seed cookie the pre-auth /start page wrote, then:
- *   1. Saves the chosen trail (from the seed's slug) as primary.
- *   2. Seeds userProfile.weeklyTrainingHours + startingFitness from
- *      the bucketed answers so /plan/new can generate a plan
- *      without asking the same questions again.
- *   3. Redirects to /plan/new with a from=cold-start marker so the
- *      plan page can show a warmer "welcome, here's your plan"
- *      state instead of the default wizard step.
+ *   1. Marks the user onboarded + seeds profile fields from bucketed
+ *      answers (skipped for returning users so /start peeks don't
+ *      clobber existing preferences).
+ *   2. Saves the chosen trail as primary.
+ *   3. Auto-generates a plan sized to the objective (mountain_summit
+ *      for mountaineering / high altitude, trail_hike otherwise).
+ *   4. Redirects to /?welcome=cold-start so Home renders the
+ *      welcome banner instead of /welcome pitching them again.
  *
  * Idempotent-ish: if there's no seed cookie or the seed already
  * consumed, we redirect to home. If the trail slug doesn't resolve
- * we skip the trail insert but still seed profile so the user's
- * onboarding isn't blocked.
+ * we skip trail + plan work. Plan generator is itself idempotent
+ * against an existing active plan.
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -45,14 +50,23 @@ export async function GET(req: Request) {
 
   const { weeklyHours, startingFitness } = mapAnswers(seed.answers);
 
-  await db
-    .update(userProfile)
-    .set({
-      weeklyTrainingHours: weeklyHours,
-      startingFitness,
-      updatedAt: new Date(),
-    })
-    .where(eq(userProfile.id, user.id));
+  // Only seed profile fields + mark onboarded for TRULY new users.
+  // A returning user who peeks at /start and picks a trail shouldn't
+  // have their existing weeklyTrainingHours / startingFitness
+  // overwritten by cold-start buckets. Trail-save + plan-gen below
+  // are independently idempotent — safe either way.
+  const isFirstTime = !user.onboardedAt;
+  if (isFirstTime) {
+    await db
+      .update(userProfile)
+      .set({
+        weeklyTrainingHours: weeklyHours,
+        startingFitness,
+        onboardedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(userProfile.id, user.id));
+  }
 
   // Save the trail as primary — the whole hook of cold-start is
   // "you cared about this hike enough to answer three questions;
@@ -97,13 +111,41 @@ export async function GET(req: Request) {
         isPrimary: true,
       });
     }
+
+    // Auto-generate a plan sized to the objective. Idempotent — if the
+    // user already had an active plan we short-circuit. Ship-fast beats
+    // dropping them into a wizard right after they answered three
+    // questions on /start.
+    try {
+      const goalType = inferGoalType(preset);
+      await generateUserPlan({
+        userId: user.id,
+        weeklyHours,
+        startingFitness,
+        goalType,
+        goalEvent: preset.name,
+      });
+    } catch (err) {
+      // Best-effort — plan generation errors shouldn't block the user
+      // from reaching Home. They can always regenerate from /plan/new.
+      console.error("cold-start plan generation failed:", err);
+    }
   }
 
-  // Land the user on the plan generator with the objective + baseline
-  // already filled in. The plan page reads userProfile so it doesn't
-  // need any extra params — from=cold-start just lets the UI say
-  // "here's a plan for {trail}" instead of the generic wizard copy.
-  return NextResponse.redirect(new URL("/plan/new?from=cold-start", url));
+  // Land on Home with a welcome banner. Cold-start users have already
+  // seen the pitch on /start — /welcome would repeat it.
+  return NextResponse.redirect(new URL("/?welcome=cold-start", url));
+}
+
+// Mountaineering + high-altitude presets get the 40-week
+// mountain_summit template; everything else gets the 12-week
+// trail_hike template so Bear Mountain doesn't come back as a
+// 40-week Rainier plan.
+function inferGoalType(preset: TrailPreset): PlanGoalType {
+  if (preset.terrainGrade === "mountaineering") return "mountain_summit";
+  if (preset.terrainGrade === "technical") return "mountain_summit";
+  if (preset.maxAltitudeFt >= 12000) return "mountain_summit";
+  return "trail_hike";
 }
 
 // Cold-start buckets → the plan generator's constraint shape. The

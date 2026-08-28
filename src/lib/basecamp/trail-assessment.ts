@@ -230,14 +230,16 @@ export async function loadFitnessSnapshot(
 
 // -------- Assessment --------
 
-export type DimensionStatus =
-  | "ready" // current capacity already meets/exceeds trail demand
-  | "closable" // gap is reachable within days available
-  | "stretch" // gap is reachable but tight — expect struggle
-  | "not_in_timeframe" // gap can't reasonably be closed
-  | "concern" // recovery/altitude flags
-  | "unknown" // signal missing — don't declare this dim ready OR blocking
-  | "not_applicable";
+import type { DimensionStatus, Verdict } from "./verdict-labels";
+export type { DimensionStatus, Verdict } from "./verdict-labels";
+export {
+  VERDICT_LABEL,
+  VERDICT_COLOR,
+  VERDICT_HEADLINE,
+  VERDICT_SUBHEAD,
+  STATUS_LABEL,
+  STATUS_COLOR,
+} from "./verdict-labels";
 
 export type DimensionAnalysis = {
   key:
@@ -254,12 +256,6 @@ export type DimensionAnalysis = {
   required: string;
   note: string;
 };
-
-export type Verdict =
-  | "comfortable"
-  | "achievable"
-  | "hard"
-  | "do_not_attempt";
 
 export type TrailAssessment = {
   verdict: Verdict;
@@ -1203,43 +1199,9 @@ function estimateWeeksToReady(
   return rounded;
 }
 
-// Verdict ladder — deliberately monotonic and plain-language so users
-// can tell which is easier at a glance. Devin r3 caught that the old
-// "Achievable with focused prep" (achievable) sorted BELOW "Doable —
-// expect to feel it" (hard) alphabetically but ABOVE it semantically,
-// leaving no way to know which was better. New ladder is strictly
-// increasing in difficulty:
-//   Ready > Ready with prep > Hard — stretch objective > Not without prep or a guide
-export const VERDICT_LABEL: Record<Verdict, string> = {
-  comfortable: "Ready",
-  achievable: "Ready with prep",
-  hard: "Hard — stretch objective",
-  do_not_attempt: "Not without prep or a guide",
-};
-
-export const VERDICT_COLOR: Record<Verdict, string> = {
-  comfortable: "text-accent",
-  achievable: "text-blue-300",
-  hard: "text-warn",
-  do_not_attempt: "text-danger",
-};
-
-export const STATUS_COLOR: Record<DimensionStatus, string> = {
-  ready: "text-accent",
-  closable: "text-blue-300",
-  stretch: "text-warn",
-  concern: "text-warn",
-  not_in_timeframe: "text-danger",
-  unknown: "text-muted",
-  not_applicable: "text-muted",
-};
-
-export const STATUS_LABEL: Record<DimensionStatus, string> = {
-  ready: "READY",
-  closable: "CLOSABLE",
-  stretch: "STRETCH",
-  concern: "CONCERN",
-  not_in_timeframe: "GAP",
-  unknown: "UNKNOWN",
-  not_applicable: "N/A",
-};
+// Verdict + status label maps live in ./verdict-labels (leaf module,
+// no DB imports). They're re-exported at the top of this file so
+// existing `import { VERDICT_LABEL } from "trail-assessment"` callers
+// keep working, but client components should import directly from
+// ./verdict-labels to avoid pulling drizzle/postgres into the browser
+// bundle.

@@ -7,6 +7,7 @@ import { trail } from "@/db/schema";
 import { getHomeState, type HomeState } from "@/lib/home/state";
 import { QuestPendingHero } from "@/components/home/quest-pending-hero";
 import { TodayStepsCredit } from "@/components/home/today-steps-credit";
+import { WelcomeBanner } from "@/components/home/welcome-banner";
 import { QuestDoneHero } from "@/components/home/quest-done-hero";
 import { RecapHero } from "@/components/home/recap-hero";
 import { NoSessionHero } from "@/components/home/no-session-hero";
@@ -55,11 +56,18 @@ function daysFromYmd(fromYmd: string, toYmd: string): number {
  * The shape differs per state via TodaySection: session_pending /
  * session_done / post_workout / trip_week / no_session.
  */
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const state = await getHomeState();
 
   if (state.kind === "no_user") redirect("/login");
   if (!state.user.onboardedAt) redirect("/welcome");
+
+  const params = await searchParams;
+  const showColdStartWelcome = params.welcome === "cold-start";
 
   const delta =
     state.kind === "post_workout"
@@ -132,6 +140,12 @@ export default async function HomePage() {
   return (
     <div className="space-y-5">
       {upgradeMoment && <ClassUpOverlay change={upgradeMoment} />}
+
+      {showColdStartWelcome && (
+        <Suspense fallback={null}>
+          <WelcomeBanner userId={state.user.id} />
+        </Suspense>
+      )}
 
       {/* Thin context line. No h1 greeting. */}
       <section>

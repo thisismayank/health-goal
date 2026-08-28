@@ -57,6 +57,10 @@ export default function StartPage() {
             your current fitness, tell you the honest verdict, and — if
             you like it — build a training plan to get you there.
           </p>
+          <p className="text-[11px] text-muted mt-3 italic">
+            Free during beta. Solo dev, mountaineer + software. No card,
+            no upsell.
+          </p>
         </section>
 
         <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">

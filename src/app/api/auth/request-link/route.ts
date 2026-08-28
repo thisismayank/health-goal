@@ -37,12 +37,12 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { token, email: normalized } = await issueMagicLink(email);
+    const { token, code, email: normalized } = await issueMagicLink(email);
     const baseUrl =
       process.env.NEXT_PUBLIC_BASE_URL ??
       new URL(req.url).origin;
     const link = magicLinkUrl(baseUrl, token);
-    const result = await sendMagicLinkEmail(normalized, link);
+    const result = await sendMagicLinkEmail(normalized, link, code);
     if (!result.ok) {
       return NextResponse.json(
         { ok: false, error: "send_failed" },

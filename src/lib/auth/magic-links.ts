@@ -1,9 +1,17 @@
-import { and, count, eq, gte, isNull } from "drizzle-orm";
+import { randomInt } from "node:crypto";
+import { and, count, desc, eq, gte, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { magicLink, userProfile } from "@/db/schema";
 import { generateToken, normalizeEmail } from "./tokens";
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+// 6-digit numeric code, zero-padded. Same TTL and single-use contract
+// as the URL token — the two are just alternate entrances to the same
+// magic_link row.
+function generateCode(): string {
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
+}
 
 // Rate-limit thresholds.
 const PER_EMAIL_WINDOW_MS = 15 * 60 * 1000; // 15 min
@@ -56,6 +64,7 @@ export async function checkMagicLinkRateLimit(
  */
 export async function issueMagicLink(rawEmail: string): Promise<{
   token: string;
+  code: string;
   email: string;
   expiresAt: Date;
   isNewUser: boolean;
@@ -68,16 +77,18 @@ export async function issueMagicLink(rawEmail: string): Promise<{
     .limit(1);
 
   const token = generateToken();
+  const code = generateCode();
   const expiresAt = new Date(Date.now() + MAGIC_LINK_TTL_MS);
 
   await db.insert(magicLink).values({
     token,
+    code,
     requestedEmail: email,
     userId: existing?.id ?? null,
     expiresAt,
   });
 
-  return { token, email, expiresAt, isNewUser: !existing };
+  return { token, code, email, expiresAt, isNewUser: !existing };
 }
 
 /**
@@ -116,6 +127,76 @@ export async function consumeMagicLink(token: string): Promise<
   if (userId == null) {
     // Provision a new user with the requested email. Name defaults to the
     // local-part of the email — user can rename in profile later.
+    const localPart = row.requestedEmail.split("@")[0];
+    const defaultName = localPart
+      .replace(/[._-]+/g, " ")
+      .split(" ")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ") || "Traveler";
+    const [inserted] = await db
+      .insert(userProfile)
+      .values({
+        email: row.requestedEmail,
+        name: defaultName,
+        createdVia: "magic_link",
+      })
+      .returning({ id: userProfile.id });
+    userId = inserted.id;
+    isNewUser = true;
+  }
+
+  await db
+    .update(magicLink)
+    .set({ usedAt: now, userId })
+    .where(eq(magicLink.id, row.id));
+
+  return { ok: true, userId, isNewUser };
+}
+
+/**
+ * Verify a magic-link by (email, 6-digit code). Matches the newest
+ * unused, unexpired row for that (email, code). Returns the same
+ * success/failure shape as consumeMagicLink so the two verify
+ * endpoints can share the post-success flow (create session, cold-
+ * start redirect).
+ *
+ * "invalid" collapses not-found + already-used + typos — we don't
+ * want to leak whether a specific code existed to a brute-force
+ * caller. Rate limiting on request-link keeps issuance in check;
+ * this path also caps repeated wrong guesses via a per-email counter
+ * of recent failed attempts (see checkCodeAttemptLimit).
+ */
+export async function consumeMagicLinkByCode(
+  rawEmail: string,
+  rawCode: string,
+): Promise<
+  | { ok: true; userId: number; isNewUser: boolean }
+  | { ok: false; reason: "invalid" | "expired" }
+> {
+  const email = normalizeEmail(rawEmail);
+  const code = rawCode.trim();
+  if (!/^\d{6}$/.test(code)) return { ok: false, reason: "invalid" };
+
+  const now = new Date();
+  const [row] = await db
+    .select()
+    .from(magicLink)
+    .where(
+      and(
+        eq(magicLink.requestedEmail, email),
+        eq(magicLink.code, code),
+        isNull(magicLink.usedAt),
+      ),
+    )
+    .orderBy(desc(magicLink.createdAt))
+    .limit(1);
+
+  if (!row) return { ok: false, reason: "invalid" };
+  if (row.expiresAt < now) return { ok: false, reason: "expired" };
+
+  let userId = row.userId;
+  let isNewUser = false;
+  if (userId == null) {
     const localPart = row.requestedEmail.split("@")[0];
     const defaultName = localPart
       .replace(/[._-]+/g, " ")

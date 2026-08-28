@@ -4,10 +4,20 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { assessColdStart, startFromColdStart } from "@/app/start/[slug]/actions";
 import type { ColdStartAnswers } from "@/lib/basecamp/synthetic-snapshot";
+import {
+  STATUS_COLOR,
+  STATUS_LABEL,
+  VERDICT_COLOR,
+  VERDICT_HEADLINE,
+  VERDICT_LABEL,
+  VERDICT_SUBHEAD,
+} from "@/lib/basecamp/verdict-labels";
+// Type-only import — erased at runtime, so importing from the
+// server-only trail-assessment module doesn't pull DB code into
+// the client bundle.
 import type {
   DimensionAnalysis,
   TrailAssessment,
-  Verdict,
 } from "@/lib/basecamp/trail-assessment";
 
 /**
@@ -133,55 +143,14 @@ export function ColdStartFlow({
       )}
 
       <p className="text-[11px] text-muted">
-        We don&apos;t save anything until you sign up. The verdict runs on
-        your device from your answers alone — no tracking.
+        We don&apos;t save anything until you sign up. The verdict comes
+        from your three answers — nothing else.
       </p>
     </section>
   );
 }
 
 // -------- pieces --------
-
-const VERDICT_HEADLINE: Record<Verdict, string> = {
-  comfortable: "You're ready.",
-  achievable: "Ready with focused prep.",
-  hard: "Stretch objective — real effort needed.",
-  do_not_attempt: "Not without more prep or a guide.",
-};
-
-const VERDICT_COLOR: Record<Verdict, string> = {
-  comfortable: "text-accent",
-  achievable: "text-blue-300",
-  hard: "text-warn",
-  do_not_attempt: "text-danger",
-};
-
-const VERDICT_LABEL: Record<Verdict, string> = {
-  comfortable: "Ready",
-  achievable: "Ready with prep",
-  hard: "Hard — stretch objective",
-  do_not_attempt: "Not without prep or a guide",
-};
-
-const STATUS_LABEL: Record<DimensionAnalysis["status"], string> = {
-  ready: "READY",
-  closable: "CLOSABLE",
-  stretch: "STRETCH",
-  concern: "CONCERN",
-  not_in_timeframe: "GAP",
-  unknown: "UNKNOWN",
-  not_applicable: "N/A",
-};
-
-const STATUS_COLOR: Record<DimensionAnalysis["status"], string> = {
-  ready: "text-accent",
-  closable: "text-blue-300",
-  stretch: "text-warn",
-  concern: "text-warn",
-  not_in_timeframe: "text-danger",
-  unknown: "text-muted",
-  not_applicable: "text-muted",
-};
 
 function VerdictCard({
   assessment,
@@ -216,31 +185,48 @@ function VerdictCard({
         <div className="text-base font-medium mt-2">
           {VERDICT_HEADLINE[assessment.verdict]}
         </div>
+        <p className="text-sm text-foreground/80 mt-1 leading-relaxed">
+          {VERDICT_SUBHEAD[assessment.verdict]}
+        </p>
         {assessment.weeksToReady != null && (
-          <p className="text-sm text-blue-300/90 mt-2">
-            About {assessment.weeksToReady} week
-            {assessment.weeksToReady === 1 ? "" : "s"} of focused training
-            closes the biggest gap.
+          <p className="text-sm text-blue-300/90 mt-2 leading-relaxed">
+            At your current trajectory, closing the biggest gap takes about{" "}
+            <span className="font-mono font-medium text-blue-200 tabular-nums">
+              {assessment.weeksToReady} week
+              {assessment.weeksToReady === 1 ? "" : "s"}
+            </span>
+            .
           </p>
         )}
       </div>
 
-      <div className="space-y-1.5 pt-2 border-t border-panel-border/60">
-        {assessment.dimensions
-          .filter((d) => d.status !== "not_applicable")
-          .map((d) => (
-            <div
-              key={d.key}
-              className="flex items-baseline justify-between gap-3 text-xs"
-            >
-              <div className="text-foreground/90 capitalize">{d.label}</div>
-              <div
-                className={`font-mono uppercase tracking-wider ${STATUS_COLOR[d.status]}`}
-              >
-                {STATUS_LABEL[d.status]}
-              </div>
-            </div>
-          ))}
+      {assessment.suggestedAdjustments.length > 0 && (
+        <div className="pt-3 border-t border-panel-border/60">
+          <div className="text-xs uppercase tracking-widest text-muted mb-1.5">
+            How to close the gap
+          </div>
+          <ul className="text-sm space-y-1">
+            {assessment.suggestedAdjustments.slice(0, 3).map((s, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-blue-400">▸</span>
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="pt-3 border-t border-panel-border/60 space-y-2">
+        <div className="text-xs uppercase tracking-widest text-muted">
+          Dimensions
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {assessment.dimensions
+            .filter((d) => d.status !== "not_applicable")
+            .map((d) => (
+              <DimensionCompact key={d.key} d={d} />
+            ))}
+        </div>
       </div>
 
       <div className="pt-3 border-t border-panel-border/60 space-y-2">
@@ -255,7 +241,7 @@ function VerdictCard({
             : `Get the training plan for ${short(presetName)} →`}
         </button>
         <div className="text-[11px] text-muted text-center">
-          Signup with email · no password · answers carry over
+          Free · magic-link email · your answers carry into signup
         </div>
         <Link
           href="/start"
@@ -263,6 +249,42 @@ function VerdictCard({
         >
           ← Pick a different hike
         </Link>
+      </div>
+    </div>
+  );
+}
+
+function DimensionCompact({ d }: { d: DimensionAnalysis }) {
+  const barColor =
+    d.status === "ready"
+      ? "bg-accent"
+      : d.status === "closable"
+        ? "bg-blue-400"
+        : d.status === "stretch" || d.status === "concern"
+          ? "bg-warn"
+          : d.status === "not_in_timeframe"
+            ? "bg-danger"
+            : d.status === "unknown"
+              ? "bg-panel-border/60"
+              : "bg-panel-border";
+  return (
+    <div className="rounded-md border border-panel-border bg-panel p-3 space-y-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-sm font-medium">{d.label}</span>
+        <span
+          className={`text-[10px] font-mono uppercase tracking-wider ${STATUS_COLOR[d.status]}`}
+        >
+          [{STATUS_LABEL[d.status]}]
+        </span>
+      </div>
+      <div className="h-1 bg-panel-border rounded overflow-hidden">
+        <div
+          className={`h-full transition-all ${barColor}`}
+          style={{ width: `${Math.max(2, d.ratio * 100)}%` }}
+        />
+      </div>
+      <div className="text-[11px] text-muted">
+        {d.current} → target {d.required}
       </div>
     </div>
   );

@@ -97,3 +97,15 @@ export async function readAndConsumeSeed(): Promise<ColdStartSeed | null> {
   store.delete(COOKIE_NAME);
   return seed;
 }
+
+/**
+ * Peek at the seed without clearing it. Used by /login to tailor copy
+ * ("save your Rainier verdict") to what the user just did on /start.
+ * The consume happens later, at /onboarding/seed.
+ */
+export async function readSeedNoConsume(): Promise<ColdStartSeed | null> {
+  const store = await cookies();
+  const raw = store.get(COOKIE_NAME)?.value;
+  if (!raw) return null;
+  return unpack(raw);
+}

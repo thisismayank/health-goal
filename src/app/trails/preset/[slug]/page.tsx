@@ -13,9 +13,10 @@ import {
   STATUS_COLOR,
   STATUS_LABEL,
   VERDICT_COLOR,
+  VERDICT_HEADLINE,
   VERDICT_LABEL,
+  VERDICT_SUBHEAD,
   type DimensionAnalysis,
-  type Verdict,
 } from "@/lib/basecamp/trail-assessment";
 import { SavePresetButton } from "@/components/trails/save-preset-button";
 import { TrailPhoto } from "@/components/trails/trail-photo";
@@ -29,23 +30,6 @@ import {
 import { formatFt, formatKm, formatPackLb, pickUnits, type Units } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
-
-const VERDICT_HEADLINE: Record<Verdict, string> = {
-  comfortable: "You're ready.",
-  achievable: "Ready with focused prep.",
-  hard: "Stretch objective — real effort needed.",
-  do_not_attempt: "Not without more prep or a guide.",
-};
-
-const VERDICT_SUBHEAD: Record<Verdict, string> = {
-  comfortable:
-    "Your current fitness comfortably meets this trail's demands.",
-  achievable:
-    "Within reach at your current fitness with a short training block. Expect real effort but you'll finish.",
-  hard: "Well above your current fitness. Go slower than the guide time, take breaks, expect to feel it the next day. Read the tips below.",
-  do_not_attempt:
-    "Significant gap between your current fitness/experience and this objective. Attempting at current level risks injury or having to turn back — hire a guide or extend the timeline.",
-};
 
 export default async function PresetDetailPage({
   params,
