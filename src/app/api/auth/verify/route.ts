@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { consumeMagicLink } from "@/lib/auth/magic-links";
 import { createSession, setSessionCookie } from "@/lib/auth/sessions";
+import { track } from "@/lib/analytics/track";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,12 @@ export async function GET(req: Request) {
   // so the answers become their onboarding baseline + the trail is
   // saved as primary. Home routing takes over from there.
   const store = await cookies();
-  if (store.get("cold_start_seed")) {
+  const hasSeed = !!store.get("cold_start_seed");
+  await track("url_verified", {
+    userId: result.userId,
+    properties: { isNewUser: result.isNewUser, hasColdStartSeed: hasSeed },
+  });
+  if (hasSeed) {
     return NextResponse.redirect(new URL("/onboarding/seed", url));
   }
 

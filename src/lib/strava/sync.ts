@@ -18,6 +18,7 @@ import type { StravaActivity } from "./client";
 import { getActivity, listActivitiesSince } from "./client";
 import { mapStravaType } from "./mapping";
 import { getValidTokens } from "./tokens";
+import { track } from "@/lib/analytics/track";
 
 export type SyncResult = {
   activityId: number;
@@ -254,6 +255,20 @@ export async function upsertActivity(
           ),
         );
     }
+  }
+
+  if (action === "created") {
+    await track("workout_logged", {
+      userId,
+      properties: {
+        source: "strava",
+        category,
+        durationMin:
+          typeof a.elapsed_time === "number"
+            ? Math.round(a.elapsed_time / 60)
+            : null,
+      },
+    });
   }
 
   return { activityId: a.id, workoutId, plannedSessionId, action };

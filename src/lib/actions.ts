@@ -26,6 +26,7 @@ import {
 } from "@/db/schema";
 import { getCurrentUser } from "./data";
 import { todayInTimeZone } from "./date";
+import { track } from "./analytics/track";
 import {
   getCumulativeVerticalFt,
   RAINIER_SUMMIT_FT,
@@ -150,6 +151,15 @@ export async function completeSession(input: CompleteSessionInput): Promise<{
   revalidatePath("/");
   revalidatePath("/week");
   revalidatePath("/character");
+
+  await track("workout_logged", {
+    userId: user.id,
+    properties: {
+      source: "manual",
+      category: ps.sessionCategory,
+      durationMin: input.actualDurationMinutes,
+    },
+  });
 
   return {
     workoutId: w.id,

@@ -3,12 +3,14 @@ import { requireOnboardedUser } from "@/lib/data";
 import { getAccountView } from "@/lib/llm/credentials";
 import { CoachConnectForm } from "@/components/coach/connect-form";
 import { CoachChat } from "@/components/coach/coach-chat";
+import { track } from "@/lib/analytics/track";
 
 export const dynamic = "force-dynamic";
 
 export default async function CoachPage() {
   const user = await requireOnboardedUser();
   const view = await getAccountView(user.id);
+  void track("coach_visit", { userId: user.id });
 
   if (!view) {
     return (

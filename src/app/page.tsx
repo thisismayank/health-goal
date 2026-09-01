@@ -9,6 +9,7 @@ import { QuestPendingHero } from "@/components/home/quest-pending-hero";
 import { TodayStepsCredit } from "@/components/home/today-steps-credit";
 import { WelcomeBanner } from "@/components/home/welcome-banner";
 import { IdleBanner } from "@/components/home/idle-banner";
+import { track } from "@/lib/analytics/track";
 import { QuestDoneHero } from "@/components/home/quest-done-hero";
 import { RecapHero } from "@/components/home/recap-hero";
 import { NoSessionHero } from "@/components/home/no-session-hero";
@@ -69,6 +70,11 @@ export default async function HomePage({
 
   const params = await searchParams;
   const showColdStartWelcome = params.welcome === "cold-start";
+
+  // Fire-and-forget: don't await, don't block the render on telemetry.
+  // A one-line insert is cheap enough that awaiting would be fine, but
+  // any stall here would delay first paint on the most-visited surface.
+  void track("home_visit", { userId: state.user.id });
 
   const delta =
     state.kind === "post_workout"

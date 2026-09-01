@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { findTrailBySlug } from "@/lib/basecamp/trail-library";
 import { getFullTrailLibrary } from "@/lib/basecamp/trail-coords";
 import { ColdStartFlow } from "@/components/start/cold-start-flow";
+import { track } from "@/lib/analytics/track";
 
 // Public — no auth. The stranger's 3-question form + verdict card
 // both live on this page; the form's server action recomputes the
@@ -20,6 +21,8 @@ export default async function ColdStartTrailPage({
     findTrailBySlug(slug) ??
     getFullTrailLibrary().find((p) => p.slug === slug);
   if (!preset) notFound();
+
+  await track("start_trail_view", { properties: { slug } });
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

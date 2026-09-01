@@ -14,6 +14,7 @@ import {
   type ColdStartAnswers,
 } from "@/lib/basecamp/synthetic-snapshot";
 import { writeSeed } from "@/lib/cold-start/seed";
+import { track } from "@/lib/analytics/track";
 
 /**
  * Cold-start assessment. Pure — takes the stranger's answers +
@@ -45,6 +46,13 @@ export async function assessColdStart(input: {
     snapshot: snap,
     userClassIndex: 0,
   });
+  await track("verdict_shown", {
+    properties: {
+      slug: input.slug,
+      verdict: assessment.verdict,
+      weeksToReady: assessment.weeksToReady,
+    },
+  });
   return { ok: true, assessment };
 }
 
@@ -58,6 +66,7 @@ export async function startFromColdStart(input: {
   answers: ColdStartAnswers;
 }): Promise<void> {
   await writeSeed({ slug: input.slug, answers: input.answers });
+  await track("get_plan_clicked", { properties: { slug: input.slug } });
   // Login accepts a ?next= parameter; post-login redirects there.
   redirect("/login?next=/onboarding/seed");
 }

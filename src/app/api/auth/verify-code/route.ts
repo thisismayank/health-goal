@@ -5,6 +5,7 @@ import {
 } from "@/lib/auth/magic-links";
 import { createSession, setSessionCookie } from "@/lib/auth/sessions";
 import { isValidEmail } from "@/lib/auth/tokens";
+import { track } from "@/lib/analytics/track";
 
 export const dynamic = "force-dynamic";
 
@@ -57,9 +58,13 @@ export async function POST(req: Request) {
   // Same cold-start handoff as /api/auth/verify — the presence of the
   // seed cookie signals the user came in via the /start public flow.
   const store = await cookies();
-  const redirect = store.get("cold_start_seed")
-    ? "/onboarding/seed"
-    : "/";
+  const hasSeed = !!store.get("cold_start_seed");
+  const redirect = hasSeed ? "/onboarding/seed" : "/";
+
+  await track("code_verified", {
+    userId: result.userId,
+    properties: { isNewUser: result.isNewUser, hasColdStartSeed: hasSeed },
+  });
 
   return NextResponse.json({ ok: true, redirect });
 }

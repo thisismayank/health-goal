@@ -4,6 +4,25 @@ import type { NextRequest } from "next/server";
 
 const REALM = "Basecamp";
 const SESSION_COOKIE = "basecamp_session";
+// Anonymous visitor cookie for product analytics. Set on first
+// request; persists 30 days. Links pre-signup /start traffic to a
+// user's eventual onboarded event so we can measure Reddit → signup
+// conversion. Not auth — the auth session cookie is above.
+const VISITOR_COOKIE = "bcv";
+const VISITOR_TTL_SECONDS = 30 * 24 * 60 * 60;
+// First-touch attribution: any UTM-like params on the entry URL
+// are packed into this cookie once, then attached to the eventual
+// onboarded/signup event by the track() helper.
+const ATTRIBUTION_COOKIE = "bca";
+const ATTRIBUTION_TTL_SECONDS = 30 * 24 * 60 * 60;
+const ATTRIBUTION_PARAMS = [
+  "src",
+  "sub",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+] as const;
 
 // Public routes that bypass the session gate. Auth pages need to be
 // reachable when signed out; webhooks authenticate with their own tokens;
@@ -79,6 +98,16 @@ export function proxy(request: NextRequest) {
   if (basicRejection) return basicRejection;
 
   const { pathname, search } = request.nextUrl;
+  const response = resolveResponse(request, pathname, search);
+  attachAnalyticsCookies(request, response);
+  return response;
+}
+
+function resolveResponse(
+  request: NextRequest,
+  pathname: string,
+  search: string,
+): NextResponse {
   if (isPublicPath(pathname)) return withPathname(request, pathname);
 
   // Session gate: cookie must be present. Actual validity is verified in
@@ -102,6 +131,52 @@ function withPathname(request: NextRequest, pathname: string) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", pathname);
   return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
+// Ensure every request has an anonymous visitor id + capture UTM-like
+// attribution on first touch. Skipped for asset/API paths where the
+// cookie would just be noise; matched to the same real-user surfaces
+// the funnel cares about.
+function attachAnalyticsCookies(
+  request: NextRequest,
+  response: NextResponse,
+): void {
+  const { pathname } = request.nextUrl;
+  if (
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/api/strava/webhook") ||
+    pathname.startsWith("/api/health-import") ||
+    pathname.startsWith("/api/cron/")
+  ) {
+    return;
+  }
+
+  if (!request.cookies.get(VISITOR_COOKIE)) {
+    response.cookies.set(VISITOR_COOKIE, crypto.randomUUID(), {
+      httpOnly: false, // readable client-side for future client events
+      sameSite: "lax",
+      path: "/",
+      maxAge: VISITOR_TTL_SECONDS,
+      secure: process.env.NODE_ENV === "production",
+    });
+  }
+
+  if (!request.cookies.get(ATTRIBUTION_COOKIE)) {
+    const attribution: Record<string, string> = {};
+    for (const key of ATTRIBUTION_PARAMS) {
+      const val = request.nextUrl.searchParams.get(key);
+      if (val) attribution[key] = val.slice(0, 200);
+    }
+    if (Object.keys(attribution).length > 0) {
+      response.cookies.set(ATTRIBUTION_COOKIE, JSON.stringify(attribution), {
+        httpOnly: false,
+        sameSite: "lax",
+        path: "/",
+        maxAge: ATTRIBUTION_TTL_SECONDS,
+        secure: process.env.NODE_ENV === "production",
+      });
+    }
+  }
 }
 
 export const config = {

@@ -1,6 +1,8 @@
 import {
   boolean,
+  index,
   integer,
+  jsonb,
   pgTable,
   real,
   serial,
@@ -745,6 +747,32 @@ export const trailCompletion = pgTable("trail_completion", {
     .notNull()
     .defaultNow(),
 });
+
+// Product analytics event stream. Append-only, minimal shape. userId
+// is null for pre-signup traffic (the anonymous sessionId links a
+// stranger's /start visit to their eventual signup). properties is
+// a small blob for event-specific context (trail slug, verdict
+// value, source utm, etc.) — kept flexible on purpose.
+export const event = pgTable(
+  "event",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => userProfile.id, {
+      onDelete: "set null",
+    }),
+    sessionId: text("session_id").notNull(),
+    name: text("name").notNull(),
+    properties: jsonb("properties"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("event_created_at_idx").on(t.createdAt),
+    index("event_name_created_at_idx").on(t.name, t.createdAt),
+    index("event_session_id_idx").on(t.sessionId),
+  ],
+);
 
 export type UserProfile = typeof userProfile.$inferSelect;
 export type TrainingPlan = typeof trainingPlan.$inferSelect;

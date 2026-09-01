@@ -11,6 +11,7 @@ import {
 import { getFullTrailLibrary } from "@/lib/basecamp/trail-coords";
 import type { ColdStartAnswers } from "@/lib/basecamp/synthetic-snapshot";
 import { generateUserPlan } from "@/lib/plan/generator";
+import { track } from "@/lib/analytics/track";
 
 export const dynamic = "force-dynamic";
 
@@ -131,6 +132,16 @@ export async function GET(req: Request) {
       console.error("cold-start plan generation failed:", err);
     }
   }
+
+  await track("onboarded", {
+    userId: user.id,
+    properties: {
+      slug: seed.slug,
+      weeklyHours,
+      startingFitness,
+      firstTime: isFirstTime,
+    },
+  });
 
   // Land on Home with a welcome banner. Cold-start users have already
   // seen the pitch on /start — /welcome would repeat it.

@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth/magic-links";
 import { sendMagicLinkEmail } from "@/lib/auth/email";
 import { isValidEmail } from "@/lib/auth/tokens";
+import { track } from "@/lib/analytics/track";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
 
   try {
     const { token, code, email: normalized } = await issueMagicLink(email);
+    await track("email_entered", { properties: { email: normalized } });
     const baseUrl =
       process.env.NEXT_PUBLIC_BASE_URL ??
       new URL(req.url).origin;

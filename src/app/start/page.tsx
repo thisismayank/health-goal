@@ -3,10 +3,13 @@ import { findTrailBySlug } from "@/lib/basecamp/trail-library";
 import { getFullTrailLibrary } from "@/lib/basecamp/trail-coords";
 import { HERO_TRAILS } from "@/lib/basecamp/hero-trails";
 import { TrailPhoto } from "@/components/trails/trail-photo";
+import { track } from "@/lib/analytics/track";
 
 // Public — no auth. A stranger's first tap should already be about
-// picking a hike, not signing up.
-export const dynamic = "force-static";
+// picking a hike, not signing up. Force-dynamic so we can record the
+// visit event server-side; static rendering would skip the track()
+// call for repeat visitors.
+export const dynamic = "force-dynamic";
 
 /**
  * Cold-start landing. Grid of 6-8 hero trails a stranger recognizes
@@ -15,7 +18,9 @@ export const dynamic = "force-static";
  * verdict card in one screen. Signup only comes AFTER they've seen
  * a personalized read on the objective they care about.
  */
-export default function StartPage() {
+export default async function StartPage() {
+  await track("start_visit");
+
   const trails = HERO_TRAILS.map((h) => {
     const preset =
       findTrailBySlug(h.slug) ??
