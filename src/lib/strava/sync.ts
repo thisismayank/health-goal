@@ -33,7 +33,21 @@ export async function syncActivity(
   const tokens = await getValidTokens(userId);
   if (!tokens) throw new Error("No Strava account for user");
   const activity = await getActivity(tokens.accessToken, activityId);
-  return upsertActivity(userId, activity);
+  const result = await upsertActivity(userId, activity);
+
+  // Best-effort passport auto-link. syncStravaActivities (batch path)
+  // already runs auto-link after import; the single-activity path
+  // (Strava webhook, one hike at a time) was missing it, so real
+  // webhook-delivered hikes weren't landing in the passport until the
+  // user manually hit "Sync now." Naches Loop was the offender that
+  // surfaced this.
+  try {
+    const { autoLinkPassport } = await import("@/lib/passport/auto-link");
+    await autoLinkPassport(userId);
+  } catch (e) {
+    console.warn("[strava/syncActivity] passport auto-link failed:", e);
+  }
+  return result;
 }
 
 export async function upsertActivity(

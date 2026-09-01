@@ -8,6 +8,7 @@ import { getHomeState, type HomeState } from "@/lib/home/state";
 import { QuestPendingHero } from "@/components/home/quest-pending-hero";
 import { TodayStepsCredit } from "@/components/home/today-steps-credit";
 import { WelcomeBanner } from "@/components/home/welcome-banner";
+import { IdleBanner } from "@/components/home/idle-banner";
 import { QuestDoneHero } from "@/components/home/quest-done-hero";
 import { RecapHero } from "@/components/home/recap-hero";
 import { NoSessionHero } from "@/components/home/no-session-hero";
@@ -146,6 +147,10 @@ export default async function HomePage({
           <WelcomeBanner userId={state.user.id} />
         </Suspense>
       )}
+
+      <Suspense fallback={null}>
+        <IdleBanner userId={state.user.id} />
+      </Suspense>
 
       {/* Thin context line. No h1 greeting. */}
       <section>

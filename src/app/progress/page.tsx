@@ -7,8 +7,10 @@ import { requireOnboardedUser } from "@/lib/data";
 import { todayInTimeZone } from "@/lib/date";
 import {
   computeCharacterSheet,
+  computeWeeklyVolumeDelta,
   type CharacterSheet,
   type Stat,
+  type WeeklyVolumeDelta,
 } from "@/lib/basecamp/stats";
 import { computeRank } from "@/lib/basecamp/rank";
 import { CoachCardSkeleton } from "@/components/coach-cards";
@@ -19,7 +21,15 @@ export const dynamic = "force-dynamic";
 export default async function ProgressPage() {
   const user = await requireOnboardedUser();
 
-  const sheet = await computeCharacterSheet(user.id);
+  const now = new Date();
+  const [sheet, volumeDelta] = await Promise.all([
+    computeCharacterSheet(user.id),
+    // Recent-behavior signal for the trend arrows. Character-sheet
+    // values are 60-90d rolling averages by design; a real 7d slack
+    // barely nudges them. Volume delta directly compares this week's
+    // minutes/sets/vertical vs last week's, which moves.
+    computeWeeklyVolumeDelta(user.id, now),
+  ]);
   const rank = computeRank(sheet);
   const today = todayInTimeZone(user.timezone);
 
@@ -148,7 +158,15 @@ export default async function ProgressPage() {
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {(["STR", "END", "POW", "REC", "WILL"] as const).map((k) => (
-            <StatCard key={k} stat={sheet.stats[k]} />
+            <StatCard
+              key={k}
+              stat={sheet.stats[k]}
+              trend={
+                k === "STR" || k === "END" || k === "POW"
+                  ? volumeDelta[k]
+                  : null
+              }
+            />
           ))}
         </div>
         <p className="text-xs text-muted italic">
@@ -263,7 +281,13 @@ function SystemPanel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StatCard({ stat }: { stat: Stat }) {
+function StatCard({
+  stat,
+  trend,
+}: {
+  stat: Stat;
+  trend: WeeklyVolumeDelta | null;
+}) {
   const tone =
     stat.value >= 70
       ? "text-blue-300"
@@ -277,6 +301,23 @@ function StatCard({ stat }: { stat: Stat }) {
         ? "bg-blue-500/60"
         : "bg-blue-500/30";
 
+  // Show trend when we have a divisible baseline. When prev week was
+  // zero (or when the user just started training), skip — a % change
+  // off zero is meaningless.
+  const showTrend = trend != null && trend.pct != null;
+  const glyph =
+    showTrend && trend!.pct! > 0
+      ? "↗"
+      : showTrend && trend!.pct! < 0
+        ? "↘"
+        : "→";
+  const trendTone =
+    showTrend && trend!.pct! > 0
+      ? "text-accent"
+      : showTrend && trend!.pct! < 0
+        ? "text-warn"
+        : "text-muted";
+
   return (
     <div className="rounded-md border border-panel-border bg-panel p-4 space-y-2">
       <div className="flex items-baseline justify-between">
@@ -286,9 +327,22 @@ function StatCard({ stat }: { stat: Stat }) {
           </span>
           <span className="ml-2 text-xs text-muted">{stat.label}</span>
         </div>
-        <span className={`text-2xl font-mono font-semibold tabular-nums ${tone}`}>
-          {stat.value}
-        </span>
+        <div className="flex items-baseline gap-2">
+          {showTrend && (
+            <span
+              className={`text-xs font-mono tabular-nums ${trendTone}`}
+              title={`${trend!.thisWeek} ${trend!.unit} this week · ${trend!.prevWeek} last week`}
+            >
+              {glyph} {trend!.pct! > 0 ? "+" : ""}
+              {trend!.pct}%
+            </span>
+          )}
+          <span
+            className={`text-2xl font-mono font-semibold tabular-nums ${tone}`}
+          >
+            {stat.value}
+          </span>
+        </div>
       </div>
       <div className="h-1 bg-panel-border rounded overflow-hidden">
         <div

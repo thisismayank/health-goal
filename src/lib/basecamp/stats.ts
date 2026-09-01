@@ -5,7 +5,7 @@
  * Historical peaks do NOT count; capabilities decay if not practiced.
  */
 
-import { and, desc, eq, gte, notInArray, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, lte, notInArray, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   dailyMetric,
@@ -82,6 +82,11 @@ export type ComputeOpts = {
   // workout marked one session complete, but the "before" WILL should
   // reflect the state before that mark.
   excludeCompletedPlannedSessionIds?: number[];
+  // "As of" timestamp — defaults to right now. When set to a past
+  // date, the workout-driven compute functions clamp their upper
+  // bound so we get an honest historical snapshot for trend arrows
+  // ("STR was 42 seven days ago, now 40 → ↘ 2 pts").
+  now?: Date;
 };
 
 function withExclusion(
@@ -125,7 +130,11 @@ async function computeStr(userId: number, now: Date, opts?: ComputeOpts): Promis
     .innerJoin(workout, eq(strengthExercise.workoutId, workout.id))
     .where(
       withExclusion(
-        and(eq(workout.userId, userId), gte(workout.startTime, windowStart))!,
+        and(
+          eq(workout.userId, userId),
+          gte(workout.startTime, windowStart),
+          lte(workout.startTime, now),
+        )!,
         opts?.excludeWorkoutIds,
       ),
     );
@@ -215,7 +224,11 @@ async function computeEnd(userId: number, now: Date, opts?: ComputeOpts): Promis
     .from(workout)
     .where(
       withExclusion(
-        and(eq(workout.userId, userId), gte(workout.startTime, windowStart))!,
+        and(
+          eq(workout.userId, userId),
+          gte(workout.startTime, windowStart),
+          lte(workout.startTime, now),
+        )!,
         opts?.excludeWorkoutIds,
       ),
     );
@@ -276,7 +289,11 @@ async function computePow(userId: number, now: Date, opts?: ComputeOpts): Promis
     .from(workout)
     .where(
       withExclusion(
-        and(eq(workout.userId, userId), gte(workout.startTime, windowStart))!,
+        and(
+          eq(workout.userId, userId),
+          gte(workout.startTime, windowStart),
+          lte(workout.startTime, now),
+        )!,
         opts?.excludeWorkoutIds,
       ),
     );
@@ -485,7 +502,7 @@ export async function computeCharacterSheet(
   userId: number,
   opts?: ComputeOpts,
 ): Promise<CharacterSheet> {
-  const now = new Date();
+  const now = opts?.now ?? new Date();
   const [STR, END, POW, REC, WILL] = await Promise.all([
     computeStr(userId, now, opts),
     computeEnd(userId, now, opts),
@@ -501,4 +518,114 @@ export async function computeCharacterSheet(
 
 export function currentStreakFromSheet(sheet: CharacterSheet): number {
   return (sheet.stats.WILL.evidence.streak as number) ?? 0;
+}
+
+/**
+ * Short-window volume delta per stat. The character sheet value sits
+ * on a 60-90 day rolling average that barely moves week-to-week by
+ * design — great for "capacity" but useless for a "did you slow down?"
+ * trend arrow. This function directly compares last-7-days activity
+ * vs the prior 7 days per dimension, so a real change in behaviour
+ * shows up immediately.
+ *
+ * unit is the natural input for the dim: minutes (END), sets (STR),
+ * feet climbed (POW). Only surfaced when the prior week had a non-
+ * trivial baseline to divide against — otherwise "went from 0 to 30
+ * min" is +∞ which is meaningless as a %.
+ */
+export type WeeklyVolumeDelta = {
+  key: "STR" | "END" | "POW";
+  unit: string;
+  thisWeek: number;
+  prevWeek: number;
+  pct: number | null; // null when prevWeek == 0
+};
+
+export async function computeWeeklyVolumeDelta(
+  userId: number,
+  now: Date,
+): Promise<Record<"STR" | "END" | "POW", WeeklyVolumeDelta>> {
+  const oneWeekAgo = shiftDate(now, -7);
+  const twoWeeksAgo = shiftDate(now, -14);
+
+  // Two windows in a single query, tagged in code.
+  const rows = await db
+    .select({
+      startTime: workout.startTime,
+      type: workout.type,
+      durationSeconds: workout.durationSeconds,
+      elevationGainMeters: workout.elevationGainMeters,
+    })
+    .from(workout)
+    .where(
+      and(
+        eq(workout.userId, userId),
+        gte(workout.startTime, twoWeeksAgo),
+        lte(workout.startTime, now),
+      ),
+    );
+
+  const strengthRows = await db
+    .select({
+      startTime: workout.startTime,
+    })
+    .from(strengthExercise)
+    .innerJoin(workout, eq(strengthExercise.workoutId, workout.id))
+    .where(
+      and(
+        eq(workout.userId, userId),
+        gte(workout.startTime, twoWeeksAgo),
+        lte(workout.startTime, now),
+      ),
+    );
+
+  const inThisWeek = (t: Date): boolean => t >= oneWeekAgo && t <= now;
+  const inPrevWeek = (t: Date): boolean =>
+    t >= twoWeeksAgo && t < oneWeekAgo;
+
+  // END: aerobic + mountain minutes
+  const aerobic = rows.filter(
+    (r) => AEROBIC_CATS.includes(r.type) || MOUNTAIN_CATS.includes(r.type),
+  );
+  const endThis = aerobic
+    .filter((r) => inThisWeek(r.startTime))
+    .reduce((s, r) => s + (r.durationSeconds ?? 0) / 60, 0);
+  const endPrev = aerobic
+    .filter((r) => inPrevWeek(r.startTime))
+    .reduce((s, r) => s + (r.durationSeconds ?? 0) / 60, 0);
+
+  // STR: hard-set count (using the same strengthExercise join stats
+  // uses; each row is a set)
+  const strThis = strengthRows.filter((r) => inThisWeek(r.startTime)).length;
+  const strPrev = strengthRows.filter((r) => inPrevWeek(r.startTime)).length;
+
+  // POW: cumulative vertical (ft) from workouts with elevation gain
+  const powThis = rows
+    .filter((r) => inThisWeek(r.startTime))
+    .reduce((s, r) => s + (r.elevationGainMeters ?? 0) * 3.281, 0);
+  const powPrev = rows
+    .filter((r) => inPrevWeek(r.startTime))
+    .reduce((s, r) => s + (r.elevationGainMeters ?? 0) * 3.281, 0);
+
+  const asDelta = (
+    key: "STR" | "END" | "POW",
+    unit: string,
+    thisWeek: number,
+    prevWeek: number,
+  ): WeeklyVolumeDelta => ({
+    key,
+    unit,
+    thisWeek: Math.round(thisWeek),
+    prevWeek: Math.round(prevWeek),
+    pct:
+      prevWeek > 0
+        ? Math.round(((thisWeek - prevWeek) / prevWeek) * 100)
+        : null,
+  });
+
+  return {
+    END: asDelta("END", "min", endThis, endPrev),
+    STR: asDelta("STR", "sets", strThis, strPrev),
+    POW: asDelta("POW", "ft", powThis, powPrev),
+  };
 }
