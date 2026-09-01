@@ -18,6 +18,7 @@ import {
   VERDICT_SUBHEAD,
   type DimensionAnalysis,
 } from "@/lib/basecamp/trail-assessment";
+import { computeDecayState } from "@/lib/basecamp/decay";
 import { SavePresetButton } from "@/components/trails/save-preset-button";
 import { TrailPhoto } from "@/components/trails/trail-photo";
 import { getSquadCompletionsForPreset } from "@/lib/squad/queries";
@@ -79,6 +80,12 @@ export default async function PresetDetailPage({
   const rank = computeRank(await computeCharacterSheet(user.id));
   const personalHours = estimatePersonalHours(preset.typicalHours, rank.current);
   const units = pickUnits(user);
+
+  // Decay context — surface the "you're X% off peak" honest read when
+  // the user has been idle enough that the current verdict reflects
+  // detraining, not lack of underlying capacity. Silent when fresh.
+  const decay = await computeDecayState(user.id, new Date());
+  const decaySubline = buildDecaySubline(decay);
 
   return (
     <div className="space-y-5">
@@ -222,6 +229,11 @@ export default async function PresetDetailPage({
                 {assessment.weeksToReady === 1 ? "" : "s"}
               </span>
               .
+            </p>
+          )}
+          {decaySubline && (
+            <p className="text-xs text-warn/90 mt-2 leading-relaxed border-l-2 border-warn/40 pl-2">
+              {decaySubline}
             </p>
           )}
         </div>
@@ -499,4 +511,32 @@ function formatMinutes(m: number): string {
   const mm = m % 60;
   if (h === 0) return `${mm}m`;
   return mm === 0 ? `${h}h` : `${h}h ${mm}m`;
+}
+
+// Verdict card decay honesty. Says out loud that the verdict reflects
+// current fitness, not underlying capacity, when the user is idle
+// enough that decay meaningfully moves the number.
+//
+// Threshold: ≥10% loss on the worst decayable dim (aerobic/vertical/
+// pack). Below that, the drift is inside the honest-noise floor and
+// mentioning it would read as scolding. Silent when there's no data.
+type DecayLike = Awaited<ReturnType<typeof computeDecayState>>;
+function buildDecaySubline(state: DecayLike): string | null {
+  if (state.idleDays == null || state.idleDays < 5) return null;
+  const decayable = state.dims.filter(
+    (d) => d.dim === "aerobic" || d.dim === "vertical" || d.dim === "pack",
+  );
+  const worst = decayable.reduce(
+    (a, b) => (b.lossPct > a.lossPct ? b : a),
+    decayable[0],
+  );
+  if (!worst || worst.lossPct < 0.1) return null;
+  const dimLabel =
+    worst.dim === "aerobic"
+      ? "endurance"
+      : worst.dim === "vertical"
+        ? "vertical"
+        : "pack";
+  const pct = Math.round(worst.lossPct * 100);
+  return `Heads up: ${state.idleDays} days off has your ${dimLabel} ~${pct}% below its recent peak. This verdict reflects current fitness — the plan rebuilds most of it in the first 2 weeks back.`;
 }
