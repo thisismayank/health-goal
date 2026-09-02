@@ -11,7 +11,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx --env-file=.env.local src/db/seed.ts",
-    "strava:setup-webhook": "tsx --env-file=.env.local scripts/strava-webhook-setup.ts"
+    "strava:setup-webhook": "tsx --env-file=.env.local scripts/strava-webhook-setup.ts",
+    "verify:personas": "tsx --env-file=.env.local scripts/verify-personas.ts"
   },
   "dependencies": {
     "@google/genai": "^2.17.1",
