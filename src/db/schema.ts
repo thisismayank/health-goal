@@ -24,6 +24,11 @@ export const userProfile = pgTable(
     // install (Mayank), "magic_link" for self-service signups, "invite" for
     // squad invites once that ships.
     createdVia: text("created_via").notNull().default("magic_link"),
+    // Raw ColdStartAnswers JSON from the /start flow, persisted so the
+    // verdict engine can layer a self-reported baseline into
+    // FitnessSnapshot post-signup. Prevents the "verdict silently
+    // degrades after email handoff" bug the Reddit-launch test caught.
+    coldStartAnswers: jsonb("cold_start_answers"),
     sex: text("sex"),
     heightCm: real("height_cm"),
     currentWeightKg: real("current_weight_kg"),

@@ -63,6 +63,12 @@ export async function GET(req: Request) {
       .set({
         weeklyTrainingHours: weeklyHours,
         startingFitness,
+        // Persist raw answers — the verdict engine layers them into
+        // FitnessSnapshot as a permanent per-dim floor so the
+        // verdict doesn't silently degrade the moment the user
+        // hands over their email. Devin's Reddit-launch test caught
+        // the failure mode this fixes.
+        coldStartAnswers: seed.answers,
         onboardedAt: new Date(),
         updatedAt: new Date(),
       })

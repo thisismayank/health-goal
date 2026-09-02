@@ -35,16 +35,17 @@ export async function assessColdStart(input: {
   if (!preset) return { ok: false, error: "Trail not found" };
 
   const snap = synthSnapshot(input.answers);
-  // Anon sentinel userId — assessTrail ignores userId when both
-  // snapshot and userClassIndex are provided (verified by tracing
-  // the analyzers; no DB queries on this path).
+  // Anon sentinel userId — assessTrail ignores userId when snapshot
+  // + userClassIndex are provided (verified by tracing the analyzers;
+  // no DB queries on this path).
   const virtual = presetToVirtualTrail(preset, -1);
-  // Class E baseline for cold-start. Terrain gate still catches
-  // mountaineering / technical requirements independent of the
-  // user's aerobic self-report — that's the safety net.
+  // Class comes from the same 3 answers, capped at C. Flagged
+  // unverified so analyzeTerrain returns UNKNOWN (not READY) when
+  // the class meets the trail's requirement — safety guardrail.
   const assessment = await assessTrail(-1, virtual, todayInTimeZone("UTC"), {
     snapshot: snap,
-    userClassIndex: 0,
+    userClassIndex: snap.classIndex,
+    userClassVerified: snap.classVerified,
   });
   await track("verdict_shown", {
     properties: {

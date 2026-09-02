@@ -221,7 +221,7 @@ export default async function PresetDetailPage({
           <p className="text-sm text-foreground/80 mt-1 leading-relaxed">
             {VERDICT_SUBHEAD[assessment.verdict]}
           </p>
-          {assessment.weeksToReady != null && (
+          {assessment.weeksToReady != null ? (
             <p className="text-sm text-blue-300/90 mt-2 leading-relaxed">
               At your current trajectory, closing the biggest gap takes about{" "}
               <span className="font-mono font-medium text-blue-200 tabular-nums">
@@ -230,7 +230,13 @@ export default async function PresetDetailPage({
               </span>
               .
             </p>
-          )}
+          ) : assessment.verdict !== "comfortable" &&
+            assessment.verdict !== "do_not_attempt" ? (
+            <p className="text-sm text-muted mt-2 leading-relaxed">
+              Not enough recent training to estimate weeks-to-ready yet. Log
+              a couple sessions or connect Strava and this fills in.
+            </p>
+          ) : null}
           {decaySubline && (
             <p className="text-xs text-warn/90 mt-2 leading-relaxed border-l-2 border-warn/40 pl-2">
               {decaySubline}

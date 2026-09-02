@@ -188,7 +188,7 @@ function VerdictCard({
         <p className="text-sm text-foreground/80 mt-1 leading-relaxed">
           {VERDICT_SUBHEAD[assessment.verdict]}
         </p>
-        {assessment.weeksToReady != null && (
+        {assessment.weeksToReady != null ? (
           <p className="text-sm text-blue-300/90 mt-2 leading-relaxed">
             At your current trajectory, closing the biggest gap takes about{" "}
             <span className="font-mono font-medium text-blue-200 tabular-nums">
@@ -197,7 +197,14 @@ function VerdictCard({
             </span>
             .
           </p>
-        )}
+        ) : assessment.verdict !== "comfortable" &&
+          assessment.verdict !== "do_not_attempt" ? (
+          <p className="text-sm text-muted mt-2 leading-relaxed">
+            Not enough to estimate weeks-to-ready from three answers alone —
+            the plan builds toward the peak and this number fills in as
+            training accumulates.
+          </p>
+        ) : null}
       </div>
 
       {assessment.suggestedAdjustments.length > 0 && (

@@ -1,0 +1,1 @@
+ALTER TABLE "user_profile" ADD COLUMN "cold_start_answers" jsonb;

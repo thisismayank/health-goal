@@ -12,6 +12,7 @@ import {
   plannedSession,
   strengthExercise,
   trainingPlan,
+  userProfile,
   workout,
   type SessionCategory,
 } from "@/db/schema";
@@ -422,6 +423,21 @@ async function computeWill(userId: number, now: Date, opts?: ComputeOpts): Promi
   const todayStr = ymd(now);
   const excluded = new Set(opts?.excludeCompletedPlannedSessionIds ?? []);
 
+  // Compliance denominator must not include sessions from BEFORE
+  // the user was onboarded. Plan generator sets start_date to the
+  // Monday of the signup week — so a Wednesday signup would inherit
+  // Monday and Tuesday as "missed" sessions. Devin's Reddit-launch
+  // test flagged this: Alex logged his first session on day 1 and
+  // /progress read "Low overall compliance at 33%".
+  const [profile] = await db
+    .select({ onboardedAt: userProfile.onboardedAt })
+    .from(userProfile)
+    .where(eq(userProfile.id, userId))
+    .limit(1);
+  const complianceStartStr = profile?.onboardedAt
+    ? ymd(profile.onboardedAt)
+    : ymd(windowStart);
+
   const [plan] = await db
     .select()
     .from(trainingPlan)
@@ -439,7 +455,9 @@ async function computeWill(userId: number, now: Date, opts?: ComputeOpts): Promi
           gte(plannedSession.date, ymd(windowStart)),
         ),
       );
-    const past = sessions.filter((s) => s.date <= todayStr);
+    const past = sessions.filter(
+      (s) => s.date <= todayStr && s.date >= complianceStartStr,
+    );
     const completed = past.filter(
       (s) => s.status === "completed" && !excluded.has(s.id),
     ).length;

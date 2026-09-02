@@ -56,6 +56,19 @@ export type FitnessSnapshot = {
   squatEst1RmKg: number | null;
   loadedHikes8w: number;
   bodyweightKg: number | null;
+  // Provenance flags for consequential dimensions. Self-report from
+  // cold-start answers can populate maxAltitudeReachedFt + provide
+  // a class-index hint, but must NOT translate into a green verdict
+  // on altitude or terrain — those are safety-critical. When these
+  // are false, analyzeAltitude/analyzeTerrain return UNKNOWN even
+  // when the numeric requirement is met (UNKNOWN doesn't cap the
+  // verdict downward; it just declines to award green).
+  altitudeVerified: boolean;
+  // Class index derived from workouts/completions when available;
+  // falls back to classFromColdStartAnswers when only the cold-start
+  // baseline exists. classVerified says which path produced it.
+  classIndex: number;
+  classVerified: boolean;
 };
 
 const AEROBIC_CATS = [
@@ -189,11 +202,53 @@ export async function loadFitnessSnapshot(
   }
 
   const [profile] = await db
-    .select({ currentWeightKg: userProfile.currentWeightKg })
+    .select({
+      currentWeightKg: userProfile.currentWeightKg,
+      coldStartAnswers: userProfile.coldStartAnswers,
+    })
     .from(userProfile)
     .where(eq(userProfile.id, userId))
     .limit(1);
   const bodyweightKg = profile?.currentWeightKg ?? null;
+
+  // Cold-start baseline. Persisted at /onboarding/seed from the 3
+  // /start answers. Layered here as a permanent per-dimension FLOOR,
+  // never a decaying override — real workout data always wins where
+  // it exists, so the baseline naturally fades as workouts accumulate.
+  const { synthSnapshot } = await import("./synthetic-snapshot");
+  const { classFromColdStartAnswers } = await import("./cold-start-baseline");
+  const coldStart = profile?.coldStartAnswers as
+    | Parameters<typeof synthSnapshot>[0]
+    | null
+    | undefined;
+  const baseline = coldStart ? synthSnapshot(coldStart) : null;
+
+  // Altitude verification: any completed trail with maxAltitudeFt >= 8k
+  // counts as real evidence. Below that threshold is Front Range / east
+  // coast, no meaningful altitude signal.
+  const { trail: trailTbl, trailCompletion } = await import("@/db/schema");
+  const maxCompleted = await db
+    .select({ ft: trailTbl.maxAltitudeFt })
+    .from(trailCompletion)
+    .innerJoin(trailTbl, eq(trailTbl.id, trailCompletion.trailId))
+    .where(eq(trailCompletion.userId, userId));
+  const measuredMaxAlt = maxCompleted.reduce(
+    (m, r) => Math.max(m, r.ft ?? 0),
+    0,
+  );
+  const altitudeVerified = measuredMaxAlt >= 8000;
+  const maxAltitudeReachedFt = altitudeVerified
+    ? measuredMaxAlt
+    : (baseline?.maxAltitudeReachedFt ?? null);
+
+  // Class index: prefer workout-derived when it beats cold-start.
+  // Cold-start class is unverified (skills can't be self-reported
+  // credibly) so classVerified is only true when workout data
+  // matches or exceeds it.
+  const workoutClassIdx = await deriveUserClassIndex(userId);
+  const baselineClassIdx = coldStart ? classFromColdStartAnswers(coldStart) : 0;
+  const classIndex = Math.max(workoutClassIdx, baselineClassIdx);
+  const classVerified = workoutClassIdx >= baselineClassIdx;
 
   const today = ymd(now);
   const [rhr, hrv, sleep] = await Promise.all([
@@ -211,12 +266,27 @@ export async function loadFitnessSnapshot(
   const vo2Max = vo2Rows.find((r) => r.vo2Max != null)?.vo2Max ?? null;
 
   return {
-    longestRecentSessionMin: longestRecentMin,
-    weeklyAerobicMinutes: weeklyAerobic,
-    maxSingleSessionVertFt,
-    cumulative90dVertFt,
+    longestRecentSessionMin: Math.max(
+      longestRecentMin,
+      baseline?.longestRecentSessionMin ?? 0,
+    ),
+    weeklyAerobicMinutes: Math.max(
+      weeklyAerobic,
+      baseline?.weeklyAerobicMinutes ?? 0,
+    ),
+    maxSingleSessionVertFt: Math.max(
+      maxSingleSessionVertFt,
+      baseline?.maxSingleSessionVertFt ?? 0,
+    ),
+    cumulative90dVertFt: Math.max(
+      cumulative90dVertFt,
+      baseline?.cumulative90dVertFt ?? 0,
+    ),
     maxPackLb,
-    maxAltitudeReachedFt: null,
+    maxAltitudeReachedFt,
+    altitudeVerified,
+    classIndex,
+    classVerified,
     rhr,
     hrv,
     sleepAvgHours: sleep.baseline != null ? +(sleep.baseline / 60).toFixed(1) : null,
@@ -436,7 +506,12 @@ function analyzeEndurance(
     status,
     ratio: combinedRatio,
     current: `${longest} min longest · ${weekly} min/week (4-wk avg)`,
-    required: `~${Math.round(longestReadyMin)} min longest · ~${Math.round(weeklyReadyMin)} min/week`,
+    // Peak-week demand — what a fully-trained athlete carries into
+    // trip week. The training plan builds toward this over weeks;
+    // it is NOT the immediate ask. Amendment from Devin's launch
+    // test — "1260 min/week" on the card next to an 80 min/week
+    // plan read as a bug.
+    required: `peak-week demand: ~${Math.round(longestReadyMin)} min longest · ~${Math.round(weeklyReadyMin)} min/week (plan builds to this)`,
     note: notes[status],
   };
 }
@@ -664,7 +739,14 @@ function analyzeAltitude(
   weeksAvail: number,
 ): DimensionAnalysis {
   const alt = trail.maxAltitudeFt;
-  const known = snap.maxAltitudeReachedFt;
+  // Safety guardrail on consequential dim: self-reported prior high
+  // altitude is used for DISPLAY (the user still sees what they
+  // answered) but NOT for gating credit. An unverified "above 14k"
+  // claim can't unlock a green verdict on an 18k expedition. Once
+  // the user completes a real trail with altitude, altitudeVerified
+  // flips true and the credit lands.
+  const knownDisplay = snap.maxAltitudeReachedFt;
+  const known = snap.altitudeVerified ? snap.maxAltitudeReachedFt : null;
 
   // Multi-day treks bake acclimatization into the itinerary (climb
   // high, sleep low over N days). Guided summit pushes (Rainier DC,
@@ -779,8 +861,10 @@ function analyzeAltitude(
               ? 0.4
               : 0.3,
     current:
-      known != null
-        ? `last high point: ${known.toLocaleString()} ft`
+      knownDisplay != null
+        ? snap.altitudeVerified
+          ? `last high point: ${knownDisplay.toLocaleString()} ft`
+          : `your answer: ${knownDisplay.toLocaleString()} ft (unverified — log a real hike at altitude)`
         : "no altitude history",
     required: `${alt.toLocaleString()} ft${acclimatizationBuffer > 0 ? ` (effective ~${effectiveAlt.toLocaleString()} ft with itinerary acclimatization)` : ""}`,
     note,
@@ -804,6 +888,7 @@ function analyzeAltitude(
 function analyzeTerrain(
   trail: Trail,
   userClassIndex: number,
+  userClassVerified: boolean,
 ): DimensionAnalysis {
   const grade = trail.terrainGrade;
 
@@ -827,6 +912,23 @@ function analyzeTerrain(
         : /* mountaineering */ 4; // A
 
   if (userClassIndex >= requiredIndex) {
+    // Safety guardrail: self-reported class must not award a green
+    // verdict on non-trivial terrain. UNKNOWN doesn't gate the
+    // verdict downward — it just declines to hand out skill credit
+    // the user hasn't earned via real activity. Once they connect
+    // Strava / log real climbs the class becomes verified and this
+    // flips to READY naturally.
+    if (!userClassVerified) {
+      return {
+        key: "terrain",
+        label: "Terrain",
+        status: "unknown",
+        ratio: userClassIndex / Math.max(1, requiredIndex),
+        current: `Class ${classLetterFromIndex(userClassIndex)} (self-reported)`,
+        required: `${grade} (Class ${classLetterFromIndex(requiredIndex)}+)`,
+        note: `Your answers put you at Class ${classLetterFromIndex(userClassIndex)}, which meets the ${grade} requirement — but we haven't seen the trail work yet. Connect Strava or log a couple sessions and this becomes verified.`,
+      };
+    }
     return {
       key: "terrain",
       label: "Terrain",
@@ -1098,6 +1200,50 @@ function suggestAdjustments(
       "Prioritize sleep tonight and tomorrow before the trail; consider postponing 1-2 days.",
     );
   }
+  // Always-render safety net. Amendment from Devin's Reddit-launch
+  // test — Alex and Sarah both got verdict cards with zero "How to
+  // close the gap" bullets, which is the one place a stranger most
+  // needs an action. Fall back to training-block advice keyed to
+  // the trail's dominant demand so the section is never empty on
+  // achievable / hard verdicts.
+  if (s.length < 2 && (verdict === "achievable" || verdict === "hard")) {
+    const fillers: string[] = [];
+    if (kind === "multi_day") {
+      fillers.push(
+        "Build a weekly back-to-back long day (2 consecutive 4–6 h efforts). Sustained volume matters more than any single big session.",
+      );
+      if (trail.maxAltitudeFt >= 10000) {
+        fillers.push(
+          `Fit one hike above ~${Math.min(10000, trail.maxAltitudeFt - 4000).toLocaleString()} ft into the last 6 weeks — your body needs a rehearsal at altitude.`,
+        );
+      }
+    } else if (kind === "summit_push") {
+      fillers.push(
+        `Ramp your weekly long hike toward ~${Math.round(trail.typicalHours * 0.4)} h with elevation, one steep day per week.`,
+      );
+      if (trail.packWeightLb >= 20) {
+        fillers.push(
+          `Add a weekly loaded hike, growing to ${trail.packWeightLb} lb over the block.`,
+        );
+      }
+    } else if (kind === "long_day") {
+      fillers.push(
+        `Build the long hike weekly toward ~${Math.round(trail.typicalHours * 0.5)} h; add ~10% duration per week.`,
+      );
+      fillers.push("Get 3+ moderate cardio sessions/week to hold the base.");
+    } else {
+      fillers.push(
+        "Walk / hike 3× a week, one of them 2+ hours. That alone is the fastest way to close the gap.",
+      );
+      fillers.push(
+        "Add a weekly session with real elevation gain — stairs, hills, or a stairmaster.",
+      );
+    }
+    for (const f of fillers) {
+      if (s.length >= 3) break;
+      if (!s.includes(f)) s.push(f);
+    }
+  }
   return s;
 }
 
@@ -1116,13 +1262,25 @@ export async function assessTrail(
     // analyzers just consume the index. When omitted, we lazily
     // compute it here via computeCharacterSheet + computeRank.
     userClassIndex?: number;
+    // Whether the userClassIndex is backed by measured data. When
+    // false (self-report from cold-start answers), analyzeTerrain
+    // returns UNKNOWN instead of READY when the class meets the
+    // requirement — safety guardrail on a consequential dim.
+    userClassVerified?: boolean;
   },
 ): Promise<TrailAssessment> {
   const snap =
     opts?.snapshot ?? (await loadFitnessSnapshot(userId, opts));
 
+  // Prefer explicit opts, else snapshot-carried value, else derive.
   const userClassIndex =
-    opts?.userClassIndex ?? (await deriveUserClassIndex(userId));
+    opts?.userClassIndex ??
+    (typeof snap.classIndex === "number"
+      ? snap.classIndex
+      : await deriveUserClassIndex(userId));
+  const userClassVerified =
+    opts?.userClassVerified ??
+    (typeof snap.classVerified === "boolean" ? snap.classVerified : true);
 
   const daysUntilTrail = trail.targetDate
     ? Math.max(0, daysBetween(todayYmd, trail.targetDate))
@@ -1138,7 +1296,7 @@ export async function assessTrail(
     analyzeVertical(trail, snap, weeksAvailable, hasDate, kind),
     analyzePack(trail, snap, weeksAvailable, hasDate, kind),
     analyzeAltitude(trail, snap, kind, weeksAvailable),
-    analyzeTerrain(trail, userClassIndex),
+    analyzeTerrain(trail, userClassIndex, userClassVerified),
     analyzeRecovery(snap, kind),
   ];
 
@@ -1191,8 +1349,24 @@ function estimateWeeksToReady(
     if (d.ratio < worstRatio) worstRatio = d.ratio;
   }
   if (worstRatio >= 1) return null;
-  // Weekly compounding at ~12%/week average growth: weeks = ln(1/r)/ln(1.12)
-  const weeks = Math.log(1 / Math.max(0.01, worstRatio)) / Math.log(1.12);
+  // Empty-snapshot guard. When a truly zero-data user (fresh signup,
+  // no workouts, no cold-start baseline) hits this path, worstRatio
+  // pins near zero and the log formula returns ~41 for any trail —
+  // "About 41 weeks" appearing everywhere is a bug, not a signal.
+  // Devin's Reddit-launch test flagged this on Sarah, Marcus, Alex
+  // all landing on 41 weeks post-signup. Return null → the UI shows
+  // "Not enough to say yet — log 2 sessions or connect Strava".
+  if (worstRatio < 0.05) return null;
+  // Target: weeks to reach CLOSABLE (0.7× ready target), not peak
+  // ready. Amendment 2 from the Reddit-launch retro — the "required"
+  // numbers on the card are peak-week demand, which is what a
+  // fully-trained athlete needs on trip week. Scoring "weeks to
+  // ready" against peak inflates the number for anyone building
+  // toward the trail. Weeks to CLOSABLE is what the plan actually
+  // aims for (peak comes on trip week itself).
+  // Weekly compounding at ~12%/week average growth:
+  //   weeks = ln(0.7 / r) / ln(1.12)
+  const weeks = Math.log(0.7 / worstRatio) / Math.log(1.12);
   const rounded = Math.round(weeks);
   if (rounded < 1) return 1;
   if (rounded > 52) return null;

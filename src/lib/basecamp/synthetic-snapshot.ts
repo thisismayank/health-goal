@@ -16,6 +16,7 @@
  */
 
 import type { FitnessSnapshot } from "./trail-assessment";
+import { classFromColdStartAnswers } from "./cold-start-baseline";
 
 export type ColdStartAnswers = {
   /** Longest single hike in the past year — bucketed by hours. */
@@ -103,5 +104,11 @@ export function synthSnapshot(answers: ColdStartAnswers): FitnessSnapshot {
     squatEst1RmKg: null,
     loadedHikes8w: 0,
     bodyweightKg: answers.bodyweightKg ?? null,
+    // Cold-start altitude is self-report only. analyzeAltitude will
+    // return UNKNOWN even if maxAltitudeReachedFt looks sufficient —
+    // the honest read is "you told us, we haven't seen it."
+    altitudeVerified: false,
+    classIndex: classFromColdStartAnswers(answers),
+    classVerified: false,
   };
 }
