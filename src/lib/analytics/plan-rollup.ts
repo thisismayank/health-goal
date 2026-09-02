@@ -13,6 +13,7 @@ import {
   dailyMetric,
   plannedSession,
   trainingPlan,
+  userProfile,
   workout,
   type SessionCategory,
 } from "@/db/schema";
@@ -117,17 +118,19 @@ export async function getPlanRollup(
   });
   const currentWeek = weeksElapsedRaw + 1;
   const phase = phaseForWeek(currentWeek);
-  // Derive plan length from the plan's own start/end dates. The old
-  // hardcoded TOTAL_SEEDED_WEEKS (16) is left as a fallback for
-  // legacy plans lacking eventDate, but the truth for uploaded plans
-  // (Mayank's 41-week Rainier) is what the plan says.
+  // Plan length from the plan's start/end dates. Generator sets
+  // endDate = startDate + 7*totalWeeks days (Monday of the week
+  // AFTER the last training week). differenceInCalendarWeeks on that
+  // returns totalWeeks — no +1 needed. The Round-2 report caught
+  // the earlier +1 producing 41 for a 40-week Rainier plan (the
+  // "41" pattern Devin's r/Mountaineering test flagged everywhere).
   const planTotalWeeks =
     plan.eventDate && plan.startDate
       ? Math.max(
           1,
           differenceInCalendarWeeks(parseYmd(plan.eventDate), startDate, {
             weekStartsOn: 1,
-          }) + 1,
+          }),
         )
       : TOTAL_SEEDED_WEEKS;
   const daysToSummit = summitDateYmd
@@ -141,6 +144,22 @@ export async function getPlanRollup(
     : null;
 
   // ----- Cumulative -----
+  // Same denominator guard as computeWill in stats.ts: don't count
+  // sessions scheduled before the user was onboarded. Plan generator
+  // backdates start_date to the Monday of the signup week, so a
+  // Wednesday signup would otherwise inherit Monday + Tuesday as
+  // "missed" and the plan-progress narrative would fire "plan begins
+  // with 33% compliance" for someone who logged their first session
+  // on day 1.
+  const [profile] = await db
+    .select({ onboardedAt: userProfile.onboardedAt })
+    .from(userProfile)
+    .where(eq(userProfile.id, userId))
+    .limit(1);
+  const complianceStartStr = profile?.onboardedAt
+    ? ymd(profile.onboardedAt)
+    : plan.startDate;
+
   const plannedSessions = await db
     .select()
     .from(plannedSession)
@@ -148,6 +167,7 @@ export async function getPlanRollup(
       and(
         eq(plannedSession.planId, plan.id),
         lte(plannedSession.date, todayYmd),
+        gte(plannedSession.date, complianceStartStr),
       ),
     );
   const sessionsPlanned = plannedSessions.length;

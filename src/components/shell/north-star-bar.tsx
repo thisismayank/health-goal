@@ -68,7 +68,7 @@ export async function NorthStarBar() {
             parseYmd(plan.eventDate),
             parseYmd(plan.startDate),
             { weekStartsOn: 1 },
-          ) + 1,
+          ),
         )
       : null;
   const weekNumberRaw = plan

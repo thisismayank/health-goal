@@ -197,8 +197,12 @@ function VerdictCard({
             </span>
             .
           </p>
-        ) : assessment.verdict !== "comfortable" &&
-          assessment.verdict !== "do_not_attempt" ? (
+        ) : assessment.verdict === "do_not_attempt" ? (
+          <p className="text-sm text-warn/90 mt-2 leading-relaxed">
+            Beyond a single training-block horizon. The honest path is
+            build up on lower objectives first, then come back.
+          </p>
+        ) : assessment.verdict !== "comfortable" ? (
           <p className="text-sm text-muted mt-2 leading-relaxed">
             Not enough to estimate weeks-to-ready from three answers alone —
             the plan builds toward the peak and this number fills in as

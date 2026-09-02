@@ -65,28 +65,46 @@ export async function pickFeaturedTrail(
   const pool = primary.length >= 4 ? primary : [...primary, ...secondary];
   if (pool.length === 0) return null;
 
-  // Deterministic pick: hash(class + weekTag) → index. Same input →
-  // same trail. Different week → different trail. Same class users →
-  // same feature (community effect).
+  // Deterministic pick with defensive verdict gate: walk the pool
+  // starting from the hash-selected index; skip any trail whose
+  // assessment returns do_not_attempt for THIS user. Devin's r2
+  // caught the failure mode: Cathedral Lakes (easy, 9.5 mi) was
+  // featured "for Class E" but assessed as do_not_attempt because
+  // the fitness snapshot was empty for a fresh signup. The verdict
+  // engine and the picker were disagreeing on the same trail.
+  //
+  // With the baseline floor in loadFitnessSnapshot this rarely
+  // fires, but a fresh user with no cold-start answers (someone who
+  // signed up via /login directly) still has an empty snapshot and
+  // an easy trail would 'do_not_attempt' at them. This walk keeps
+  // Featured coherent no matter what.
   const seed = createHash("sha256")
     .update(`${rank.current}|${weekTag}`)
     .digest();
-  // Take a 32-bit unsigned from the first 4 bytes.
-  const index = seed.readUInt32BE(0) % pool.length;
-  const preset = pool[index];
-
-  // Personalized verdict for the featured trail (single assessment).
+  const startIdx = seed.readUInt32BE(0) % pool.length;
   const snap = await loadFitnessSnapshot(user.id);
   const today = todayInTimeZone(user.timezone);
-  const virtual = presetToVirtualTrail(preset, user.id);
-  const assessment = await assessTrail(user.id, virtual, today, {
-    snapshot: snap,
-  });
+
+  let preset: TrailPreset | null = null;
+  let verdict: Verdict = "do_not_attempt";
+  for (let step = 0; step < pool.length; step++) {
+    const candidate = pool[(startIdx + step) % pool.length];
+    const virtual = presetToVirtualTrail(candidate, user.id);
+    const assessment = await assessTrail(user.id, virtual, today, {
+      snapshot: snap,
+    });
+    if (assessment.verdict !== "do_not_attempt") {
+      preset = candidate;
+      verdict = assessment.verdict;
+      break;
+    }
+  }
+  if (!preset) return null;
 
   return {
     user,
     preset,
-    verdict: assessment.verdict,
+    verdict,
     hikerClass: rank.current,
     hikerClassLabel: rank.currentLabel,
     weekTag,

@@ -206,19 +206,32 @@ export type RankResult = {
 };
 
 export function computeRank(sheet: CharacterSheet): RankResult {
-  let current: Rank = "E";
-  let nextIdx = 0;
+  let measured: Rank = "E";
   for (let i = 0; i < GATES.length; i++) {
     const gate = GATES[i];
     const reqs = gate.requirements(sheet);
     const allMet = reqs.every((r) => r.met);
     if (allMet) {
-      current = gate.rank;
-      nextIdx = i + 1;
+      measured = gate.rank;
     } else {
       break;
     }
   }
+
+  // Cold-start floor. If the user's self-reported baseline puts them
+  // at Class D or C, don't render "Casual Walker" on Home until real
+  // training either confirms it (measured rank overtakes) or the
+  // classification stays consistent. Prevents the Round-2 contradiction
+  // where the verdict engine said Class C and the Home header said
+  // Class E on the same screen for the same user.
+  const measuredIdx = RANKS.indexOf(measured);
+  const floorIdx = Math.max(0, sheet.minClassIndex ?? 0);
+  const effectiveIdx = Math.max(measuredIdx, floorIdx);
+  const current = RANKS[effectiveIdx];
+  // Next-gate progress must be relative to the effective class, not
+  // the measured one, or a self-declared C would see next=D with
+  // 0/N requirements met (measured stats are near zero).
+  const nextIdx = effectiveIdx + 1;
 
   const nextGate = GATES[nextIdx] ?? null;
   const nextReqs = nextGate ? nextGate.requirements(sheet) : [];

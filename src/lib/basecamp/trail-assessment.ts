@@ -1174,21 +1174,28 @@ function suggestAdjustments(
   }
 
   // Longer / summit / multi-day objectives: keep the classic prep-plan tone.
-  if (gappy("endurance")) {
-    s.push(
-      `Slow pace target: expect ${(trail.typicalHours * 1.3).toFixed(1)} hours instead of ${trail.typicalHours}.`,
-    );
-  }
-  if (gappy("pack")) {
-    const cur = trail.packWeightLb;
-    s.push(
-      `Reduce pack weight to ${Math.round(cur * 0.7)}–${Math.round(cur * 0.85)} lb.`,
-    );
-  }
-  if (gappy("vertical")) {
-    s.push(
-      "Take frequent breaks on steep sections; pace by breathing (still able to talk).",
-    );
+  // Pacing / on-trail-tactics bullets only apply when the user is
+  // actually going. On do_not_attempt they read as absurd ("expect
+  // 18.2 hours instead of 14" for someone who's never hiked and got
+  // told to postpone) — Devin's r2 flag on Marcus. Skip and let the
+  // training-block fallback below own that verdict.
+  if (verdict !== "do_not_attempt") {
+    if (gappy("endurance")) {
+      s.push(
+        `Slow pace target: expect ${(trail.typicalHours * 1.3).toFixed(1)} hours instead of ${trail.typicalHours}.`,
+      );
+    }
+    if (gappy("pack")) {
+      const cur = trail.packWeightLb;
+      s.push(
+        `Reduce pack weight to ${Math.round(cur * 0.7)}–${Math.round(cur * 0.85)} lb.`,
+      );
+    }
+    if (gappy("vertical")) {
+      s.push(
+        "Take frequent breaks on steep sections; pace by breathing (still able to talk).",
+      );
+    }
   }
   if (byKey.altitude?.status === "concern") {
     s.push(
@@ -1201,12 +1208,13 @@ function suggestAdjustments(
     );
   }
   // Always-render safety net. Amendment from Devin's Reddit-launch
-  // test — Alex and Sarah both got verdict cards with zero "How to
-  // close the gap" bullets, which is the one place a stranger most
-  // needs an action. Fall back to training-block advice keyed to
-  // the trail's dominant demand so the section is never empty on
-  // achievable / hard verdicts.
-  if (s.length < 2 && (verdict === "achievable" || verdict === "hard")) {
+  // test — Sarah's do_not_attempt on Rainier and Alex's achievable
+  // on Whitney both rendered with ZERO bullets. The "How to close
+  // the gap" section is the one place a stranger most needs an
+  // action, especially on the harshest verdict where "not without
+  // prep" without any suggestion of what prep reads as "the app
+  // just says no." Fill in for every non-comfortable verdict.
+  if (s.length < 2 && verdict !== "comfortable") {
     const fillers: string[] = [];
     if (kind === "multi_day") {
       fillers.push(
@@ -1217,6 +1225,9 @@ function suggestAdjustments(
           `Fit one hike above ~${Math.min(10000, trail.maxAltitudeFt - 4000).toLocaleString()} ft into the last 6 weeks — your body needs a rehearsal at altitude.`,
         );
       }
+      fillers.push(
+        "Sleep + nutrition are training too — 7+ h nightly and adequate carbs before long-day efforts.",
+      );
     } else if (kind === "summit_push") {
       fillers.push(
         `Ramp your weekly long hike toward ~${Math.round(trail.typicalHours * 0.4)} h with elevation, one steep day per week.`,
@@ -1226,6 +1237,9 @@ function suggestAdjustments(
           `Add a weekly loaded hike, growing to ${trail.packWeightLb} lb over the block.`,
         );
       }
+      fillers.push(
+        "Two strength sessions/week (squats, deadlifts, step-ups) — legs are the limiter on a summit push.",
+      );
     } else if (kind === "long_day") {
       fillers.push(
         `Build the long hike weekly toward ~${Math.round(trail.typicalHours * 0.5)} h; add ~10% duration per week.`,

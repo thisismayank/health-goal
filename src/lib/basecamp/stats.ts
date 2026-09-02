@@ -40,6 +40,13 @@ export type Stat = {
 export type CharacterSheet = {
   computedAt: Date;
   stats: Record<StatKey, Stat>;
+  // Floor for computeRank() — set from classFromColdStartAnswers when
+  // the user has cold_start_answers persisted. Real training stats
+  // determine the ACTUAL rank; this just prevents a self-declared
+  // Class-C hiker from being labelled "Casual Walker" on their own
+  // Home page five minutes after signup. Same shape as the snapshot
+  // baseline floor.
+  minClassIndex: number;
 };
 
 const WINDOW_DAYS: Record<StatKey, number> = {
@@ -88,6 +95,16 @@ export type ComputeOpts = {
   // bound so we get an honest historical snapshot for trend arrows
   // ("STR was 42 seven days ago, now 40 → ↘ 2 pts").
   now?: Date;
+  // Cold-start baseline. Populated by computeCharacterSheet from
+  // userProfile.coldStartAnswers so the stat compute functions can
+  // MAX(measured, baseline) — matches loadFitnessSnapshot's approach
+  // and keeps /progress from zeroing out fresh signup numbers.
+  baseline?: {
+    longestRecentSessionMin: number;
+    weeklyAerobicMinutes: number;
+    maxSingleSessionVertFt: number;
+    cumulative90dVertFt: number;
+  } | null;
 };
 
 function withExclusion(
@@ -248,11 +265,22 @@ async function computeEnd(userId: number, now: Date, opts?: ComputeOpts): Promis
     windowDays: WINDOW_DAYS.END,
     now,
   });
-  const weeklyAerobic = workoutWeeklyAerobic + stepWeeklyAerobic;
+  const measuredWeeklyAerobic = workoutWeeklyAerobic + stepWeeklyAerobic;
 
-  const longestMin = rows.reduce(
+  // Cold-start baseline floor. MAX so real training overtakes the
+  // self-report naturally.
+  const weeklyAerobic = Math.max(
+    measuredWeeklyAerobic,
+    opts?.baseline?.weeklyAerobicMinutes ?? 0,
+  );
+
+  const measuredLongestMin = rows.reduce(
     (max, w) => Math.max(max, (w.durationSeconds ?? 0) / 60),
     0,
+  );
+  const longestMin = Math.max(
+    measuredLongestMin,
+    opts?.baseline?.longestRecentSessionMin ?? 0,
   );
 
   const volumeScore = clamp((weeklyAerobic / 450) * 100);
@@ -304,7 +332,14 @@ async function computePow(userId: number, now: Date, opts?: ComputeOpts): Promis
     (s, w) => s + estimatedVerticalMeters(w).meters,
     0,
   );
-  const totalFeet = totalMeters * 3.281;
+  const measuredTotalFeet = totalMeters * 3.281;
+  // Cold-start baseline floor for cumulative vertical (0 if no
+  // baseline). Real training accumulates over the 90-day window and
+  // overtakes naturally.
+  const totalFeet = Math.max(
+    measuredTotalFeet,
+    opts?.baseline?.cumulative90dVertFt ?? 0,
+  );
   const weeklyFeet = totalFeet / (WINDOW_DAYS.POW / 7);
 
   const packKg = rows.reduce((max, w) => Math.max(max, w.packWeightKg ?? 0), 0);
@@ -521,16 +556,38 @@ export async function computeCharacterSheet(
   opts?: ComputeOpts,
 ): Promise<CharacterSheet> {
   const now = opts?.now ?? new Date();
+
+  // Cold-start baseline shared across END/POW + the class floor.
+  // One query, threaded to the stat compute functions so they can
+  // MAX(measured, baseline) the same way loadFitnessSnapshot does
+  // for the verdict engine. Prevents the Round-2 bug: "verdict says
+  // 660 min longest, /progress says 0 min/wk" on the same screen.
+  const { synthSnapshot } = await import("./synthetic-snapshot");
+  const { classFromColdStartAnswers } = await import("./cold-start-baseline");
+  const [profileRow] = await db
+    .select({ coldStartAnswers: userProfile.coldStartAnswers })
+    .from(userProfile)
+    .where(eq(userProfile.id, userId))
+    .limit(1);
+  const coldStart = profileRow?.coldStartAnswers as
+    | Parameters<typeof synthSnapshot>[0]
+    | null
+    | undefined;
+  const baseline = coldStart ? synthSnapshot(coldStart) : null;
+  const minClassIndex = coldStart ? classFromColdStartAnswers(coldStart) : 0;
+  const optsWithBaseline: ComputeOpts = { ...opts, baseline };
+
   const [STR, END, POW, REC, WILL] = await Promise.all([
-    computeStr(userId, now, opts),
-    computeEnd(userId, now, opts),
-    computePow(userId, now, opts),
+    computeStr(userId, now, optsWithBaseline),
+    computeEnd(userId, now, optsWithBaseline),
+    computePow(userId, now, optsWithBaseline),
     computeRec(userId, now),
-    computeWill(userId, now, opts),
+    computeWill(userId, now, optsWithBaseline),
   ]);
   return {
     computedAt: now,
     stats: { STR, END, POW, REC, WILL },
+    minClassIndex,
   };
 }
 
