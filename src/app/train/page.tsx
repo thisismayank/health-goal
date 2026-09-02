@@ -87,7 +87,16 @@ export default async function TrainPage() {
   }
 
   const today = todayInTimeZone(user.timezone);
-  const passed = sessions.filter((s) => s.date <= today);
+  // Same onboardedAt guard as computeWill in stats.ts and getPlanRollup
+  // in plan-rollup.ts — don't count sessions scheduled before the
+  // user was onboarded. Plan generator backdates start_date to Monday
+  // of the signup week, so a Wednesday signup would otherwise inherit
+  // Mon+Tue as "missed" and this week's compliance would read 33%
+  // for someone who logged their first session on day 1.
+  const onboardedStr = user.onboardedAt ? ymd(user.onboardedAt) : plan.startDate;
+  const passed = sessions.filter(
+    (s) => s.date <= today && s.date >= onboardedStr,
+  );
   const completed = passed.filter((s) => s.status === "completed");
   const plannedTotalMin = sessions.reduce(
     (sum, s) => sum + (s.targetDurationMinutes ?? 0),

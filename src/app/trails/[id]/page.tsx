@@ -49,12 +49,25 @@ export default async function TrailDetailPage({
 
   const user = await requireOnboardedUser();
 
-  const [t] = await db
+  const [rawTrail] = await db
     .select()
     .from(trail)
     .where(and(eq(trail.id, trailId), eq(trail.userId, user.id)))
     .limit(1);
-  if (!t) notFound();
+  if (!rawTrail) notFound();
+
+  // Defensive read: legacy rows may have malformed targetDate values
+  // stored before server-side validation shipped (Devin r3:
+  // `252026-11-11` from a fumbled keystroke on mobile that then
+  // permanently 500'd the detail page). Treat any non-conforming
+  // targetDate as null on read so users can still reach the delete
+  // affordance below.
+  const badDate =
+    rawTrail.targetDate != null &&
+    !/^\d{4}-\d{2}-\d{2}$/.test(rawTrail.targetDate);
+  const t: TrailRow = badDate
+    ? { ...rawTrail, targetDate: null }
+    : rawTrail;
 
   const today = todayInTimeZone(user.timezone);
   const assessment = await assessTrail(user.id, t, today);
@@ -87,6 +100,14 @@ export default async function TrailDetailPage({
           <h1 className="text-2xl font-semibold">{t.name}</h1>
           <TrailEditForm trail={t} />
         </div>
+        {badDate && (
+          <div className="mt-2 rounded-md border border-warn/40 bg-warn/5 p-3 text-xs text-warn/90 leading-relaxed">
+            The stored target date wasn&apos;t a valid calendar date and
+            was cleared. Set a new one via Edit, or use{" "}
+            <span className="font-mono">Delete trail</span> below if this
+            row is broken beyond use.
+          </div>
+        )}
         <div className="text-sm text-muted mt-1">
           {formatKm(t.distanceKm, units)} · +{formatFt(t.elevationGainFt, units)}{" "}
           gain · max {formatFt(t.maxAltitudeFt, units)} · ~{t.typicalHours}h

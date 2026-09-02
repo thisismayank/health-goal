@@ -85,6 +85,15 @@ export async function pickFeaturedTrail(
   const snap = await loadFitnessSnapshot(user.id);
   const today = todayInTimeZone(user.timezone);
 
+  // Devin r3: skipping only do_not_attempt let "Hard — stretch
+  // objective" featured picks through on a 1.8-mile walk for a
+  // Class E user with no baseline data. The recommendation label
+  // and the verdict rating disagreeing on the same card looks
+  // broken. Require an achievable-or-better pick. If no candidate
+  // in this class's pool qualifies (a genuinely undertrained user
+  // for whom nothing in their class currently reads as
+  // reachable-with-prep), return null and Home skips the card.
+  // Better nothing than contradictory.
   let preset: TrailPreset | null = null;
   let verdict: Verdict = "do_not_attempt";
   for (let step = 0; step < pool.length; step++) {
@@ -93,7 +102,10 @@ export async function pickFeaturedTrail(
     const assessment = await assessTrail(user.id, virtual, today, {
       snapshot: snap,
     });
-    if (assessment.verdict !== "do_not_attempt") {
+    if (
+      assessment.verdict === "achievable" ||
+      assessment.verdict === "comfortable"
+    ) {
       preset = candidate;
       verdict = assessment.verdict;
       break;

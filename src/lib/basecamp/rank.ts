@@ -228,10 +228,12 @@ export function computeRank(sheet: CharacterSheet): RankResult {
   const floorIdx = Math.max(0, sheet.minClassIndex ?? 0);
   const effectiveIdx = Math.max(measuredIdx, floorIdx);
   const current = RANKS[effectiveIdx];
-  // Next-gate progress must be relative to the effective class, not
-  // the measured one, or a self-declared C would see next=D with
-  // 0/N requirements met (measured stats are near zero).
-  const nextIdx = effectiveIdx + 1;
+  // Next-gate index. GATES starts at D (index 0 = rank D), so
+  // GATES[i] === RANKS[i+1]. The next gate for current rank RANKS[k]
+  // is GATES[k] — same index in GATES equals one step up in RANKS.
+  // The previous +1 skipped a class (Devin r3: Class D showed
+  // "next: B", Class C showed "next: A").
+  const nextIdx = effectiveIdx;
 
   const nextGate = GATES[nextIdx] ?? null;
   const nextReqs = nextGate ? nextGate.requirements(sheet) : [];

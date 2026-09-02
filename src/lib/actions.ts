@@ -27,6 +27,37 @@ import {
 import { getCurrentUser } from "./data";
 import { todayInTimeZone } from "./date";
 import { track } from "./analytics/track";
+
+// Trail target dates come through free-text inputs and a fumbled
+// keystroke (Devin r3: `252026-11-11`) previously slipped past the
+// column type and permanently 500'd the saved-trail page. Validate
+// server-side: must be a real YYYY-MM-DD in a plausible range.
+// Undefined + null pass through unchanged (means "no change" and
+// "clear the date" respectively).
+function validateTargetDate<T extends string | null | undefined>(
+  raw: T,
+): T {
+  if (raw == null) return raw;
+  const s = String(raw).trim();
+  if (s === "") return null as T;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    throw new Error(
+      `Target date must be YYYY-MM-DD (got "${s.slice(0, 40)}")`,
+    );
+  }
+  const d = new Date(`${s}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`Target date is not a real calendar date`);
+  }
+  const year = d.getUTCFullYear();
+  const nowYear = new Date().getUTCFullYear();
+  if (year < nowYear - 1 || year > nowYear + 10) {
+    throw new Error(
+      `Target date year ${year} is out of range (${nowYear - 1}-${nowYear + 10})`,
+    );
+  }
+  return s as T;
+}
 import {
   getCumulativeVerticalFt,
   RAINIER_SUMMIT_FT,
@@ -278,6 +309,7 @@ export type CreateTrailInput = {
 export async function createTrailFromPreset(slug: string, targetDate?: string): Promise<{ id: number }> {
   const user = await getCurrentUser();
   if (!user) throw new Error("No user found");
+  const validated = validateTargetDate(targetDate);
   const { findTrailBySlug } = await import("./basecamp/trail-library");
   const { getFullTrailLibrary } = await import("./basecamp/trail-coords");
   const preset =
@@ -296,10 +328,10 @@ export async function createTrailFromPreset(slug: string, targetDate?: string): 
     .where(and(eq(trail.userId, user.id), eq(trail.presetSlug, preset.slug)))
     .limit(1);
   if (existing) {
-    if (targetDate && !existing.targetDate) {
+    if (validated && !existing.targetDate) {
       await db
         .update(trail)
-        .set({ targetDate })
+        .set({ targetDate: validated })
         .where(eq(trail.id, existing.id));
     }
     revalidatePath("/trails");
@@ -318,7 +350,7 @@ export async function createTrailFromPreset(slug: string, targetDate?: string): 
       typicalHours: preset.typicalHours,
       packWeightLb: preset.packWeightLb,
       terrainGrade: preset.terrainGrade,
-      targetDate: targetDate ?? null,
+      targetDate: validated ?? null,
       notes: `${preset.notes} · Sources: ${preset.sources.join(", ")}`,
       presetSlug: preset.slug,
     })
@@ -378,7 +410,7 @@ export async function createTrail(input: CreateTrailInput): Promise<{ id: number
       typicalHours: input.typicalHours,
       packWeightLb: input.packWeightLb ?? 0,
       terrainGrade: input.terrainGrade,
-      targetDate: input.targetDate ?? null,
+      targetDate: validateTargetDate(input.targetDate) ?? null,
       notes: input.notes ?? null,
     })
     .returning({ id: trail.id });
@@ -406,7 +438,7 @@ export async function updateTrail(input: UpdateTrailInput) {
     patch.packWeightLb = input.packWeightLb;
   }
   if (input.targetDate !== undefined) {
-    patch.targetDate = input.targetDate || null;
+    patch.targetDate = validateTargetDate(input.targetDate);
   }
   if (input.notes !== undefined) {
     patch.notes = input.notes?.trim() || null;
@@ -418,9 +450,39 @@ export async function updateTrail(input: UpdateTrailInput) {
     .update(trail)
     .set(patch)
     .where(and(eq(trail.id, input.trailId), eq(trail.userId, user.id)));
+
+  // Sync active plan's eventDate to the primary trail's targetDate.
+  // Fixes Devin r3: header shows WK 1/40 while the verdict card
+  // computes "20 weeks to prepare" against a 140-day target date —
+  // same screen, different numbers, because plan.eventDate was fixed
+  // at generation time and never updated when the trail's target
+  // changed. Only touches the display bounds (plan.eventDate), not
+  // planned_session rows — those stay put; users on a shorter runway
+  // just see the sessions they'll actually do.
+  if (patch.targetDate !== undefined) {
+    const [row] = await db
+      .select({ isPrimary: trail.isPrimary })
+      .from(trail)
+      .where(and(eq(trail.id, input.trailId), eq(trail.userId, user.id)))
+      .limit(1);
+    if (row?.isPrimary && typeof patch.targetDate === "string") {
+      await db
+        .update(trainingPlan)
+        .set({ eventDate: patch.targetDate })
+        .where(
+          and(
+            eq(trainingPlan.userId, user.id),
+            eq(trainingPlan.status, "active"),
+          ),
+        );
+    }
+  }
+
   revalidatePath("/trails");
   revalidatePath(`/trails/${input.trailId}`);
   revalidatePath("/");
+  revalidatePath("/train");
+  revalidatePath("/progress");
 }
 
 export async function deleteTrail(trailId: number) {

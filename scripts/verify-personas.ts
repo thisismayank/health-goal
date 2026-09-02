@@ -344,6 +344,39 @@ function extractComplianceFromNarrative(html: string): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
+function extractTrainCompliance(html: string): number | null {
+  // /train renders `<span>N<!-- -->%</span> compliance so far`.
+  // React inserts template comments between the value and the
+  // percent sign. Round-3 regression: onboardedAt filter reached
+  // computeWill + plan-rollup but NOT this inline calc.
+  return numOrNull(
+    extractFirst(
+      html,
+      /(\d{1,3})[\s\S]{0,40}?%[\s\S]{0,80}?compliance so far/,
+    ),
+  );
+}
+
+function extractNextClass(html: string): string | null {
+  // /progress renders `Next class: <!-- -->D<!-- --> · <!-- -->Weekend Hiker`.
+  // React template comments between the label, letter and separator.
+  // Off-by-one in computeRank showed the wrong letter here (Devin
+  // r3: Class D user saw NEXT B, skipping C).
+  return extractFirst(
+    html,
+    /Next class:[\s\S]{0,50}?([EDCBAS])[\s\S]{0,50}?·/,
+  );
+}
+
+function extractFeaturedTrailName(html: string): string | null {
+  // Home renders featured card with the trail's name below the
+  // [FEATURED] label. Used to spot low-endurance-cap picks (an easy
+  // 1.8-mile walk rated Hard for a class-E user, r3 flag).
+  const region = html.match(/\[FEATURED[^\]]*\][\s\S]{0,600}/);
+  if (!region) return null;
+  return extractFirst(region[0], /class="[^"]*font-semibold[^"]*"[^>]*>([^<]{3,80})</);
+}
+
 function numOrNull(s: string | null): number | null {
   if (s == null) return null;
   const n = parseInt(s, 10);
@@ -387,6 +420,7 @@ async function verifyPersona(p: Persona): Promise<Checks> {
     `${BASE}/trails/preset/${encodeURIComponent(p.slug)}`,
     jar,
   );
+  const train = await get(`${BASE}/train`, jar);
 
   const values: Record<string, unknown> = {};
 
@@ -421,6 +455,14 @@ async function verifyPersona(p: Persona): Promise<Checks> {
   values.presetBulletCount = extractSuggestedAdjustmentCount(preset.text);
   values.presetWeeksLine = extractWeeksLine(preset.text);
 
+  // /train
+  values.trainStatus = train.status;
+  values.trainCompliance = extractTrainCompliance(train.text);
+
+  // /progress next-class + featured refinement
+  values.progressNextClass = extractNextClass(progress.text);
+  values.homeFeaturedName = extractFeaturedTrailName(home.text);
+
   const contradictions: string[] = [];
 
   // ---- Consistency: same values must agree across surfaces ----
@@ -451,6 +493,31 @@ async function verifyPersona(p: Persona): Promise<Checks> {
     contradictions.push(
       `Compliance mismatch on /progress: stat card says ${values.progressStatCompliance}%, narrative says ${values.progressNarrativeCompliance}%`,
     );
+  }
+
+  if (
+    values.progressStatCompliance != null &&
+    values.trainCompliance != null &&
+    values.progressStatCompliance !== values.trainCompliance
+  ) {
+    contradictions.push(
+      `Compliance mismatch across surfaces: /progress says ${values.progressStatCompliance}%, /train says ${values.trainCompliance}% (Devin r3: the onboardedAt filter needs to reach /train's inline calc too)`,
+    );
+  }
+
+  // Next-class letter must be exactly one above current class in the
+  // ladder E→D→C→B→A→S. Devin r3: a Class D user saw "NEXT B"
+  // (skipping C) after the class-floor fix landed with the wrong
+  // GATES index offset.
+  if (values.progressClass && values.progressNextClass) {
+    const ladder = ["E", "D", "C", "B", "A", "S"];
+    const curIdx = ladder.indexOf(values.progressClass as string);
+    const nextIdx = ladder.indexOf(values.progressNextClass as string);
+    if (curIdx >= 0 && nextIdx >= 0 && nextIdx !== curIdx + 1) {
+      contradictions.push(
+        `Next-class off-by-one: current ${values.progressClass}, next ${values.progressNextClass} (expected ${ladder[curIdx + 1] ?? "(none)"})`,
+      );
+    }
   }
 
   // ---- Regressions from prior Devin rounds ----
