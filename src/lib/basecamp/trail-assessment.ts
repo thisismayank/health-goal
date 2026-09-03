@@ -1344,7 +1344,17 @@ function estimateWeeksToReady(
   dims: DimensionAnalysis[],
   verdict: Verdict,
 ): number | null {
-  if (verdict === "comfortable") return null;
+  // Two verdicts never carry a weeks-to-ready number:
+  //   - comfortable: nothing to close.
+  //   - do_not_attempt: the verdict itself says the horizon is
+  //     beyond a single training block. A short worst-ratio (e.g.,
+  //     Sarah's Rainier with baseline endurance) can otherwise yield
+  //     "closing the biggest gap takes about 4 weeks" directly under
+  //     "Not without prep or a guide" — Devin r4's launch-blocker
+  //     same-card contradiction. The card renders the "Beyond a
+  //     single training-block horizon" fallback when this returns
+  //     null on do_not_attempt.
+  if (verdict === "comfortable" || verdict === "do_not_attempt") return null;
   // Find the least-ready dimension by ratio. Concern/altitude/recovery
   // aren't buildable on a training timescale — skip them for this
   // estimate (their fix is rest, acclimatization, or route change).

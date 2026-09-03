@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { updateTrail } from "@/lib/actions";
 import type { Trail } from "@/db/schema";
 
@@ -13,7 +12,6 @@ export function TrailEditForm({ trail: t }: { trail: Trail }) {
   const [packLb, setPackLb] = useState(String(t.packWeightLb));
   const [targetDate, setTargetDate] = useState(t.targetDate ?? "");
   const [notes, setNotes] = useState(t.notes ?? "");
-  const router = useRouter();
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,15 +23,27 @@ export function TrailEditForm({ trail: t }: { trail: Trail }) {
     }
     startTransition(async () => {
       try {
-        await updateTrail({
+        const res = await updateTrail({
           trailId: t.id,
           name,
           packWeightLb: pack,
           targetDate: targetDate || null,
           notes,
         });
-        router.refresh();
+        // Server action now returns a Result — validation errors are
+        // NOT thrown so they don't hit Next.js's prod error-digest
+        // scrubber (Devin r4: users saw "Minified React error #441"
+        // instead of "Target date year 2099 is out of range").
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
         setOpen(false);
+        // router.refresh() alone rendered stale for a beat post-save
+        // (Devin r4 minor: "No target date set" showing after a
+        // successful save until reload). Hard reload is heavier but
+        // reliably shows the new state.
+        window.location.reload();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to update");
       }

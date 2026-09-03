@@ -569,6 +569,24 @@ async function verifyPersona(p: Persona): Promise<Checks> {
     );
   }
 
+  // do_not_attempt must show the horizon copy, never the "closing
+  // the biggest gap takes about N weeks" number. Devin r4 launch
+  // blocker: Sarah's Rainier read "Not without prep or a guide" and
+  // "closing the biggest gap takes about 4 weeks" on the same card,
+  // because estimateWeeksToReady returned a small number when
+  // worstRatio wasn't near-zero. The engine now returns null on
+  // do_not_attempt regardless of ratio — this check will catch any
+  // regression at the display layer too.
+  if (
+    values.presetVerdict === "Not without prep or a guide" &&
+    typeof values.presetWeeksLine === "string" &&
+    values.presetWeeksLine.includes("closing the biggest gap")
+  ) {
+    contradictions.push(
+      `do_not_attempt verdict rendering "closing the biggest gap" weeks line — should be the "Beyond a single training-block horizon" fallback`,
+    );
+  }
+
   // ---- Per-persona baseline expectations ----
   if (
     values.presetVerdict &&

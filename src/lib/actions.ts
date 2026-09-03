@@ -426,25 +426,43 @@ export type UpdateTrailInput = {
   notes?: string | null;
 };
 
-export async function updateTrail(input: UpdateTrailInput) {
+export type UpdateTrailResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function updateTrail(
+  input: UpdateTrailInput,
+): Promise<UpdateTrailResult> {
   const user = await getCurrentUser();
-  if (!user) throw new Error("No user found");
+  if (!user) return { ok: false, error: "No user found" };
 
   const patch: Record<string, unknown> = {};
   if (input.name != null && input.name.trim()) patch.name = input.name.trim();
   if (input.packWeightLb != null) {
     if (input.packWeightLb < 0)
-      throw new Error("Pack weight must be non-negative");
+      return { ok: false, error: "Pack weight must be non-negative" };
     patch.packWeightLb = input.packWeightLb;
   }
   if (input.targetDate !== undefined) {
-    patch.targetDate = validateTargetDate(input.targetDate);
+    // validateTargetDate throws with a readable message. Catch and
+    // return as a Result — server actions that throw get their error
+    // messages stripped to "Minified React error #<digest>" in prod
+    // builds, which the form can't render. Result-shape callers see
+    // the real string. Devin r4 launch-day fix.
+    try {
+      patch.targetDate = validateTargetDate(input.targetDate);
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : "Invalid target date",
+      };
+    }
   }
   if (input.notes !== undefined) {
     patch.notes = input.notes?.trim() || null;
   }
 
-  if (Object.keys(patch).length === 0) return;
+  if (Object.keys(patch).length === 0) return { ok: true };
 
   await db
     .update(trail)
@@ -483,6 +501,7 @@ export async function updateTrail(input: UpdateTrailInput) {
   revalidatePath("/");
   revalidatePath("/train");
   revalidatePath("/progress");
+  return { ok: true };
 }
 
 export async function deleteTrail(trailId: number) {
