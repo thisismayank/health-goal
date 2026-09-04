@@ -12,7 +12,12 @@ import { parseYmd, todayInTimeZone } from "@/lib/date";
 
 // Paths where the shell should be hidden entirely — auth pages that need
 // to feel like their own thing, not a page inside the app.
-const CHROMELESS_PREFIXES = ["/login", "/welcome"];
+// /start is the anonymous acquisition wedge — an authed-app north-star
+// bar reads to a cold visitor as "why am I seeing a Class rank and
+// summit progress when I've never used this?" (Devin: two stacked
+// headers, tab bar bouncing to /login, PWA install prompt on first
+// paint). Keep the /start surfaces chromeless.
+const CHROMELESS_PREFIXES = ["/login", "/welcome", "/start"];
 
 export async function NorthStarBar() {
   const h = await headers();

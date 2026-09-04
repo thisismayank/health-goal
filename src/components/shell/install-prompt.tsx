@@ -100,7 +100,9 @@ export function InstallPrompt() {
   const hiddenRoute =
     pathname === "/login" ||
     pathname === "/welcome" ||
-    pathname.startsWith("/welcome/");
+    pathname.startsWith("/welcome/") ||
+    pathname === "/start" ||
+    pathname.startsWith("/start/");
   if (installed || dismissed || hiddenRoute) return null;
 
   // Chrome / Android: only show when the browser has fired

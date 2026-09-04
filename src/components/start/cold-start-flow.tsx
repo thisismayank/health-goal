@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { assessColdStart, startFromColdStart } from "@/app/start/[slug]/actions";
 import type { ColdStartAnswers } from "@/lib/basecamp/synthetic-snapshot";
@@ -40,6 +40,22 @@ export function ColdStartFlow({
   const [assessment, setAssessment] = useState<TrailAssessment | null>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const verdictRef = useRef<HTMLDivElement | null>(null);
+
+  // Visibility of system status: on mobile the verdict card renders
+  // below the questions, so tapping "See my verdict" appears to do
+  // nothing — the button just disables. Scroll the card into view
+  // the moment it mounts. `preventScroll` on the initial mount
+  // avoids stealing focus from Question buttons on re-renders that
+  // don't produce a new assessment (assessment is the effect dep).
+  useEffect(() => {
+    if (assessment && verdictRef.current) {
+      verdictRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, [assessment]);
 
   const allAnswered =
     answers.longestHikeBucket != null &&
@@ -134,12 +150,14 @@ export function ColdStartFlow({
       </div>
 
       {assessment && (
-        <VerdictCard
-          assessment={assessment}
-          presetName={presetName}
-          onStart={start}
-          startPending={pending}
-        />
+        <div ref={verdictRef}>
+          <VerdictCard
+            assessment={assessment}
+            presetName={presetName}
+            onStart={start}
+            startPending={pending}
+          />
+        </div>
       )}
 
       <p className="text-[11px] text-muted">

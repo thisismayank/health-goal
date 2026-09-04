@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { findTrailBySlug } from "@/lib/basecamp/trail-library";
+import {
+  findTrailBySlug,
+  formatTrailDuration,
+} from "@/lib/basecamp/trail-library";
 import { getFullTrailLibrary } from "@/lib/basecamp/trail-coords";
 import { HERO_TRAILS } from "@/lib/basecamp/hero-trails";
 import { TrailPhoto } from "@/components/trails/trail-photo";
@@ -92,8 +95,8 @@ export default async function StartPage() {
                   {preset.distanceKm >= 30
                     ? `${Math.round(preset.distanceKm * 0.6213712)} mi`
                     : `${(preset.distanceKm * 0.6213712).toFixed(1)} mi`}{" "}
-                  · +{preset.elevationGainFt.toLocaleString()} ft · ~
-                  {preset.typicalHours}h
+                  · +{preset.elevationGainFt.toLocaleString()} ft ·{" "}
+                  {formatTrailDuration(preset)}
                 </div>
               </div>
             </Link>

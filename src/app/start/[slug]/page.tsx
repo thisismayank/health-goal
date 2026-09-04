@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { findTrailBySlug } from "@/lib/basecamp/trail-library";
+import {
+  findTrailBySlug,
+  formatTrailDuration,
+} from "@/lib/basecamp/trail-library";
 import { getFullTrailLibrary } from "@/lib/basecamp/trail-coords";
 import { ColdStartFlow } from "@/components/start/cold-start-flow";
 import { track } from "@/lib/analytics/track";
@@ -50,8 +53,8 @@ export default async function ColdStartTrailPage({
           <div className="text-xs text-muted mt-1">
             {(preset.distanceKm * 0.6213712).toFixed(1)} mi · +
             {preset.elevationGainFt.toLocaleString()} ft · max{" "}
-            {preset.maxAltitudeFt.toLocaleString()} ft · ~{preset.typicalHours}h
-            · {preset.terrainGrade}
+            {preset.maxAltitudeFt.toLocaleString()} ft ·{" "}
+            {formatTrailDuration(preset)} · {preset.terrainGrade}
           </div>
         </section>
 

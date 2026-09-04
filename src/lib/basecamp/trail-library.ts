@@ -1552,3 +1552,30 @@ export function findTrailBySlug(slug: string): TrailPreset | undefined {
 export function allTrails(): TrailPreset[] {
   return DEDUPED_LIBRARY;
 }
+
+/**
+ * Human-readable duration for a preset. For multi-day treks
+ * `typicalHours` stores the LONGEST single day (see file header) —
+ * showing just "~14h" on Kilimanjaro (a 6-7 day trek) reads as a
+ * contradiction against the notes. Detect the multi-day case from
+ * the notes and format both.
+ *
+ *   day hike:      "~4h"
+ *   summit push:   "~14h"
+ *   multi-day:     "6-7 days · summit day ~14h"
+ */
+export function formatTrailDuration(preset: TrailPreset): string {
+  const notesLower = (preset.notes ?? "").toLowerCase();
+  // Same detection classifyTrail() uses — keep in sync so the display
+  // doesn't disagree with the engine.
+  const multiDayMatch =
+    notesLower.match(/(\d+)(?:-(\d+))?\s*day\s*(?:trek|expedition|itinerary)/) ??
+    notesLower.match(/(\d+)(?:-(\d+))?[- ]day/);
+  if (multiDayMatch) {
+    const low = multiDayMatch[1];
+    const high = multiDayMatch[2];
+    const range = high ? `${low}-${high} days` : `${low} days`;
+    return `${range} · summit day ~${preset.typicalHours}h`;
+  }
+  return `~${preset.typicalHours}h`;
+}

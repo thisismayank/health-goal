@@ -70,7 +70,9 @@ export function BottomNav() {
   if (
     pathname === "/login" ||
     pathname === "/welcome" ||
-    pathname.startsWith("/welcome/")
+    pathname.startsWith("/welcome/") ||
+    pathname === "/start" ||
+    pathname.startsWith("/start/")
   ) {
     return null;
   }

@@ -413,6 +413,24 @@ async function verifyPersona(p: Persona): Promise<Checks> {
     );
   }
 
+  // Anonymous /start surfaces — the acquisition wedge. Fetched WITHOUT
+  // the session cookie so we see what a cold Reddit visitor sees.
+  // Cleared cookies from the jar for these two calls; restored right
+  // after.
+  const authedCookies = jarHeader(jar);
+  const anonJar: Jar = new Map();
+  const startRoot = await get(`${BASE}/start`, anonJar);
+  const startSlug = await get(
+    `${BASE}/start/${encodeURIComponent(p.slug)}`,
+    anonJar,
+  );
+  // restore for the rest of the fetches
+  jar.clear();
+  for (const kv of authedCookies.split("; ")) {
+    const [k, ...v] = kv.split("=");
+    if (k) jar.set(k, v.join("="));
+  }
+
   // Fetch surfaces. Order matters only for populating home_visit event.
   const home = await get(`${BASE}/`, jar);
   const progress = await get(`${BASE}/progress`, jar);
@@ -462,6 +480,21 @@ async function verifyPersona(p: Persona): Promise<Checks> {
   // /progress next-class + featured refinement
   values.progressNextClass = extractNextClass(progress.text);
   values.homeFeaturedName = extractFeaturedTrailName(home.text);
+
+  // /start chrome check — anon visitor should NOT see north-star
+  // bar, bottom nav (tabs → /login dead ends), or PWA install prompt
+  // covering the first tile. Devin r4 heuristics pass.
+  values.startRootHasAuthedChrome = startRoot.text.includes(">BASECAMP<");
+  values.startRootHasBottomNav =
+    startRoot.text.includes(">Progress<") &&
+    startRoot.text.includes(">Coach<");
+  // Match the actual visible copy from install-prompt.tsx, not the
+  // component name (that appears as an RSC payload token even when
+  // hidden and would false-positive).
+  values.startRootHasInstallPrompt = startRoot.text.includes(
+    "Install Basecamp",
+  );
+  values.startSlugHasAuthedChrome = startSlug.text.includes(">BASECAMP<");
 
   const contradictions: string[] = [];
 
@@ -584,6 +617,30 @@ async function verifyPersona(p: Persona): Promise<Checks> {
   ) {
     contradictions.push(
       `do_not_attempt verdict rendering "closing the biggest gap" weeks line — should be the "Beyond a single training-block horizon" fallback`,
+    );
+  }
+
+  // Anon /start must be chromeless. Authed shell on the acquisition
+  // wedge reads to a Reddit visitor as "why am I seeing a Class rank
+  // + summit progress + a bottom nav that bounces me to /login?"
+  if (values.startRootHasAuthedChrome) {
+    contradictions.push(
+      `Anon /start renders NorthStarBar (BASECAMP chrome) — belongs behind auth`,
+    );
+  }
+  if (values.startRootHasBottomNav) {
+    contradictions.push(
+      `Anon /start renders BottomNav (Progress/Coach tabs → /login dead ends) — should be hidden`,
+    );
+  }
+  if (values.startRootHasInstallPrompt) {
+    contradictions.push(
+      `Anon /start renders InstallPrompt — covers the tile grid before the visitor sees a verdict`,
+    );
+  }
+  if (values.startSlugHasAuthedChrome) {
+    contradictions.push(
+      `Anon /start/[slug] renders authed chrome — belongs behind auth`,
     );
   }
 
