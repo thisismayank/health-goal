@@ -13,6 +13,11 @@ import {
   synthSnapshot,
   type ColdStartAnswers,
 } from "@/lib/basecamp/synthetic-snapshot";
+import {
+  inferGoalTypeFromPreset,
+  mapAnswersToPlanConstraints,
+} from "@/lib/basecamp/cold-start-baseline";
+import { computeWeek1Preview, type PlanPreview } from "@/lib/plan/preview";
 import { writeSeed } from "@/lib/cold-start/seed";
 import { track } from "@/lib/analytics/track";
 
@@ -26,7 +31,7 @@ export async function assessColdStart(input: {
   slug: string;
   answers: ColdStartAnswers;
 }): Promise<
-  | { ok: true; assessment: TrailAssessment }
+  | { ok: true; assessment: TrailAssessment; preview: PlanPreview }
   | { ok: false; error: string }
 > {
   const preset =
@@ -47,6 +52,20 @@ export async function assessColdStart(input: {
     userClassIndex: snap.classIndex,
     userClassVerified: snap.classVerified,
   });
+
+  // Week-1 preview so the verdict card can show 3 session titles +
+  // total hours right above the "Get the training plan" CTA — the
+  // bridge between "here's your verdict" and "here's what you get."
+  // Same generator logic /onboarding/seed will actually create.
+  const { weeklyHours, startingFitness } = mapAnswersToPlanConstraints(
+    input.answers,
+  );
+  const preview = computeWeek1Preview({
+    goalType: inferGoalTypeFromPreset(preset),
+    weeklyHours,
+    startingFitness,
+  });
+
   await track("verdict_shown", {
     properties: {
       slug: input.slug,
@@ -54,7 +73,7 @@ export async function assessColdStart(input: {
       weeksToReady: assessment.weeksToReady,
     },
   });
-  return { ok: true, assessment };
+  return { ok: true, assessment, preview };
 }
 
 /**

@@ -24,6 +24,8 @@
  */
 
 import type { ColdStartAnswers } from "./synthetic-snapshot";
+import type { PlanGoalType } from "@/db/schema";
+import type { TrailPreset } from "./trail-library";
 
 export const COLD_START_CLASS_CAP = 2; // C
 
@@ -66,4 +68,45 @@ export function classFromColdStartAnswers(
   // 0-2 → E, 3-4 → D, 5+ → C. Never above C from self-report alone.
   const index = total >= 5 ? 2 : total >= 3 ? 1 : 0;
   return Math.min(COLD_START_CLASS_CAP, index);
+}
+
+/**
+ * Map cold-start answers → plan generator constraints. Same logic
+ * /onboarding/seed uses when persisting the user's baseline; extracted
+ * here so /start can generate a week-1 preview without duplicating.
+ */
+export function mapAnswersToPlanConstraints(
+  a: ColdStartAnswers,
+): {
+  weeklyHours: 3 | 5 | 7 | 10;
+  startingFitness: "new" | "occasional" | "regular" | "active";
+} {
+  const weeklyHours: 3 | 5 | 7 | 10 =
+    a.weeklyHoursBucket === "over_6"
+      ? 7
+      : a.weeklyHoursBucket === "3_to_6"
+        ? 5
+        : 3;
+  const startingFitness: "new" | "occasional" | "regular" | "active" =
+    a.longestHikeBucket === "never"
+      ? "new"
+      : a.longestHikeBucket === "under_3"
+        ? "occasional"
+        : a.longestHikeBucket === "3_to_6"
+          ? "regular"
+          : "active";
+  return { weeklyHours, startingFitness };
+}
+
+/**
+ * Which plan template family a preset belongs to. Same logic
+ * /onboarding/seed uses when auto-generating a plan.
+ * Mountaineering + high-altitude get the 40-week mountain_summit
+ * template; everything else gets the 12-week trail_hike template.
+ */
+export function inferGoalTypeFromPreset(preset: TrailPreset): PlanGoalType {
+  if (preset.terrainGrade === "mountaineering") return "mountain_summit";
+  if (preset.terrainGrade === "technical") return "mountain_summit";
+  if (preset.maxAltitudeFt >= 12000) return "mountain_summit";
+  return "trail_hike";
 }

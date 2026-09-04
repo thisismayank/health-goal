@@ -12,13 +12,14 @@ import {
   VERDICT_LABEL,
   VERDICT_SUBHEAD,
 } from "@/lib/basecamp/verdict-labels";
-// Type-only import — erased at runtime, so importing from the
-// server-only trail-assessment module doesn't pull DB code into
-// the client bundle.
+// Type-only imports — erased at runtime, so importing from the
+// server-only modules doesn't pull DB code into the client bundle.
 import type {
   DimensionAnalysis,
   TrailAssessment,
 } from "@/lib/basecamp/trail-assessment";
+import type { PlanPreview } from "@/lib/plan/preview";
+import { CategoryIcon } from "@/components/category-icon";
 
 /**
  * Three-question form → verdict card, on one page.
@@ -38,6 +39,7 @@ export function ColdStartFlow({
 }) {
   const [answers, setAnswers] = useState<Partial<ColdStartAnswers>>({});
   const [assessment, setAssessment] = useState<TrailAssessment | null>(null);
+  const [preview, setPreview] = useState<PlanPreview | null>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const verdictRef = useRef<HTMLDivElement | null>(null);
@@ -72,6 +74,7 @@ export function ColdStartFlow({
       });
       if (res.ok) {
         setAssessment(res.assessment);
+        setPreview(res.preview);
       } else {
         setError(res.error);
       }
@@ -154,6 +157,7 @@ export function ColdStartFlow({
           <VerdictCard
             assessment={assessment}
             presetName={presetName}
+            preview={preview}
             onStart={start}
             startPending={pending}
           />
@@ -173,11 +177,13 @@ export function ColdStartFlow({
 function VerdictCard({
   assessment,
   presetName,
+  preview,
   onStart,
   startPending,
 }: {
   assessment: TrailAssessment;
   presetName: string;
+  preview: PlanPreview | null;
   onStart: () => void;
   startPending: boolean;
 }) {
@@ -257,6 +263,39 @@ function VerdictCard({
             ))}
         </div>
       </div>
+
+      {preview && preview.sessions.length > 0 && (
+        <div className="pt-3 border-t border-panel-border/60 space-y-2">
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="text-xs uppercase tracking-widest text-muted">
+              Week 1 of your plan
+            </div>
+            <div className="text-[11px] text-muted tabular-nums">
+              {preview.sessions.length} sessions ·{" "}
+              {formatHours(preview.totalMinutes)} · {preview.totalWeeks}-wk block
+            </div>
+          </div>
+          <ul className="space-y-1.5">
+            {preview.sessions.map((s, i) => (
+              <li
+                key={i}
+                className="flex items-center gap-2.5 text-sm"
+              >
+                <CategoryIcon
+                  category={s.category}
+                  className="w-4 h-4 text-blue-300 shrink-0"
+                />
+                <span className="text-foreground/90 truncate">
+                  {s.title}
+                </span>
+                <span className="ml-auto text-xs text-muted tabular-nums whitespace-nowrap">
+                  {s.minutes} min
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="pt-3 border-t border-panel-border/60 space-y-2">
         <button
@@ -351,6 +390,13 @@ function Question<V extends string>({
       </div>
     </div>
   );
+}
+
+function formatHours(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes - h * 60;
+  return m === 0 ? `~${h}h` : `~${h}h ${m}m`;
 }
 
 function short(name: string): string {

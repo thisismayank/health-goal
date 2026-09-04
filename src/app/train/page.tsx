@@ -16,6 +16,7 @@ import { InlineSessionActions } from "@/components/plan/inline-actions";
 import { PlanSubNav } from "@/components/shell/plan-sub-nav";
 import { activeInjuries } from "@/lib/injury/queries";
 import { adaptSession } from "@/lib/plan/injury-adaptation";
+import { CategoryIcon } from "@/components/category-icon";
 
 export const dynamic = "force-dynamic";
 
@@ -301,7 +302,13 @@ function SessionHeader({
 
   return (
     <>
-      <div className="text-sm truncate">{session.title}</div>
+      <div className="flex items-center gap-2 text-sm">
+        <CategoryIcon
+          category={session.sessionCategory}
+          className="w-4 h-4 text-blue-300 shrink-0"
+        />
+        <span className="truncate">{session.title}</span>
+      </div>
       <div className="text-xs text-muted flex flex-wrap gap-x-2 gap-y-0.5">
         <span className="uppercase tracking-wider text-[10px]">
           {session.sessionCategory.replaceAll("_", " ").toLowerCase()}
